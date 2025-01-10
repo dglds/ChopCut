@@ -114,11 +114,23 @@ fun HomeScreen(
                 }
             }
 
-            // Test Operations
+            // Test Operations - Phase 1 (CopyPipeline)
             if (selectedUri != null) {
                 item {
                     TestOperationsCard(
                         onTestTrim = { viewModel.testTrim() },
+                        enabled = uiState !is HomeUiState.Processing
+                    )
+                }
+            }
+
+            // Transcode Operations - Phase 2
+            if (selectedUri != null) {
+                item {
+                    TranscodeOperationsCard(
+                        onTestCompress = { viewModel.testCompress() },
+                        onTestResize = { viewModel.testResize() },
+                        onTestCrop = { viewModel.testCrop() },
                         enabled = uiState !is HomeUiState.Processing
                     )
                 }
@@ -386,6 +398,74 @@ fun TestOperationsCard(
                 text = "Note: Output will be saved to app cache",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun TranscodeOperationsCard(
+    onTestCompress: () -> Unit,
+    onTestResize: () -> Unit,
+    onTestCrop: () -> Unit,
+    enabled: Boolean
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "Step 3: Test Transcode Operations",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Test Phase 2 features (requires transcoding):",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Compress Button
+            Button(
+                onClick = onTestCompress,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Test Compress (2 Mbps)")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Resize Button
+            Button(
+                onClick = onTestResize,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Test Resize (50% resolution)")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Crop Button
+            Button(
+                onClick = onTestCrop,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Test Crop (center 50%)")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "⚠️ These operations require full transcoding (slower)",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error
             )
         }
     }
