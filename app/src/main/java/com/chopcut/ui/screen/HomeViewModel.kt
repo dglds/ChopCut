@@ -4,6 +4,12 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.chopcut.data.audio.AudioDataExtractor
+import com.chopcut.data.audio.AudioRawData
+import com.chopcut.data.audio.AudioExtractor
+import com.chopcut.data.audio.WaveFormGenerator
+import com.chopcut.data.audio.model.AudioFormat
+import com.chopcut.ui.components.WaveformData
 import com.chopcut.data.codec.CodecCapabilities
 import com.chopcut.data.model.TimeRange
 import com.chopcut.data.model.VideoCodec
@@ -11,6 +17,7 @@ import com.chopcut.data.model.VideoInfo
 import com.chopcut.data.pipeline.CopyPipeline
 import com.chopcut.data.pipeline.TranscodeOperations
 import com.chopcut.data.repository.VideoRepository
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,12 +30,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val codecCapabilities = CodecCapabilities()
     private val copyPipeline = CopyPipeline(application, videoRepository)
     private val transcodeOperations = TranscodeOperations(application, videoRepository)
+    private val audioExtractor = AudioExtractor(application, videoRepository)
+    private val audioDataExtractor = AudioDataExtractor(application)
+
+    // Raw PCM data (extracted once, reused for waveform generation)
+    private val _audioRawData = MutableStateFlow<AudioRawData?>(null)
+    val audioRawData: StateFlow<AudioRawData?> = _audioRawData.asStateFlow()
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Initial)
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     private val _selectedVideoUri = MutableStateFlow<Uri?>(null)
     val selectedVideoUri: StateFlow<Uri?> = _selectedVideoUri.asStateFlow()
+
+    // State for extracted audio file
+    private val _extractedAudioFile = MutableStateFlow<java.io.File?>(null)
+    val extractedAudioFile: StateFlow<java.io.File?> = _extractedAudioFile.asStateFlow()
+
+    // State for raw waveform data
+    private val _waveformData = MutableStateFlow<WaveformData>(WaveformData.empty())
+    val waveformData: StateFlow<WaveformData> = _waveformData.asStateFlow()
+
+    // Configurable waveform bar count
+    private val _waveformBars = MutableStateFlow(50)
+    val waveformBars: StateFlow<Int> = _waveformBars.asStateFlow()
+
+    // Waveform mirrored mode
+    private val _waveformMirrored = MutableStateFlow(false)
+    val waveformMirrored: StateFlow<Boolean> = _waveformMirrored.asStateFlow()
 
     init {
         checkCodecs()
@@ -203,6 +232,102 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun testExtractAudio() {
+        val uri = _selectedVideoUri.value
+        if (uri == null) {
+            _uiState.value = HomeUiState.Error("Please select a video first")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = HomeUiState.Processing("Extracting audio...")
+
+            try {
+                audioExtractor.extract(uri, AudioFormat.AAC)
+                    .collect { result ->
+                        result.onSuccess { file ->
+                            Timber.d("TIME: audio_extract_success: ${file.absolutePath}")
+                            _extractedAudioFile.value = file
+                            _uiState.value = HomeUiState.Success(
+                                "Audio extracted!\nOutput: ${file.name}\nSize: ${file.length() / 1024} KB\nFormat: AAC (.m4a)"
+                            )
+                        }.onFailure { error ->
+                            Timber.e(error, "Audio extract failed")
+                            _uiState.value = HomeUiState.Error(error.message ?: "Extract audio failed")
+                        }
+                    }
+            } catch (e: Exception) {
+                Timber.e(e, "Error during audio extraction")
+                _uiState.value = HomeUiState.Error(e.message ?: "Extract audio failed")
+            }
+        }
+    }
+
+    // Extract raw PCM data (once, reused for waveform)
+    fun extractPcmData() {
+        val uri = _selectedVideoUri.value
+        if (uri == null) {
+            _uiState.value = HomeUiState.Error("Please select a video first")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = HomeUiState.Processing("Extracting audio data...")
+            try {
+                val rawData = audioDataExtractor.extractRawPcmData(uri)
+                _audioRawData.value = rawData
+                _waveformData.value = WaveformData.empty()  // Clear old waveform
+
+                _uiState.value = HomeUiState.Success(
+                    "Audio data extracted!\n" +
+                    "Samples: ${rawData.pcmSamples.size}\n" +
+                    "Duration: ${rawData.durationMs}ms\n" +
+                    "Sample rate: ${rawData.sampleRate}Hz"
+                )
+
+            } catch (e: Exception) {
+                Timber.e(e, "Error during PCM extraction")
+                _uiState.value = HomeUiState.Error(e.message ?: "PCM extraction failed")
+            }
+        }
+    }
+
+    // NEW: Generate waveform from already extracted data
+    fun generateWaveform() {
+        val rawData = _audioRawData.value
+        if (rawData == null || rawData.pcmSamples.isEmpty()) {
+            _uiState.value = HomeUiState.Error("Extract audio data first!")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                val amplitudes = WaveFormGenerator.generateWaveform(
+                    pcmSamples = rawData.pcmSamples,
+                    barCount = _waveformBars.value
+                )
+
+                _waveformData.value = WaveformData(
+                    amplitudes = amplitudes,
+                    sampleRate = rawData.sampleRate,
+                    durationMs = rawData.durationMs
+                )
+
+                Timber.d("TIME: waveform generated: ${amplitudes.size} bars")
+
+                _uiState.value = HomeUiState.Success(
+                    "Waveform generated!\n" +
+                    "Bars: ${amplitudes.size}\n" +
+                    "Change bar count and regenerate!"
+                )
+
+            } catch (e: Exception) {
+                Timber.e(e, "Error during waveform generation")
+                _uiState.value = HomeUiState.Error(e.message ?: "Waveform generation failed")
+            }
+        }
+    }
+
     fun checkCodecs() {
         viewModelScope.launch {
             try {
@@ -232,6 +357,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetState() {
         _uiState.value = HomeUiState.Initial
+    }
+
+    fun setWaveformBars(bars: Int) {
+        _waveformBars.value = bars.coerceIn(10, 500)
+    }
+
+    fun toggleWaveformMirrored() {
+        _waveformMirrored.value = !_waveformMirrored.value
     }
 }
 

@@ -6,15 +6,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chopcut.data.model.VideoInfo
+import com.chopcut.ui.components.WaveForm
+import com.chopcut.ui.components.WaveformData
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -28,6 +32,10 @@ fun HomeScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val selectedUri by viewModel.selectedVideoUri.collectAsState()
+    val waveformData by viewModel.waveformData.collectAsState()
+    val waveformBars by viewModel.waveformBars.collectAsState()
+    val waveformMirrored by viewModel.waveformMirrored.collectAsState()
+    val audioRawData by viewModel.audioRawData.collectAsState()
 
     // Video picker launcher
     val videoPickerLauncher = rememberLauncherForActivityResult(
@@ -167,6 +175,31 @@ fun HomeScreen(
                         onTestResize = { viewModel.testResize() },
                         onTestCrop = { viewModel.testCrop() },
                         enabled = uiState !is HomeUiState.Processing
+                    )
+                }
+            }
+
+            // Audio Operations - Phase 4.1
+            if (selectedUri != null) {
+                item {
+                    AudioOperationsCard(
+                        onExtractPcmData = { viewModel.extractPcmData() },
+                        onGenerateWaveform = { viewModel.generateWaveform() },
+                        hasRawData = audioRawData != null,
+                        enabled = uiState !is HomeUiState.Processing,
+                        waveformBars = waveformBars,
+                        onBarsChange = { viewModel.setWaveformBars(it) }
+                    )
+                }
+            }
+
+            // WaveForm - Raw Audio Visualization
+            if (waveformData.amplitudes.isNotEmpty()) {
+                item {
+                    WaveFormCard(
+                        waveformData,
+                        mirrored = waveformMirrored,
+                        onToggleMirrored = { viewModel.toggleWaveformMirrored() }
                     )
                 }
             }
@@ -502,6 +535,161 @@ fun TranscodeOperationsCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error
             )
+        }
+    }
+}
+
+@Composable
+fun AudioOperationsCard(
+    onExtractPcmData: () -> Unit,
+    onGenerateWaveform: () -> Unit,
+    hasRawData: Boolean,
+    enabled: Boolean,
+    waveformBars: Int,
+    onBarsChange: (Int) -> Unit
+) {
+    var barsInput by remember { mutableStateOf(waveformBars.toString()) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "Step 4: Audio Waveform",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = if (hasRawData)
+                    "✓ Audio data extracted - generate waveform!"
+                else
+                    "1. Extract audio data first, 2. Generate waveform",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Waveform bars input
+            OutlinedTextField(
+                value = barsInput,
+                onValueChange = {
+                    barsInput = it
+                    it.toIntOrNull()?.let { onBarsChange(it) }
+                },
+                label = { Text("Waveform Bars (10-500)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Step 1: Extract Audio Data
+            Button(
+                onClick = onExtractPcmData,
+                enabled = enabled && !hasRawData,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (hasRawData)
+                        MaterialTheme.colorScheme.secondary
+                    else
+                        MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(if (hasRawData) "✓ Audio Data Extracted" else "1. Extract Audio Data")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Step 2: Generate Waveform
+            Button(
+                onClick = onGenerateWaveform,
+                enabled = enabled && hasRawData,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("2. Generate Waveform ($waveformBars bars)")
+            }
+        }
+    }
+}
+
+@Composable
+fun WaveFormCard(
+    data: WaveformData,
+    mirrored: Boolean = false,
+    onToggleMirrored: () -> Unit = {}
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "Waveform - Raw Audio",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Calculate stats
+            val maxAmp = data.amplitudes.maxOrNull() ?: 0f
+            val avgAmp = if (data.amplitudes.isNotEmpty()) data.amplitudes.sum() / data.amplitudes.size else 0f
+
+            Text(
+                text = "Samples: ${data.amplitudes.size} • Duration: ${data.durationMs}ms • SR: ${data.sampleRate}Hz",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Max: ${"%.4f".format(maxAmp)} • Avg: ${"%.4f".format(avgAmp)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            WaveForm(
+                amplitudes = data.amplitudes,
+                maxAmp = maxAmp,
+                avgAmp = avgAmp,
+                mirrored = mirrored,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Toggle mirrored button
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = onToggleMirrored,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (mirrored)
+                        MaterialTheme.colorScheme.secondary
+                    else
+                        MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(if (mirrored) "Waveform: Mirrored (Center)" else "Waveform: Normal (Bottom)")
+            }
+
+            // Show first 20 values
+            if (data.amplitudes.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "First 20 values:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = data.amplitudes.take(20).joinToString(", ") { "%.3f".format(it) },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

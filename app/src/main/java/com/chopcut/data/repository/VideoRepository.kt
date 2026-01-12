@@ -3,11 +3,14 @@ package com.chopcut.data.repository
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.chopcut.data.audio.model.AudioInfo
 import com.chopcut.data.model.VideoInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -78,6 +81,71 @@ class VideoRepository(
                 retriever.release()
             } catch (e: Exception) {
                 Timber.e(e, "Error releasing MediaMetadataRetriever")
+            }
+        }
+    }
+
+    /**
+     * Extract audio metadata from a video file
+     * Uses MediaExtractor to get detailed audio track information
+     */
+    suspend fun getAudioMetadata(uri: Uri): AudioInfo? = withContext(Dispatchers.IO) {
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(context, uri, null)
+
+            // Find audio track
+            var audioTrackIndex = -1
+            for (i in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(i)
+                val mime = format.getString(MediaFormat.KEY_MIME)
+                if (mime?.startsWith("audio/") == true) {
+                    audioTrackIndex = i
+                    break
+                }
+            }
+
+            if (audioTrackIndex < 0) {
+                Timber.w("No audio track found in $uri")
+                return@withContext null
+            }
+
+            val format = extractor.getTrackFormat(audioTrackIndex)
+
+            val mimeType = format.getString(MediaFormat.KEY_MIME) ?: "audio/unknown"
+            val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            // Bitrate may not be present in all formats, use default for AAC
+            val bitrate = 128000L // Default: 128 kbps
+            val durationUs = format.getLong(MediaFormat.KEY_DURATION)
+
+            // Try to get language if available
+            val language = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                format.getString(MediaFormat.KEY_LANGUAGE)
+            } else {
+                null
+            }
+
+            AudioInfo(
+                codec = mimeType.substringAfter('/'),
+                sampleRate = sampleRate,
+                channelCount = channelCount,
+                bitrate = bitrate,
+                durationUs = durationUs,
+                mimeType = mimeType,
+                language = language
+            ).also {
+                Timber.d("Extracted audio metadata: ${it.codec}, ${it.sampleRate}Hz, " +
+                         "${it.channelCount}ch, ${it.bitrateKbps}kbps, ${it.durationMs}ms")
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error extracting audio metadata from $uri")
+            null
+        } finally {
+            try {
+                extractor.release()
+            } catch (e: Exception) {
+                Timber.e(e, "Error releasing MediaExtractor")
             }
         }
     }

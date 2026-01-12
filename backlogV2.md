@@ -26,9 +26,9 @@ App Android para edição de vídeo usando 100% APIs nativas (sem FFmpeg).
 | Compress | Reduz tamanho/bitrate |
 | Resize | Alterar resolução |
 | Crop | Recortar área do vídeo |
-| Speed | Alterar velocidade (com áudio) |
-| Remux | Mudar container |
 | Extract Audio | Extrair trilha de áudio |
+| SoundForm | Visualizar/identificar períodos de fala |
+| Remux | Mudar container |
 
 ---
 
@@ -162,28 +162,36 @@ Tela principal do editor integrando componentes.
 
 ### FASE 4: Polish
 
-#### TAREFA 4.1: Speed (Audio)
-Alterar velocidade com Sonic (time-stretch).
+#### TAREFA 4.1: Extract Audio
+Extrair trilha de áudio do vídeo (formato AAC).
 ```kotlin
-// data/audio/AudioProcessor.kt
-fun timeStretch(buffer: ByteBuffer, speed: Float): ByteBuffer
+// data/audio/AudioExtractor.kt
+suspend fun extract(uri: Uri): Flow<Result<File>>
 ```
 
-#### TAREFA 4.2: SettingsScreen
+#### TAREFA 4.2: SoundForm - Audio Analysis
+Analisar áudio para identificar períodos de fala e silêncio.
+```kotlin
+// data/audio/AudioAnalyzer.kt
+suspend fun analyzeSpeechSegments(file: File): List<SpeechSegment>
+data class SpeechSegment(val startMs: Long, val endMs: Long, val isSpeech: Boolean)
+```
+
+#### TAREFA 4.3: SettingsScreen
 Tela de configurações (codec, qualidade, etc).
 ```kotlin
 // ui/screen/SettingsScreen.kt
 @Composable fun SettingsScreen()
 ```
 
-#### TAREFA 4.3: ExportForegroundService
+#### TAREFA 4.4: ExportForegroundService
 Service para export em background com notificação.
 ```kotlin
 // service/ExportService.kt
 class ExportForegroundService : Service()
 ```
 
-#### TAREFA 4.4: Error Handling
+#### TAREFA 4.5: Error Handling
 Tratamento de erros e recuperação.
 ```kotlin
 // util/ErrorHandler.kt
@@ -202,7 +210,7 @@ app/src/main/java/com/chopcut/
 │   ├── repository/     (VideoRepository)
 │   ├── pipeline/       (CopyPipeline, TranscodePipeline)
 │   ├── thumbnail/      (ThumbnailExtractor)
-│   └── audio/          (AudioProcessor)
+│   └── audio/          (AudioExtractor, AudioAnalyzer)
 ├── graphics/
 │   ├── gl/             (GLRenderer, shaders)
 │   └── egl/            (SurfaceBridge)
