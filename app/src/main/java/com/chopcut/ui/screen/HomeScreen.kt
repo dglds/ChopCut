@@ -22,7 +22,8 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    viewModel: HomeViewModel = viewModel()
+    viewModel: HomeViewModel = viewModel(),
+    onNavigateToEditor: (android.net.Uri) -> Unit = {}
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -104,6 +105,40 @@ fun HomeScreen(
             if (uiState is HomeUiState.VideoLoaded) {
                 item {
                     VideoInfoCard((uiState as HomeUiState.VideoLoaded).videoInfo)
+                }
+            }
+
+            // Open Editor Button (FASE 3)
+            val uri = selectedUri
+            if (uri != null) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text = "Step 2: Open Video Editor",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Try the new video editor with preview and timeline!",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = { onNavigateToEditor(uri) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Open in Editor")
+                            }
+                        }
+                    }
                 }
             }
 

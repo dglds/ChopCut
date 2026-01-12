@@ -1,6 +1,13 @@
 # CLAUDE.md
+## Dev rules
+ - Pense em português pt-br.
+ - Sempre utilize a task gradle 'quick' e após a verificação use o build padrão.
+ - Utilize uma cor ciano quando mostrar uma mensagem para o usuário.
+ - Quando finalizar a tarefa e o build compilar, instale o app usando installDebug.
+
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 
 ## Project Overview
 
@@ -17,10 +24,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common Commands
 
+
+
 ### Build Commands
 ```bash
 # Build the project
 ./gradlew build
+
+# Quick sintax check
+./gradlew quick
 
 # Build debug APK
 ./gradlew assembleDebug
@@ -146,16 +158,6 @@ com.chopcut/
 └── MainActivity.kt
 ```
 
-## Testing
-
-### Unit Tests
-Place in `app/src/test/`. Run with `./gradlew test`.
-
-### Instrumentation Tests
-Place in `app/src/androidTest/`. Run with `./gradlew connectedAndroidTest` (requires connected device).
-
-### Compose UI Tests
-Use `androidx.compose.ui:ui-test-junit4` for testing Compose components with `createComposeRule()`.
 
 ## Important Files
 

@@ -1,3 +1,14 @@
+tasks.register("quick") {
+    group = "verification"
+    description = "Verificação rápida de sintaxe e imports (Java/Kotlin)"
+
+    dependsOn(
+        "compileDebugKotlin",
+        "compileDebugJavaWithJavac"
+    )
+}
+
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -57,6 +68,10 @@ dependencies {
 
     // Navigation
     implementation(libs.androidx.navigation.compose)
+
+    // ExoPlayer (Media3)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
 
     // Timber
     implementation(libs.timber)
