@@ -131,8 +131,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        // TODO: Resize requires OpenGL pipeline (buffer-copy doesn't work for resolution changes)
-        _uiState.value = HomeUiState.Error("Resize requires OpenGL implementation (coming soon)\n\nFor now, use Compress which works!")
+        viewModelScope.launch {
+            _uiState.value = HomeUiState.Processing("Resizing video to 50% (~2 sec test)...")
+
+            try {
+                // Get original video info to calculate target size
+                val metadata = videoRepository.getMetadata(uri)
+                if (metadata == null) {
+                    _uiState.value = HomeUiState.Error("Failed to read video metadata")
+                    return@launch
+                }
+
+                // Resize to 50% of original resolution
+                val targetWidth = metadata.width / 2
+                val targetHeight = metadata.height / 2
+
+                transcodeOperations.resize(uri, targetWidth, targetHeight)
+                    .collect { result ->
+                        result.onSuccess { file ->
+                            Timber.d("Resize completed: ${file.absolutePath}")
+                            _uiState.value = HomeUiState.Success(
+                                "Resize completed!\n${metadata.width}x${metadata.height} → ${targetWidth}x${targetHeight}\nOutput: ${file.name}\nSize: ${file.length() / 1024} KB\n(Limited to 60 frames for testing)"
+                            )
+                        }.onFailure { error ->
+                            Timber.e(error, "Resize failed")
+                            _uiState.value = HomeUiState.Error(error.message ?: "Resize failed")
+                        }
+                    }
+            } catch (e: Exception) {
+                Timber.e(e, "Error during resize")
+                _uiState.value = HomeUiState.Error(e.message ?: "Resize failed")
+            }
+        }
     }
 
     fun testCrop() {
@@ -142,8 +172,35 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        // TODO: Crop requires OpenGL pipeline (buffer-copy doesn't work for visual cropping)
-        _uiState.value = HomeUiState.Error("Crop requires OpenGL implementation (coming soon)\n\nFor now, use Compress which works!")
+        viewModelScope.launch {
+            _uiState.value = HomeUiState.Processing("Cropping video center 50% (~2 sec test)...")
+
+            try {
+                // Crop center 50% of the video
+                val cropRect = android.graphics.RectF(
+                    0.25f,  // left 25%
+                    0.25f,  // top 25%
+                    0.75f,  // right 75%
+                    0.75f   // bottom 75%
+                )
+
+                transcodeOperations.crop(uri, cropRect)
+                    .collect { result ->
+                        result.onSuccess { file ->
+                            Timber.d("Crop completed: ${file.absolutePath}")
+                            _uiState.value = HomeUiState.Success(
+                                "Crop completed!\nCenter 50% cropped\nOutput: ${file.name}\nSize: ${file.length() / 1024} KB\n(Limited to 60 frames for testing)"
+                            )
+                        }.onFailure { error ->
+                            Timber.e(error, "Crop failed")
+                            _uiState.value = HomeUiState.Error(error.message ?: "Crop failed")
+                        }
+                    }
+            } catch (e: Exception) {
+                Timber.e(e, "Error during crop")
+                _uiState.value = HomeUiState.Error(e.message ?: "Crop failed")
+            }
+        }
     }
 
     fun checkCodecs() {

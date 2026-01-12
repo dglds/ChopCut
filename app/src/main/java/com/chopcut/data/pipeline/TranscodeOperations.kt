@@ -8,6 +8,7 @@ import com.chopcut.data.model.VideoCodec
 import com.chopcut.data.model.VideoInfo
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.util.DispatcherProvider
+import com.chopcut.util.TimeTracker
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -35,6 +36,7 @@ class TranscodeOperations(
      */
     @OptIn(FlowPreview::class)
     fun compress(uri: Uri, bitrate: Int): Flow<Result<File>> = flow<Result<File>> {
+        val timer = TimeTracker.start("compress")
         Timber.d("Starting compress operation for $uri with bitrate $bitrate")
 
         val outputFile = videoRepository.createTempFile(".mp4")
@@ -78,6 +80,8 @@ class TranscodeOperations(
             if (outputFile.exists()) {
                 outputFile.delete()
             }
+        } finally {
+            timer.end()
         }
     }.flowOn(dispatcherProvider.io)
 
@@ -90,6 +94,7 @@ class TranscodeOperations(
      */
     @OptIn(FlowPreview::class)
     fun resize(uri: Uri, width: Int, height: Int): Flow<Result<File>> = flow<Result<File>> {
+        val timer = TimeTracker.start("resize")
         Timber.d("Starting resize operation for $uri to ${width}x${height}")
 
         try {
@@ -129,6 +134,8 @@ class TranscodeOperations(
         } catch (e: Exception) {
             Timber.e(e, "Error during resize operation")
             emit(Result.failure(e))
+        } finally {
+            timer.end()
         }
     }.flowOn(dispatcherProvider.io)
 
@@ -140,6 +147,7 @@ class TranscodeOperations(
      */
     @OptIn(FlowPreview::class)
     fun crop(uri: Uri, cropRect: android.graphics.RectF): Flow<Result<File>> = flow<Result<File>> {
+        val timer = TimeTracker.start("crop")
         Timber.d("Starting crop operation for $uri with rect $cropRect")
 
         try {
@@ -174,13 +182,17 @@ class TranscodeOperations(
                 preserveAudio = metadata.hasAudio
             )
 
-            // For MVP: Use identity transform (crop visual via OpenGL coming later)
-            // The resize to crop dimensions will handle the size change
-            emitAll(transcodePipeline.process(uri, Transform.IDENTITY, config))
+            // Use IDENTITY transform (no OpenGL) - just resize to crop dimensions
+            // TODO: Full visual crop requires OpenGL in single-threaded context
+            Timber.d("Crop using direct surface path (resize to ${cropWidth}x${cropHeight})")
+            val transform = Transform.IDENTITY
+            emitAll(transcodePipeline.process(uri, transform, config))
 
         } catch (e: Exception) {
             Timber.e(e, "Error during crop operation")
             emit(Result.failure(e))
+        } finally {
+            timer.end()
         }
     }.flowOn(dispatcherProvider.io)
 

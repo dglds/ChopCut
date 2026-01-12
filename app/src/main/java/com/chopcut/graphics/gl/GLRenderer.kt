@@ -1,8 +1,8 @@
 package com.chopcut.graphics.gl
 
 import android.graphics.SurfaceTexture
+import android.opengl.GLES11Ext
 import android.opengl.GLES20
-import android.opengl.GLUtils
 import android.opengl.Matrix
 import com.chopcut.data.model.Transform
 import timber.log.Timber
@@ -12,6 +12,7 @@ import java.nio.FloatBuffer
 
 /**
  * OpenGL ES 2.0 renderer for video frame transformations
+ * Uses SurfaceTexture's external texture for rendering
  */
 class GLRenderer {
 
@@ -28,10 +29,12 @@ class GLRenderer {
             }
         """
 
+        // Use samplerExternalOES for SurfaceTexture textures
         private const val FRAGMENT_SHADER = """
+            #extension GL_OES_EGL_image_external : require
             precision mediump float;
             varying vec2 vTextureCoord;
-            uniform sampler2D uTexture;
+            uniform samplerExternalOES uTexture;
             void main() {
                 gl_FragColor = texture2D(uTexture, vTextureCoord);
             }
@@ -62,6 +65,7 @@ class GLRenderer {
     private var textureCoordHandle = 0
     private var mvpMatrixHandle = 0
     private var textureMatrixHandle = 0
+    private var textureSamplerHandle = 0
 
     // Vertex buffers
     private var vertexBuffer: FloatBuffer
@@ -71,14 +75,13 @@ class GLRenderer {
     private val mvpMatrix = FloatArray(16)
     private val textureMatrix = FloatArray(16)
     private val transformMatrix = FloatArray(16)
-    private val tempMatrix = FloatArray(16)
-
-    // Texture ID
-    private var textureId = 0
 
     // Viewport size
     private var viewportWidth = 0
     private var viewportHeight = 0
+
+    // External OES texture handle (for SurfaceTexture)
+    private var externalTextureId = 0
 
     private var initialized = false
 
@@ -116,6 +119,10 @@ class GLRenderer {
 
             // Create program
             program = GLES20.glCreateProgram()
+            if (program == 0) {
+                throw RuntimeException("Failed to create shader program")
+            }
+
             GLES20.glAttachShader(program, vertexShader)
             GLES20.glAttachShader(program, fragmentShader)
             GLES20.glLinkProgram(program)
@@ -134,21 +141,23 @@ class GLRenderer {
             textureCoordHandle = GLES20.glGetAttribLocation(program, "aTextureCoord")
             mvpMatrixHandle = GLES20.glGetUniformLocation(program, "uMVPMatrix")
             textureMatrixHandle = GLES20.glGetUniformLocation(program, "uTextureMatrix")
+            textureSamplerHandle = GLES20.glGetUniformLocation(program, "uTexture")
 
-            // Generate texture
+            // Generate and configure external OES texture
             val textures = IntArray(1)
             GLES20.glGenTextures(1, textures, 0)
-            textureId = textures[0]
+            externalTextureId = textures[0]
 
-            // Configure texture
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, externalTextureId)
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
 
             initialized = true
             Timber.d("GLRenderer initialized successfully")
+            Timber.d("Handles: pos=$positionHandle, texCoord=$textureCoordHandle, mvp=$mvpMatrixHandle, texMat=$textureMatrixHandle, sampler=$textureSamplerHandle")
+            Timber.d("External texture ID: $externalTextureId")
 
         } catch (e: Exception) {
             Timber.e(e, "Failed to initialize GLRenderer")
@@ -210,7 +219,22 @@ class GLRenderer {
     }
 
     /**
+     * Attach a SurfaceTexture to this renderer's external texture
+     * This must be called before renderFrame()
+     */
+    fun attachSurfaceTexture(surfaceTexture: SurfaceTexture) {
+        if (!initialized) {
+            Timber.w("GLRenderer not initialized, cannot attach SurfaceTexture")
+            return
+        }
+        // Detach from any old texture and attach to our external texture
+        surfaceTexture.detachFromGLContext()
+        // Note: SurfaceTexture will be attached during first use in renderFrame
+    }
+
+    /**
      * Render frame from surface texture
+     * Note: SurfaceTexture manages its own OpenGL texture (GL_TEXTURE_EXTERNAL_OES)
      */
     fun renderFrame(surfaceTexture: SurfaceTexture): Boolean {
         if (!initialized) {
@@ -219,10 +243,10 @@ class GLRenderer {
         }
 
         try {
-            // Update texture from SurfaceTexture
+            // Update texture from SurfaceTexture (this updates the external OES texture)
             surfaceTexture.updateTexImage()
 
-            // Get texture transformation matrix
+            // Get texture transformation matrix from SurfaceTexture
             surfaceTexture.getTransformMatrix(textureMatrix)
 
             // Clear screen
@@ -252,10 +276,10 @@ class GLRenderer {
                 textureCoordHandle, 2, GLES20.GL_FLOAT, false, 0, textureBuffer
             )
 
-            // Bind texture
+            // Bind the external OES texture - SurfaceTexture uses texture unit 0 by default
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
-            GLES20.glUniform1i(textureMatrixHandle, 0)
+            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, externalTextureId)
+            GLES20.glUniform1i(textureSamplerHandle, 0)
 
             // Draw
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
@@ -285,9 +309,9 @@ class GLRenderer {
     fun release() {
         Timber.d("Releasing GLRenderer")
 
-        if (textureId != 0) {
-            GLES20.glDeleteTextures(1, intArrayOf(textureId), 0)
-            textureId = 0
+        if (externalTextureId != 0) {
+            GLES20.glDeleteTextures(1, intArrayOf(externalTextureId), 0)
+            externalTextureId = 0
         }
 
         if (program != 0) {
@@ -301,6 +325,9 @@ class GLRenderer {
 
     private fun loadShader(type: Int, shaderCode: String): Int {
         val shader = GLES20.glCreateShader(type)
+        if (shader == 0) {
+            throw RuntimeException("Failed to create shader (type=$type)")
+        }
         GLES20.glShaderSource(shader, shaderCode)
         GLES20.glCompileShader(shader)
 

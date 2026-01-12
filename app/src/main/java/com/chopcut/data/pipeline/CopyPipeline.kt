@@ -9,6 +9,7 @@ import android.net.Uri
 import com.chopcut.data.model.TimeRange
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.util.DispatcherProvider
+import com.chopcut.util.TimeTracker
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -30,6 +31,7 @@ class CopyPipeline(
      */
     @OptIn(FlowPreview::class)
     fun trim(uri: Uri, ranges: List<TimeRange>): Flow<Result<File>> = flow {
+        val timer = TimeTracker.start("trim")
         Timber.d("Starting trim operation for $uri with ${ranges.size} range(s)")
 
         val outputFile = videoRepository.createTempFile(".mp4")
@@ -138,6 +140,8 @@ class CopyPipeline(
             if (outputFile.exists()) {
                 outputFile.delete()
             }
+        } finally {
+            timer.end()
         }
     }.flowOn(dispatcherProvider.io)
 
@@ -149,6 +153,7 @@ class CopyPipeline(
      */
     @OptIn(FlowPreview::class)
     fun concat(uris: List<Uri>): Flow<Result<File>> = flow {
+        val timer = TimeTracker.start("concat")
         if (uris.isEmpty()) {
             emit(Result.failure(IllegalArgumentException("No videos provided")))
             return@flow
@@ -255,6 +260,8 @@ class CopyPipeline(
             if (outputFile.exists()) {
                 outputFile.delete()
             }
+        } finally {
+            timer.end()
         }
     }.flowOn(dispatcherProvider.io)
 

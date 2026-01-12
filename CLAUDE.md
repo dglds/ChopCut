@@ -1,9 +1,6 @@
 # CLAUDE.md
 ## Dev rules
  - Pense em português pt-br.
- - Sempre utilize a task gradle 'quick' e após a verificação use o build padrão.
- - Utilize uma cor ciano quando mostrar uma mensagem para o usuário.
- - Quando finalizar a tarefa e o build compilar, instale o app usando installDebug.
 
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -60,6 +57,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Install debug APK to connected device
 ./gradlew installDebug
+
+# Install debug APK and start log monitor
+./gradlew installDebugWithMonitor
+```
+
+### Log Monitor Commands
+```bash
+# Start log monitor (server + browser)
+./gradlew logMonitor
+
+# Start only the server
+./gradlew startLogMonitor
+
+# Open log monitor interface
+./gradlew openLogMonitor
+
+# Stop log monitor server
+./gradlew stopLogMonitor
+
+# Check log monitor status
+./gradlew checkLogMonitor
 ```
 
 ### Gradle Wrapper
@@ -79,26 +97,37 @@ This is a fresh project with basic structure. The app uses:
 
 ### Project Structure
 ```
-app/src/main/java/com/chopcut/
-├── ChopCutApplication.kt   # Application class
-├── MainActivity.kt          # Main activity entry point
-├── util/                    # Utilities
-│   └── DispatcherProvider.kt
-├── data/                    # Data layer
-│   ├── model/              # Data models
-│   │   ├── VideoInfo.kt
-│   │   ├── VideoCodec.kt
-│   │   └── TimeRange.kt
-│   ├── codec/              # Codec detection
-│   │   └── CodecCapabilities.kt
-│   ├── repository/         # Repositories
-│   │   └── VideoRepository.kt
-│   └── pipeline/           # Video processing pipelines
-│       └── CopyPipeline.kt
-└── ui/theme/                # Compose theming
-    ├── Theme.kt            # App theme configuration
-    ├── Color.kt            # Color palette
-    └── Type.kt             # Typography definitions
+ChopCut/
+├── app/                     # Android application
+│   └── src/main/java/com/chopcut/
+│       ├── ChopCutApplication.kt   # Application class
+│       ├── MainActivity.kt          # Main activity entry point
+│       ├── util/                    # Utilities
+│       │   └── DispatcherProvider.kt
+│       ├── data/                    # Data layer
+│       │   ├── model/              # Data models
+│       │   │   ├── VideoInfo.kt
+│       │   │   ├── VideoCodec.kt
+│       │   │   └── TimeRange.kt
+│       │   ├── codec/              # Codec detection
+│       │   │   └── CodecCapabilities.kt
+│       │   ├── repository/         # Repositories
+│       │   │   └── VideoRepository.kt
+│       │   └── pipeline/           # Video processing pipelines
+│       │       └── CopyPipeline.kt
+│       └── ui/theme/                # Compose theming
+│           ├── Theme.kt            # App theme configuration
+│           ├── Color.kt            # Color palette
+│           └── Type.kt             # Typography definitions
+└── log-monitor/             # Real-time log monitoring tool
+    ├── index.html          # Web interface
+    ├── styles.css          # Styles
+    ├── app.js              # Frontend logic
+    ├── server.js           # Node.js server (SSE)
+    ├── start.sh            # Startup script
+    ├── README.md           # Full documentation
+    ├── QUICK_START.md      # Quick start guide
+    └── GRADLE_TASKS.md     # Gradle tasks documentation
 ```
 
 ### Dependency Management
@@ -159,10 +188,66 @@ com.chopcut/
 ```
 
 
+## Log Monitor Tool
+
+ChopCut includes a powerful real-time log monitoring tool built with Node.js and Server-Sent Events (SSE).
+
+### Features
+- ✅ Real-time logcat monitoring via web interface
+- ✅ Filter by log level (ERROR, WARNING, INFO, DEBUG, VERBOSE)
+- ✅ Search logs in real-time
+- ✅ Auto-scroll with toggle
+- ✅ Copy filtered logs to clipboard
+- ✅ Live statistics dashboard
+- ✅ Start/Stop server from browser
+
+### Quick Start
+```bash
+# Start monitor (recommended)
+./gradlew logMonitor
+
+# Or use the script directly
+cd log-monitor
+./start.sh
+```
+
+### Prerequisites
+- Node.js (v12 or higher)
+- ADB (Android Debug Bridge)
+- Android device connected via USB
+
+### Documentation
+- `log-monitor/README.md` - Complete documentation
+- `log-monitor/QUICK_START.md` - Quick start guide
+- `log-monitor/GRADLE_TASKS.md` - Gradle tasks reference
+
+### Common Workflows
+
+**Development with Live Logs:**
+```bash
+./gradlew quick && ./gradlew installDebugWithMonitor
+# Opens browser automatically
+# Click "Start Server" in the interface
+```
+
+**Debug Specific Issue:**
+```bash
+adb logcat -c                    # Clear logcat
+./gradlew logMonitor             # Start monitor
+# In browser: Filter only ERROR logs
+# Reproduce the issue
+```
+
+**Check Monitor Status:**
+```bash
+./gradlew checkLogMonitor
+```
+
 ## Important Files
 
-- `app/build.gradle.kts` - App module build configuration
+- `app/build.gradle.kts` - App module build configuration (includes log monitor tasks)
 - `build.gradle.kts` - Project-level build configuration
 - `gradle/libs.versions.toml` - Dependency catalog
 - `app/src/main/AndroidManifest.xml` - App manifest
 - `gradle.properties` - Gradle configuration properties
+- `log-monitor/` - Real-time log monitoring tool
