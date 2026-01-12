@@ -60,7 +60,7 @@ fun WaveForm(
 
             // Red/orange bars are 10%, yellow/green are tall
             val barHeight = when {
-                amp <= lowThreshold -> size.height * 0.05f  // Red = 10%
+                amp <= lowThreshold -> size.height * 0.05f  // Red = 5%
                 else -> size.height * (normalizedAmp * 0.75f + 0.20f)  // Yellow/green = tall
             }
 
