@@ -274,7 +274,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = HomeUiState.Processing("Extracting audio data...")
             try {
-                val rawData = audioDataExtractor.extractRawPcmData(uri, _waveformBars.value)
+                val rawData = audioDataExtractor.extractRawPcmData(uri)
                 _audioRawData.value = rawData
                 _waveformData.value = WaveformData.empty()  // Clear old waveform
 
