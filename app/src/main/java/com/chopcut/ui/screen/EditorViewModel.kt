@@ -219,10 +219,33 @@ class EditorViewModel(
             }
 
             try {
-                projectRepository.saveProject(projectToSave, edits.value)
-                _project.value = projectToSave
+                // Regenerate thumbnail with current rotation
+                val totalRotation = edits.value.filterIsInstance<EditOperation.Rotation>()
+                    .sumOf { it.degrees }
+                
+                val thumbFile = java.io.File(context.filesDir, "projects/${projectToSave.id}/thumbnail.jpg")
+                // Ensure directory exists
+                thumbFile.parentFile?.mkdirs()
+                
+                // Use sourceVideoUri from project (it's internal URI now)
+                val sourceUri = Uri.parse(projectToSave.sourceVideoUri)
+                
+                val thumbSuccess = thumbnailExtractor.extractToFile(
+                    sourceUri, 
+                    thumbFile, 
+                    rotation = totalRotation
+                )
+                
+                val finalProject = if (thumbSuccess) {
+                    projectToSave.copy(thumbnail = thumbFile.absolutePath)
+                } else {
+                    projectToSave
+                }
+
+                projectRepository.saveProject(finalProject, edits.value)
+                _project.value = finalProject
                 _saveStatus.value = SaveStatus.SAVED
-                Timber.d("Project saved: ${projectToSave.name}")
+                Timber.d("Project saved: ${finalProject.name}")
                 if (manual) {
                     _uiMessage.emit("Projeto salvo com sucesso!")
                 }

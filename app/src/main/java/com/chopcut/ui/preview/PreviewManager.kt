@@ -17,13 +17,42 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+import androidx.media3.common.util.UnstableApi
+import com.chopcut.data.model.EditOperation
+import com.chopcut.data.player.EffectFactory
+
 /**
  * Manages ExoPlayer for video preview playback
  */
+@UnstableApi
 class PreviewManager(private val context: Context) {
 
     var exoPlayer: ExoPlayer? = null
         private set
+
+    // ... (existing code)
+
+    /**
+     * Apply edit operations as video effects
+     */
+    fun applyEffects(operations: List<EditOperation>) {
+        val player = exoPlayer ?: return
+        
+        try {
+            val effects = EffectFactory.createEffects(operations)
+            player.setVideoEffects(effects)
+            
+            // Force visual update if paused
+            if (!player.isPlaying) {
+                 // Seeking to the exact same position often forces a redraw
+                 player.seekTo(player.currentPosition) 
+            }
+            
+            Timber.d("Applied ${effects.size} video effects. First: ${effects.firstOrNull()}")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to apply video effects")
+        }
+    }
 
     // Coroutine scope for position updates
     private val updateScope = CoroutineScope(Dispatchers.Main)

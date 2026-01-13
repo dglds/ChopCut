@@ -69,19 +69,36 @@ class ThumbnailExtractor(
         uri: Uri,
         destFile: java.io.File,
         width: Int = 320,
-        height: Int = 180
+        height: Int = 180,
+        rotation: Int = 0
     ): Boolean = withContext(Dispatchers.IO) {
-        val bitmap = extractAt(uri, 0, width, height) // Extract at start (0ms)
+        var bitmap = extractAt(uri, 0, width, height) // Extract at start (0ms)
+        
         if (bitmap != null) {
             try {
-                java.io.FileOutputStream(destFile).use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+                // Apply rotation if needed
+                if (rotation % 360 != 0) {
+                    val matrix = android.graphics.Matrix()
+                    matrix.postRotate(rotation.toFloat())
+                    val rotatedBitmap = Bitmap.createBitmap(
+                        bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+                    )
+                    if (rotatedBitmap != bitmap) {
+                        bitmap.recycle() // Release original if rotated is different
+                        bitmap = rotatedBitmap
+                    }
                 }
-                Timber.d("Thumbnail saved to ${destFile.absolutePath}")
+
+                java.io.FileOutputStream(destFile).use { out ->
+                    bitmap?.compress(Bitmap.CompressFormat.JPEG, 80, out)
+                }
+                Timber.d("Thumbnail saved to ${destFile.absolutePath} (rot: $rotation)")
                 true
             } catch (e: Exception) {
                 Timber.e(e, "Failed to save thumbnail to file")
                 false
+            } finally {
+                bitmap?.recycle()
             }
         } else {
             false

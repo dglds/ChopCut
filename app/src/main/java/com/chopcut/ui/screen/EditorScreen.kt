@@ -67,6 +67,8 @@ import com.chopcut.ui.preview.PreviewManager
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
+import androidx.media3.common.util.UnstableApi
+
 /**
  * Editor screen for video editing
  *
@@ -74,6 +76,7 @@ import timber.log.Timber
  * @param onNavigateBack Callback when user wants to go back
  * @param onExportComplete Callback when export is complete (result Uri)
  */
+@androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
@@ -112,6 +115,11 @@ fun EditorScreen(
     val canUndo by editorViewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by editorViewModel.canRedo.collectAsStateWithLifecycle()
     val saveStatus by editorViewModel.saveStatus.collectAsStateWithLifecycle()
+
+    // Apply effects when edits change
+    LaunchedEffect(edits) {
+        previewManager.applyEffects(edits)
+    }
 
     // Handle UI messages
     LaunchedEffect(Unit) {
@@ -205,11 +213,17 @@ fun EditorScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            // Calculate total rotation
+            val totalRotation = edits.filterIsInstance<EditOperation.Rotation>()
+                .sumOf { it.degrees }
+                .toFloat() % 360f
+
             // Video Preview
             VideoPreview(
                 uri = currentVideoUri,
                 previewManager = previewManager,
                 modifier = Modifier.fillMaxWidth(),
+                rotationDegrees = totalRotation,
                 onPositionChanged = { positionMs ->
                     Timber.d("Position: ${positionMs}ms")
                 },

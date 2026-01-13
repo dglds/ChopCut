@@ -1,9 +1,9 @@
 package com.chopcut.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,16 +22,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.ui.PlayerView
+import com.chopcut.R
 import com.chopcut.ui.preview.PreviewManager
-import kotlinx.coroutines.CoroutineScope
 import timber.log.Timber
-
-import androidx.compose.foundation.clickable
+import android.view.LayoutInflater
 
 /**
  * Video preview component with ExoPlayer integration
@@ -39,6 +39,7 @@ import androidx.compose.foundation.clickable
  * @param uri Video URI to preview
  * @param previewManager PreviewManager instance
  * @param modifier Modifier for the container
+ * @param rotationDegrees Rotation to apply to the video view
  * @param onPositionChanged Callback when video position changes (in ms)
  * @param onVideoClick Callback when the video surface is clicked
  */
@@ -47,6 +48,7 @@ fun VideoPreview(
     uri: android.net.Uri,
     previewManager: PreviewManager,
     modifier: Modifier = Modifier,
+    rotationDegrees: Float = 0f,
     onPositionChanged: (Long) -> Unit = {},
     onVideoClick: () -> Unit = {}
 ) {
@@ -97,18 +99,19 @@ fun VideoPreview(
             if (isReady) {
                 AndroidView(
                     factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            useController = false  // Timeline controls playback
+                        // Inflate from XML to use TextureView (supports rotation)
+                        val view = LayoutInflater.from(ctx).inflate(R.layout.player_view, null) as PlayerView
+                        view.apply {
                             controllerShowTimeoutMs = 0
                             player = previewManager.exoPlayer
-                            Timber.d("PlayerView created with player: ${previewManager.exoPlayer}")
+                            Timber.d("PlayerView created from XML with TextureView")
                         }
                     },
                     update = { view ->
                         // Ensure the view is always attached to the current player
-                        view.player = previewManager.exoPlayer
+                        (view as PlayerView).player = previewManager.exoPlayer
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize().rotate(rotationDegrees)
                 )
             }
 
@@ -167,18 +170,11 @@ private fun formatTime(timeMs: Long): String {
 
 /**
  * Video preview controls with play/pause button
- *
- * @param previewManager PreviewManager instance
- * @param modifier Modifier for the container
  */
 @Composable
 fun VideoPreviewControls(
     previewManager: PreviewManager,
     modifier: Modifier = Modifier
 ) {
-    val isPlaying by previewManager.isPlaying.collectAsStateWithLifecycle()
-    val isReady by previewManager.isReady.collectAsStateWithLifecycle()
-
-    // TODO: Create play/pause button component
-    // This will be integrated with the main VideoPreview component
+    // Unused, can be removed or kept for future
 }

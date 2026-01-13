@@ -192,6 +192,8 @@ dependencies {
     // ExoPlayer (Media3)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.effect)
+    implementation(libs.androidx.media3.transformer)
 
     // Timber
     implementation(libs.timber)
