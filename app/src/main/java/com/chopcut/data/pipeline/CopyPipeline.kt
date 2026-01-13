@@ -291,12 +291,17 @@ class CopyPipeline(
         endUs: Long,
         onProgress: (Float) -> Unit
     ) {
+        // Seek to the closest sync frame (keyframe) at or before start time
         extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+        val actualStartUs = extractor.sampleTime
+
+        Timber.d("processTrack: requested start=$startUs, actual seek position=$actualStartUs")
 
         val buffer = MediaCodec.BufferInfo()
         val byteBuffer = java.nio.ByteBuffer.allocate(1024 * 1024)
 
         var lastProgressUpdate = 0f
+        var firstSampleWritten = false
 
         while (true) {
             val sampleSize = extractor.readSampleData(byteBuffer, 0)
@@ -310,19 +315,30 @@ class CopyPipeline(
                 break
             }
 
-            // Skip samples before start time
-            if (sampleTime >= startUs) {
+            // Write samples from the sync frame onwards (needed for proper decoding)
+            // but adjust presentation time to start from 0
+            if (sampleTime >= actualStartUs) {
                 buffer.offset = 0
                 buffer.size = sampleSize
-                buffer.presentationTimeUs = sampleTime - startUs
+
+                // Adjust presentation time: subtract the actual start time
+                // This ensures the video starts at timestamp 0
+                buffer.presentationTimeUs = sampleTime - actualStartUs
+
+                // Preserve sync frame flag for the first sample
                 buffer.flags = extractor.sampleFlags
+                if (!firstSampleWritten) {
+                    // Ensure first frame is marked as sync frame
+                    buffer.flags = buffer.flags or MediaCodec.BUFFER_FLAG_KEY_FRAME
+                    firstSampleWritten = true
+                }
 
                 muxer.writeSampleData(outputTrackIndex, byteBuffer, buffer)
 
                 // Update progress
-                val progress = ((sampleTime - startUs).toFloat() / (endUs - startUs).toFloat())
+                val progress = ((sampleTime - actualStartUs).toFloat() / (endUs - actualStartUs).toFloat())
                 if (progress - lastProgressUpdate > 0.01f) { // Update every 1%
-                    onProgress(progress)
+                    onProgress(progress.coerceIn(0f, 1f))
                     lastProgressUpdate = progress
                 }
             }

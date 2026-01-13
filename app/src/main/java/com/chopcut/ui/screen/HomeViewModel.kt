@@ -11,12 +11,17 @@ import com.chopcut.data.audio.WaveFormGenerator
 import com.chopcut.data.audio.model.AudioFormat
 import com.chopcut.ui.components.WaveformData
 import com.chopcut.data.codec.CodecCapabilities
+import com.chopcut.data.model.ExportConfig
 import com.chopcut.data.model.TimeRange
+import com.chopcut.data.model.Transform
 import com.chopcut.data.model.VideoCodec
 import com.chopcut.data.model.VideoInfo
 import com.chopcut.data.pipeline.CopyPipeline
 import com.chopcut.data.pipeline.TranscodeOperations
+import com.chopcut.data.pipeline.TranscodePipeline
 import com.chopcut.data.repository.VideoRepository
+import com.chopcut.service.ExportServiceManager
+import com.chopcut.util.DispatcherProvider
 import com.chopcut.util.error.ChopCutException
 import com.chopcut.util.error.ErrorHandler
 import com.chopcut.util.error.safeExecute
@@ -25,6 +30,7 @@ import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -33,9 +39,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val videoRepository = VideoRepository(application)
     private val codecCapabilities = CodecCapabilities()
     private val copyPipeline = CopyPipeline(application, videoRepository)
+    private val transcodePipeline = TranscodePipeline(application, videoRepository)
     private val transcodeOperations = TranscodeOperations(application, videoRepository)
     private val audioExtractor = AudioExtractor(application, videoRepository)
     private val audioDataExtractor = AudioDataExtractor(application)
+
+    // Export service manager para testes
+    private val exportServiceManager = ExportServiceManager(application)
 
     // Raw PCM data (extracted once, reused for waveform generation)
     private val _audioRawData = MutableStateFlow<AudioRawData?>(null)
@@ -67,8 +77,51 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _errorState = MutableStateFlow<ErrorHandler.ErrorState?>(null)
     val errorState: StateFlow<ErrorHandler.ErrorState?> = _errorState.asStateFlow()
 
+    // Export test state
+    private val _exportProgress = MutableStateFlow(0)
+    val exportProgress: StateFlow<Int> = _exportProgress.asStateFlow()
+
+    private val _exportStatus = MutableStateFlow<String?>(null)
+    val exportStatus: StateFlow<String?> = _exportStatus.asStateFlow()
+
     init {
         checkCodecs()
+        setupExportListeners()
+    }
+
+    private fun setupExportListeners() {
+        viewModelScope.launch {
+            exportServiceManager.events.collect { event ->
+                when (event) {
+                    is ExportServiceManager.ExportEvent.Progress -> {
+                        _exportProgress.value = event.progress
+                        _exportStatus.value = "Exportando: ${event.progress}%"
+                        Timber.d("Export progress: ${event.progress}%")
+                    }
+                    is ExportServiceManager.ExportEvent.Success -> {
+                        _exportProgress.value = 100
+                        _exportStatus.value = "Concluído: ${event.outputName}"
+                        _uiState.value = HomeUiState.Success(
+                            "Export via Service concluído!\nOutput: ${event.outputName}\nURI: ${event.outputUri}"
+                        )
+                        Timber.d("Export successful: ${event.outputName}")
+                        // Resetar progresso após um delay
+                        kotlinx.coroutines.delay(3000)
+                        _exportProgress.value = 0
+                        _exportStatus.value = null
+                    }
+                    is ExportServiceManager.ExportEvent.Error -> {
+                        _exportStatus.value = "Erro: ${event.error}"
+                        _uiState.value = HomeUiState.Error("Export falhou: ${event.error}")
+                        Timber.e("Export failed: ${event.error}")
+                        // Resetar progresso após um delay
+                        kotlinx.coroutines.delay(3000)
+                        _exportProgress.value = 0
+                        _exportStatus.value = null
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -410,6 +463,164 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleWaveformMirrored() {
         _waveformMirrored.value = !_waveformMirrored.value
+    }
+
+    /**
+     * Teste de export usando ForegroundService
+     * Mostra notificação de progresso e continua em background
+     */
+    fun testExportForegroundService() {
+        val uri = _selectedVideoUri.value
+        if (uri == null) {
+            _errorState.value = ErrorHandler.ErrorState(
+                title = "Nenhum vídeo selecionado",
+                message = "Selecione um vídeo primeiro",
+                recovery = com.chopcut.util.error.RecoveryStrategy.SelectAnotherVideo
+            )
+            return
+        }
+
+        viewModelScope.launch(DispatcherProvider.io) {
+            _exportProgress.value = 0
+            _exportStatus.value = "Iniciando export..."
+
+            try {
+                // Obter duração do vídeo para exportar até 30s ou o completo se for menor
+                val metadata = videoRepository.getMetadata(uri)
+                val durationMs = metadata?.durationUs?.div(1000) ?: 30000
+                val exportDurationMs = minOf(durationMs, 30000) // Máximo 30s
+
+                val timeRange = TimeRange(startMs = 0, endMs = exportDurationMs)
+                val outputName = "test_service_${System.currentTimeMillis()}.mp4"
+
+                exportServiceManager.startExport(
+                    videoUri = uri,
+                    timeRanges = listOf(timeRange),
+                    outputName = outputName,
+                    exportType = "trim"
+                )
+
+                _uiState.value = HomeUiState.Processing("Export iniciado via ForegroundService...")
+                Timber.d("ForegroundService export started: ${exportDurationMs}ms")
+            } catch (e: Exception) {
+                Timber.e(e, "Error starting foreground service export")
+                _uiState.value = HomeUiState.Error("Erro ao iniciar export: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Teste de export com RE-ENCODING (garante qualidade, mas é mais lento)
+     * Usa TranscodePipeline com as mesmas configurações do vídeo original
+     */
+    fun testExportReencode() {
+        val uri = _selectedVideoUri.value
+        if (uri == null) {
+            _errorState.value = ErrorHandler.ErrorState(
+                title = "Nenhum vídeo selecionado",
+                message = "Selecione um vídeo primeiro",
+                recovery = com.chopcut.util.error.RecoveryStrategy.SelectAnotherVideo
+            )
+            return
+        }
+
+        viewModelScope.launch(DispatcherProvider.io) {
+            _exportProgress.value = 0
+            _exportStatus.value = "Iniciando export (re-encode)..."
+
+            try {
+                val metadata = videoRepository.getMetadata(uri)
+                    ?: throw IllegalArgumentException("Não foi possível ler metadados do vídeo")
+
+                // Usar configuração baseada no vídeo original
+                val config = com.chopcut.data.model.ExportConfig.fromVideoInfo(metadata)
+
+                Timber.d("Export re-encode: ${metadata.width}x${metadata.height}, codec=${metadata.videoCodec}, bitrate=${config.bitrate}")
+
+                _uiState.value = HomeUiState.Processing("Re-encodando vídeo...\nIsso pode levar alguns segundos")
+
+                transcodePipeline.process(uri, com.chopcut.data.model.Transform.IDENTITY, config)
+                    .collect { result ->
+                        result.getOrNull()?.let { file ->
+                            _exportProgress.value = 100
+                            _exportStatus.value = "Salvando na galeria..."
+
+                            viewModelScope.launch(DispatcherProvider.io) {
+                                val outputName = "reencode_${System.currentTimeMillis()}.mp4"
+                                val outputUri = videoRepository.saveToGallery(file, outputName)
+
+                                outputUri?.let {
+                                    _exportProgress.value = 0
+                                    _uiState.value = HomeUiState.Success(
+                                        "Export (Re-encode) concluído!\n" +
+                                        "Output: $outputName\n" +
+                                        "Size: ${file.length() / 1024} KB\n" +
+                                        "URI: $it"
+                                    )
+                                } ?: run {
+                                    _uiState.value = HomeUiState.Error("Falha ao salvar na galeria")
+                                }
+                            }
+                        } ?: run {
+                            val error = result.exceptionOrNull()
+                            Timber.e(error, "Re-encode failed")
+                            _exportProgress.value = 0
+                            _uiState.value = HomeUiState.Error("Re-encode falhou: ${error?.message}")
+                        }
+                    }
+            } catch (e: Exception) {
+                Timber.e(e, "Error during re-encode")
+                _exportProgress.value = 0
+                _uiState.value = HomeUiState.Error("Erro ao iniciar re-encode: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Teste de export usando WorkManager
+     * Persiste mesmo se o app for fechado
+     */
+    fun testExportWorkManager() {
+        val uri = _selectedVideoUri.value
+        if (uri == null) {
+            _errorState.value = ErrorHandler.ErrorState(
+                title = "Nenhum vídeo selecionado",
+                message = "Selecione um vídeo primeiro",
+                recovery = com.chopcut.util.error.RecoveryStrategy.SelectAnotherVideo
+            )
+            return
+        }
+
+        viewModelScope.launch(DispatcherProvider.io) {
+            try {
+                val timeRange = TimeRange(startMs = 0, endMs = 5000)
+                val outputName = "test_workmanager_${System.currentTimeMillis()}.mp4"
+
+                val scheduler = com.chopcut.service.ExportWorkScheduler(getApplication())
+                scheduler.scheduleExport(
+                    videoUri = uri,
+                    timeRanges = listOf(timeRange),
+                    outputName = outputName
+                )
+
+                _uiState.value = HomeUiState.Processing("Export agendado via WorkManager")
+                Timber.d("WorkManager export scheduled")
+            } catch (e: Exception) {
+                Timber.e(e, "Error scheduling work manager export")
+                _uiState.value = HomeUiState.Error("Erro ao agendar export: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Cancela export em andamento
+     */
+    fun cancelExport() {
+        exportServiceManager.cancelExport()
+        _exportProgress.value = 0
+        _exportStatus.value = "Export cancelado"
+        _uiState.value = HomeUiState.Success("Export cancelado")
+        Timber.d("Export cancelled")
     }
 }
 

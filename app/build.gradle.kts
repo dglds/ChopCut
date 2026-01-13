@@ -128,6 +128,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    kotlin("plugin.parcelize")
 }
 
 android {
@@ -181,6 +182,9 @@ dependencies {
     // ViewModel
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
+    // ProcessLifecycleOwner
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
@@ -190,6 +194,13 @@ dependencies {
 
     // Timber
     implementation(libs.timber)
+
+    // WorkManager
+    implementation(libs.androidx.work.runtime.ktx)
+
+    // Coroutines
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

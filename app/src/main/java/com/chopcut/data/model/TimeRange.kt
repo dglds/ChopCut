@@ -1,9 +1,13 @@
 package com.chopcut.data.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
 data class TimeRange(
     val startMs: Long,
     val endMs: Long
-) {
+) : Parcelable {
     init {
         require(startMs >= 0) { "startMs must be >= 0" }
         require(endMs > startMs) { "endMs must be > startMs" }

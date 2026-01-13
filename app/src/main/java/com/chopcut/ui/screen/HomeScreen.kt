@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +40,8 @@ fun HomeScreen(
     val waveformBars by viewModel.waveformBars.collectAsState()
     val waveformMirrored by viewModel.waveformMirrored.collectAsState()
     val audioRawData by viewModel.audioRawData.collectAsState()
+    val exportProgress by viewModel.exportProgress.collectAsState()
+    val exportStatus by viewModel.exportStatus.collectAsState()
 
     // Video picker launcher
     val videoPickerLauncher = rememberLauncherForActivityResult(
@@ -174,6 +180,21 @@ fun HomeScreen(
                         onTestCompress = { viewModel.testCompress() },
                         onTestResize = { viewModel.testResize() },
                         onTestCrop = { viewModel.testCrop() },
+                        enabled = uiState !is HomeUiState.Processing
+                    )
+                }
+            }
+
+            // Background Export Test - Phase 4.4
+            if (selectedUri != null) {
+                item {
+                    BackgroundExportCard(
+                        progress = exportProgress,
+                        status = exportStatus,
+                        onTestForegroundService = { viewModel.testExportForegroundService() },
+                        onTestWorkManager = { viewModel.testExportWorkManager() },
+                        onTestReencode = { viewModel.testExportReencode() },
+                        onCancelExport = { viewModel.cancelExport() },
                         enabled = uiState !is HomeUiState.Processing
                     )
                 }
@@ -691,6 +712,246 @@ fun WaveFormCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+fun BackgroundExportCard(
+    progress: Int,
+    status: String?,
+    onTestForegroundService: () -> Unit,
+    onTestWorkManager: () -> Unit,
+    onTestReencode: () -> Unit,
+    onCancelExport: () -> Unit,
+    enabled: Boolean
+) {
+    var showCancelDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (progress > 0)
+                MaterialTheme.colorScheme.primaryContainer
+            else
+                MaterialTheme.colorScheme.secondaryContainer
+        ),
+        border = if (progress > 0)
+            androidx.compose.foundation.BorderStroke(
+                2.dp,
+                MaterialTheme.colorScheme.primary
+            )
+        else null
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Step 4: Test Background Export",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (progress > 0)
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    else
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                if (progress > 0) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Teste exportação em background com notificação:",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (progress > 0)
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                else
+                    MaterialTheme.colorScheme.onSecondaryContainer
+            )
+
+            // Progress Bar (visível durante export)
+            if (progress > 0) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LinearProgressIndicator(
+                    progress = { progress / 100f },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = status ?: "Exportando...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = "$progress%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Botão de cancelar durante export
+                Button(
+                    onClick = { showCancelDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Cancelar Export")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            } else {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Botão único para testar FG Service
+                Button(
+                    onClick = onTestForegroundService,
+                    enabled = enabled,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Testar Export com Notificação")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Botão secundário para WorkManager
+                OutlinedButton(
+                    onClick = onTestWorkManager,
+                    enabled = enabled,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Testar via WorkManager")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Botão terciário para Re-encode (garante qualidade)
+                Button(
+                    onClick = onTestReencode,
+                    enabled = enabled,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Testar Re-encode (Qualidade Garantida)")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Info box
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (progress > 0)
+                        MaterialTheme.colorScheme.surface
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp)
+                ) {
+                    Text(
+                        text = "ℹ️ Diferenças:",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (progress > 0)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "• FG Service: notificação + continua app fechado\n" +
+                              "• WorkManager: persiste após reboot do device",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (progress > 0)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+
+    // Dialog de confirmação de cancelamento
+    if (showCancelDialog) {
+        AlertDialog(
+            onDismissRequest = { showCancelDialog = false },
+            title = { Text("Cancelar exportação?") },
+            text = { Text("A exportação será interrompida e o arquivo parcial será descartado.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onCancelExport()
+                        showCancelDialog = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Sim, cancelar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelDialog = false }) {
+                    Text("Não")
+                }
+            }
+        )
     }
 }
 
