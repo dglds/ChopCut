@@ -183,6 +183,7 @@ Tela de configurações (codec, qualidade, etc).
 // ui/screen/SettingsScreen.kt
 @Composable fun SettingsScreen()
 ```
+- [x] ✅ COMPLETO
 
 #### TAREFA 4.4: ExportForegroundService
 Service para export em background com notificação.
