@@ -1,8 +1,13 @@
 package com.chopcut.ui.screen
 
 import android.net.Uri
+import android.view.Gravity
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,15 +23,27 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import com.chopcut.data.model.EditOperation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -91,6 +108,19 @@ fun EditorScreen(
     val waveformData by editorViewModel.waveformData.collectAsStateWithLifecycle()
     val exportResult by editorViewModel.exportResult.collectAsStateWithLifecycle()
     val isExporting by editorViewModel.isExporting.collectAsStateWithLifecycle()
+    val edits by editorViewModel.edits.collectAsStateWithLifecycle()
+    val canUndo by editorViewModel.canUndo.collectAsStateWithLifecycle()
+    val canRedo by editorViewModel.canRedo.collectAsStateWithLifecycle()
+    val saveStatus by editorViewModel.saveStatus.collectAsStateWithLifecycle()
+
+    // Handle UI messages
+    LaunchedEffect(Unit) {
+        editorViewModel.messageFlow.collect { message ->
+            val toast = android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT)
+            toast.setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 200)
+            toast.show()
+        }
+    }
 
     // Update currentVideoUri when project loads
     LaunchedEffect(project) {
@@ -117,7 +147,14 @@ fun EditorScreen(
         val result = exportResult
         if (result != null) {
             result.getOrNull()?.let { outputUri ->
-                onExportComplete(outputUri)
+                // onExportComplete(outputUri) // Disable navigation back
+                val toast = android.widget.Toast.makeText(
+                    context,
+                    "Salvo na galeria! \n$outputUri",
+                    android.widget.Toast.LENGTH_LONG
+                )
+                toast.setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 200)
+                toast.show()
             }
         }
     }
@@ -125,15 +162,34 @@ fun EditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Video Editor") },
+                title = {
+                    Column {
+                        Text("Video Editor")
+                        Text(
+                            text = when(saveStatus) {
+                                EditorViewModel.SaveStatus.SAVED -> "Salvo"
+                                EditorViewModel.SaveStatus.SAVING -> "Salvando..."
+                                EditorViewModel.SaveStatus.UNSAVED -> "Não salvo"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
+                    IconButton(onClick = { editorViewModel.undo() }, enabled = canUndo) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Desfazer")
+                    }
+                    IconButton(onClick = { editorViewModel.redo() }, enabled = canRedo) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Refazer")
+                    }
                     IconButton(
-                        onClick = { editorViewModel.saveProject() },
+                        onClick = { editorViewModel.saveProject(manual = true) },
                         enabled = videoInfo != null
                     ) {
                         Icon(Icons.Default.Done, contentDescription = "Salvar")
@@ -147,6 +203,7 @@ fun EditorScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             // Video Preview
             VideoPreview(
@@ -154,177 +211,199 @@ fun EditorScreen(
                 previewManager = previewManager,
                 modifier = Modifier.fillMaxWidth(),
                 onPositionChanged = { positionMs ->
-                    // Update current position display if needed
                     Timber.d("Position: ${positionMs}ms")
-                }
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            // Playback controls
-            PlaybackControls(
-                previewManager = previewManager,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            // Video Timeline
-            if (videoDurationMs > 0) {
-                VideoTimeline(
-                    uri = currentVideoUri,
-                    durationMs = videoDurationMs,
-                    thumbnailExtractor = thumbnailExtractor,
-                    trimRange = trimRange,
-                    onTrimRangeChange = { newRange ->
-                        trimRange = newRange
-                    },
-                    onPositionClick = { positionMs ->
-                        previewManager.seekTo(positionMs)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                // Trim info
-                val range = trimRange
-                if (range != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Start: ${formatTime(range.startMs)}",
-                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
-                        )
-                        Text(
-                            text = "Duration: ${formatTime(range.endMs - range.startMs)}",
-                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
-                        )
-                        Text(
-                            text = "End: ${formatTime(range.endMs)}",
-                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
-                        )
+                },
+                onVideoClick = {
+                    if (previewManager.isPlaying.value) {
+                        previewManager.pause()
+                    } else {
+                        previewManager.play()
                     }
                 }
-            }
-
-            // Waveform
-            if (waveformData.amplitudes.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "Audio Waveform",
-                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall
-                )
-                Spacer(Modifier.height(8.dp))
-                WaveForm(
-                    amplitudes = waveformData.amplitudes,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(60.dp)
-                )
-            }
-
-            // Operations Row
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = "Operations",
-                style = MaterialTheme.typography.titleSmall
             )
-            Spacer(Modifier.height(8.dp))
+
+            Spacer(Modifier.height(16.dp))
+
+            // 1. Applied Operations (Compact Horizontal List)
+            if (edits.isNotEmpty()) {
+                Text(
+                    text = "Histórico",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                androidx.compose.foundation.lazy.LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    itemsIndexed(edits.reversed()) { index, op ->
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            ),
+                            modifier = Modifier.height(40.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = when (op) {
+                                        is EditOperation.Trim -> "Trim"
+                                        is EditOperation.Rotation -> "Rot"
+                                        is EditOperation.Resize -> "Size"
+                                        is EditOperation.Crop -> "Crop"
+                                        else -> "Op"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
+            // 2. Operations Buttons (Trim, Test, etc)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Main Trim/Export Button
                 Button(
                     onClick = {
                         val range = trimRange
                         if (range != null) {
-                            editorViewModel.exportTrimmedVideo(range)
+                            editorViewModel.applyTrim(range)
                         }
                     },
-                    enabled = !isExporting && trimRange != null
+                    enabled = !isExporting && trimRange != null,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Trim", style = MaterialTheme.typography.labelSmall)
                 }
 
                 Button(
                     onClick = { editorViewModel.testOperation("rotate") },
-                    enabled = !isExporting
+                    enabled = !isExporting,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)
                 ) {
-                    Text("Rotate 90°", style = MaterialTheme.typography.labelSmall)
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Rot", style = MaterialTheme.typography.labelSmall)
                 }
 
                 Button(
                     onClick = { editorViewModel.testOperation("resize") },
-                    enabled = !isExporting
+                    enabled = !isExporting,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)
                 ) {
-                    Text("Resize 50%", style = MaterialTheme.typography.labelSmall)
+                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Size", style = MaterialTheme.typography.labelSmall)
                 }
 
                 Button(
                     onClick = { editorViewModel.testOperation("crop") },
-                    enabled = !isExporting
+                    enabled = !isExporting,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)
                 ) {
-                    Text("Crop Center", style = MaterialTheme.typography.labelSmall)
+                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Crop", style = MaterialTheme.typography.labelSmall)
                 }
             }
 
-            // Video info
-            val info = videoInfo
-            if (info != null) {
-                Spacer(Modifier.height(16.dp))
-                VideoInfoDisplay(info)
-            }
-        }
-    }
-}
+            Spacer(Modifier.height(16.dp))
 
-/**
- * Playback controls with play/pause button
- */
-@Composable
-fun PlaybackControls(
-    previewManager: PreviewManager,
-    modifier: Modifier = Modifier
-) {
-    val isPlaying by previewManager.isPlaying.collectAsStateWithLifecycle()
-    val isReady by previewManager.isReady.collectAsStateWithLifecycle()
-
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        FloatingActionButton(
-            onClick = {
-                if (isPlaying) {
-                    previewManager.pause()
-                } else {
-                    previewManager.play()
+            // 3. Timeline Row (Play Button + Timeline)
+            if (videoInfo == null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
                 }
-            },
-            modifier = Modifier.size(64.dp)
-        ) {
-            if (isPlaying) {
-                // Pause icon not available in base icons, using text
-                Text(
-                    text = "||",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.size(32.dp)
-                )
             } else {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Play",
-                    modifier = Modifier.size(32.dp)
-                )
+                // Timeline
+                if (videoDurationMs > 0) {
+                    VideoTimeline(
+                        uri = currentVideoUri,
+                        durationMs = videoDurationMs,
+                        thumbnailExtractor = thumbnailExtractor,
+                        trimRange = trimRange,
+                        onTrimRangeChange = { newRange ->
+                            trimRange = newRange
+                        },
+                        onPositionClick = { positionMs ->
+                            previewManager.pause()
+                            previewManager.seekTo(positionMs)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Trim Info (Below timeline)
+                val range = trimRange
+                if (range != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = formatTime(range.startMs),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = formatTime(range.endMs - range.startMs),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                        Text(
+                            text = formatTime(range.endMs),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Waveform
+                Spacer(Modifier.height(16.dp))
+                if (waveformData.amplitudes.isNotEmpty()) {
+                    WaveForm(
+                        amplitudes = waveformData.amplitudes,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                    )
+                } else {
+                    // Loading State for Waveform
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Gerando forma de onda...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        LinearProgressIndicator(modifier = Modifier.width(120.dp))
+                    }
+                }
+
+                // Video info
+                Spacer(Modifier.height(16.dp))
+                VideoInfoDisplay(videoInfo!!)
             }
         }
     }

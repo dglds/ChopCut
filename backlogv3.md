@@ -269,13 +269,16 @@ Arquivos: vários
 - ✅ **Extra:** Botões de operações de teste (Trim, Rotate, Resize, Crop)
 - ✅ **Extra:** Ajuste no salvamento para pasta raiz `ChopCut` (com fallback)
 
-### Sprint 2 (Undo/Redo + Auto-save)
+### Sprint 2 (Undo/Redo + Auto-save) - ✅ CONCLUÍDO
 
-1. EditOperation e EditStack
-2. UndoManager
-3. Auto-save no editor
-4. UI de undo/redo
-5. Indicador de "não salvo"
+- ✅ Sistema de Undo/Redo (`UndoManager`)
+- ✅ Integração de Undo/Redo no Editor (ViewModel + UI)
+- ✅ Auto-save com debounce (3 segundos)
+- ✅ Indicador de status de salvamento (Salvo/Salvando/Não salvo)
+- ✅ **Extra:** Correção crítica na persistência de projetos (cópia de vídeo para armazenamento interno)
+- ✅ **Extra:** Melhorias na UI do Editor (Layout reorganizado, ícones, scroll)
+- ✅ **Extra:** Melhorias na Tela de Projetos (Thumbnails reais, novo design de card)
+- ✅ **Extra:** Ajustes de usabilidade (Pausa na timeline, Toast no topo, prefixo de arquivo)
 
 ### Sprint 3 (Preview em Tempo Real)
 

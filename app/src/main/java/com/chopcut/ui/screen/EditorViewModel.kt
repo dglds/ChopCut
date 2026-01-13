@@ -8,11 +8,16 @@ import androidx.lifecycle.viewModelScope
 import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.data.audio.AudioRawData
 import com.chopcut.data.audio.WaveFormGenerator
+import com.chopcut.data.model.EditOperation
+import com.chopcut.data.thumbnail.ThumbnailExtractor
+import com.chopcut.data.undo.UndoManager
 import com.chopcut.ui.components.WaveformData
 import com.chopcut.data.model.TimeRange
 import com.chopcut.data.model.Transform
 import com.chopcut.data.model.ExportConfig
 import com.chopcut.data.pipeline.TranscodePipeline
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import com.chopcut.data.model.VideoInfo
 import com.chopcut.data.repository.ProjectRepository
@@ -40,6 +45,10 @@ class EditorViewModel(
     private val projectRepository = ProjectRepository(context)
     private val audioDataExtractor = AudioDataExtractor(context)
     private val transcodePipeline = TranscodePipeline(context, videoRepository)
+    private val thumbnailExtractor = ThumbnailExtractor(context)
+    
+    // Undo Manager
+    private val undoManager = UndoManager()
 
     // Service manager para export em background
     private val exportServiceManager = ExportServiceManager(context)
@@ -48,8 +57,22 @@ class EditorViewModel(
     private val _project = MutableStateFlow<com.chopcut.data.model.Project?>(null)
     val project: StateFlow<com.chopcut.data.model.Project?> = _project.asStateFlow()
 
-    private val _edits = MutableStateFlow<List<com.chopcut.data.model.EditOperation>>(emptyList())
-    val edits: StateFlow<List<com.chopcut.data.model.EditOperation>> = _edits.asStateFlow()
+    // Delegate edits to UndoManager
+    val edits: StateFlow<List<EditOperation>> = undoManager.currentEdits
+    val canUndo: StateFlow<Boolean> = undoManager.canUndo
+    val canRedo: StateFlow<Boolean> = undoManager.canRedo
+
+    // Save state
+    enum class SaveStatus { SAVED, SAVING, UNSAVED }
+    private val _saveStatus = MutableStateFlow(SaveStatus.SAVED)
+    val saveStatus: StateFlow<SaveStatus> = _saveStatus.asStateFlow()
+    
+    // UI Messages (Toasts, Snackbars)
+    private val _uiMessage = kotlinx.coroutines.flow.MutableSharedFlow<String>()
+    val messageFlow: kotlinx.coroutines.flow.Flow<String> = _uiMessage
+
+    private var autoSaveJob: Job? = null
+    private val AUTO_SAVE_DELAY = 3000L // 3 seconds debounce
 
     // Video info state
     private val _videoInfo = MutableStateFlow<VideoInfo?>(null)
@@ -81,28 +104,103 @@ class EditorViewModel(
         if (projectId != null) {
             loadProject(projectId)
         } else {
+            // New project: initialize with provided URI, but start import process
             loadVideoMetadata(videoUri)
+            initializeNewProject()
         }
         setupExportEventListeners()
+    }
+
+    private fun initializeNewProject() {
+        viewModelScope.launch(DispatcherProvider.io) {
+            // 1. Create project object immediately with original URI
+            val metadata = videoRepository.getMetadata(videoUri) ?: _videoInfo.value
+            val newProjectId = java.util.UUID.randomUUID().toString()
+            
+            if (metadata != null) {
+                val initialProject = com.chopcut.data.model.Project(
+                    id = newProjectId,
+                    name = metadata.fileName,
+                    sourceVideoUri = videoUri.toString(), // Temporary: original URI
+                    duration = metadata.durationMs
+                )
+                _project.value = initialProject
+                _videoInfo.value = metadata
+                
+                // Initial save to register in DB
+                saveProject()
+                Timber.d("Project initialized: $newProjectId")
+
+                // 2. Start background import (copy to internal storage)
+                val internalFile = videoRepository.copyToInternalStorage(videoUri, newProjectId)
+                
+                // 2.1 Generate thumbnail
+                val thumbFile = java.io.File(context.filesDir, "projects/$newProjectId/thumbnail.jpg")
+                val thumbSuccess = thumbnailExtractor.extractToFile(videoUri, thumbFile)
+                val thumbPath = if (thumbSuccess) thumbFile.absolutePath else null
+                
+                if (internalFile != null) {
+                    val internalUri = Uri.fromFile(internalFile)
+                    
+                    // 3. Update project with internal URI and Thumbnail
+                    val updatedProject = initialProject.copy(
+                        sourceVideoUri = internalUri.toString(),
+                        thumbnail = thumbPath
+                    )
+                    _project.value = updatedProject
+                    
+                    // Save update silently
+                    projectRepository.saveProject(updatedProject, edits.value)
+                    Timber.d("Project video imported successfully: $internalUri, Thumb: $thumbPath")
+                } else {
+                    Timber.e("Failed to import video for project")
+                }
+            }
+        }
     }
 
     private fun loadProject(id: String) {
         viewModelScope.launch(DispatcherProvider.io) {
             projectRepository.getProjectWithEdits(id)?.let { pair ->
                 val project = pair.first
-                val edits = pair.second
+                val loadedEdits = pair.second
                 _project.value = project
-                _edits.value = edits
+                undoManager.loadInitialState(loadedEdits)
                 loadVideoMetadata(Uri.parse(project.sourceVideoUri))
             }
+        }
+    }
+
+    fun addOperation(operation: EditOperation) {
+        undoManager.addOperation(operation)
+        triggerAutoSave()
+    }
+
+    fun undo() {
+        undoManager.undo()
+        triggerAutoSave()
+    }
+
+    fun redo() {
+        undoManager.redo()
+        triggerAutoSave()
+    }
+
+    private fun triggerAutoSave() {
+        _saveStatus.value = SaveStatus.UNSAVED
+        autoSaveJob?.cancel()
+        autoSaveJob = viewModelScope.launch {
+            delay(AUTO_SAVE_DELAY)
+            saveProject()
         }
     }
 
     /**
      * Saves the current project state
      */
-    fun saveProject(name: String? = null) {
+    fun saveProject(name: String? = null, manual: Boolean = false) {
         viewModelScope.launch(DispatcherProvider.io) {
+            _saveStatus.value = SaveStatus.SAVING
             val currentProject = _project.value
             val metadata = _videoInfo.value ?: return@launch
 
@@ -112,6 +210,7 @@ class EditorViewModel(
                     modifiedAt = System.currentTimeMillis()
                 )
             } else {
+                // Should not happen if initializeNewProject runs, but fallback
                 com.chopcut.data.model.Project(
                     name = name ?: metadata.fileName,
                     sourceVideoUri = videoUri.toString(),
@@ -119,9 +218,21 @@ class EditorViewModel(
                 )
             }
 
-            projectRepository.saveProject(projectToSave, _edits.value)
-            _project.value = projectToSave
-            Timber.d("Project saved: ${projectToSave.name}")
+            try {
+                projectRepository.saveProject(projectToSave, edits.value)
+                _project.value = projectToSave
+                _saveStatus.value = SaveStatus.SAVED
+                Timber.d("Project saved: ${projectToSave.name}")
+                if (manual) {
+                    _uiMessage.emit("Projeto salvo com sucesso!")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Error saving project")
+                _saveStatus.value = SaveStatus.UNSAVED
+                if (manual) {
+                    _uiMessage.emit("Erro ao salvar projeto: ${e.message}")
+                }
+            }
         }
     }
 
@@ -207,52 +318,49 @@ class EditorViewModel(
     }
 
     /**
-     * Executes a test operation with fixed values using TranscodePipeline
+     * Executes a test operation (Lightweight for UI testing)
+     * Adds to Undo stack but simulates processing to be fast.
      */
     fun testOperation(type: String) {
         viewModelScope.launch(DispatcherProvider.io) {
             val metadata = _videoInfo.value ?: return@launch
+            
+            // Simulating UI operation only
+            when (type) {
+                "rotate" -> {
+                    addOperation(EditOperation.Rotation(90))
+                }
+                "resize" -> {
+                    addOperation(EditOperation.Resize(metadata.width / 2, metadata.height / 2))
+                }
+                "crop" -> {
+                    addOperation(EditOperation.Crop(0, 0, 100, 100))
+                }
+            }
+            
+            // Notify UI (Fast feedback)
+            Timber.d("Test operation $type applied (Logic only)")
+            
+            /* HEAVY TRANSCODE DISABLED FOR TESTING FLUIDITY
             _isExporting.value = true
             _exportResult.value = null
             _exportProgress.value = 0
-
+            
             try {
-                val outputName = "test_${type}_${System.currentTimeMillis()}.mp4"
-                
-                val transform = when (type) {
-                    "rotate" -> Transform(rotation = 90f)
-                    "resize" -> Transform(scaleX = 0.5f, scaleY = 0.5f)
-                    "crop" -> Transform(cropRect = android.graphics.RectF(0.25f, 0.25f, 0.75f, 0.75f))
-                    else -> Transform.IDENTITY
-                }
-
-                // Use default export config based on metadata but with 60 frames limit for speed
-                val config = ExportConfig.fromVideoInfo(metadata).copy(
-                    bitrate = 2_000_000 // lower bitrate for faster test
-                )
-
-                Timber.d("Starting transcode test: $type")
-                
-                transcodePipeline.process(videoUri, transform, config)
-                    .collect { result ->
-                        result.onSuccess { file ->
-                            val outputUri = videoRepository.saveToGallery(file, outputName)
-                            _exportProgress.value = 100
-                            _isExporting.value = false
-                            _exportResult.value = Result.success(outputUri ?: Uri.EMPTY)
-                            Timber.d("Test operation $type completed: $outputUri")
-                        }.onFailure { error ->
-                            Timber.e(error, "Test operation $type failed")
-                            _exportResult.value = Result.failure(error)
-                            _isExporting.value = false
-                        }
-                    }
-            } catch (e: Exception) {
-                Timber.e(e, "Error during test operation")
-                _exportResult.value = Result.failure(e)
-                _isExporting.value = false
-            }
+                val outputName = "ChopCut_test_${type}_${System.currentTimeMillis()}.mp4" // REMOVED TRIMMED, ADDED CHOPCUT
+                // ... transcode logic ...
+            } catch (e: Exception) { ... }
+            */
         }
+    }
+
+    /**
+     * Applies a Trim operation to the project state (adds to Undo stack)
+     */
+    fun applyTrim(trimRange: com.chopcut.ui.components.TrimRange) {
+        val op = EditOperation.Trim(trimRange.startMs, trimRange.endMs)
+        addOperation(op)
+        Timber.d("Applied Trim operation: ${trimRange.startMs}-${trimRange.endMs}ms")
     }
 
     /**
@@ -266,7 +374,7 @@ class EditorViewModel(
 
             try {
                 val timeRange = TimeRange(trimRange.startMs, trimRange.endMs)
-                val outputName = "trimmed_${System.currentTimeMillis()}.mp4"
+                val outputName = "ChopCut_${System.currentTimeMillis()}.mp4"
 
                 exportServiceManager.startExport(
                     videoUri = videoUri,
@@ -295,7 +403,7 @@ class EditorViewModel(
 
             try {
                 val timeRange = TimeRange(trimRange.startMs, trimRange.endMs)
-                val outputName = "trimmed_${System.currentTimeMillis()}.mp4"
+                val outputName = "ChopCut_${System.currentTimeMillis()}.mp4"
 
                 val scheduler = ExportWorkScheduler(context)
                 scheduler.scheduleExport(

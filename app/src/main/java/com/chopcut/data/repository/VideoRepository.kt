@@ -359,6 +359,34 @@ class VideoRepository(
     }
 
     /**
+     * Copy URI to internal storage for project persistence
+     */
+    suspend fun copyToInternalStorage(uri: Uri, projectId: String): File? = withContext(Dispatchers.IO) {
+        val projectsDir = File(context.filesDir, "projects")
+        if (!projectsDir.exists()) projectsDir.mkdirs()
+        
+        val projectDir = File(projectsDir, projectId)
+        if (!projectDir.exists()) projectDir.mkdirs()
+        
+        val destFile = File(projectDir, "source.mp4")
+        
+        try {
+            contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(destFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Timber.d("Copied video to internal storage: ${destFile.absolutePath}")
+            destFile
+        } catch (e: Exception) {
+            Timber.e(e, "Error copying video to internal storage")
+            // Cleanup on failure
+            if (destFile.exists()) destFile.delete()
+            null
+        }
+    }
+
+    /**
      * Copy URI to a temp file
      */
     suspend fun copyToTempFile(uri: Uri): File? = withContext(Dispatchers.IO) {

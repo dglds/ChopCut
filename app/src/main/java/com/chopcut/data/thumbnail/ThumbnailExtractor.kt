@@ -63,6 +63,32 @@ class ThumbnailExtractor(
     }
 
     /**
+     * Extract a thumbnail and save it to a file
+     */
+    suspend fun extractToFile(
+        uri: Uri,
+        destFile: java.io.File,
+        width: Int = 320,
+        height: Int = 180
+    ): Boolean = withContext(Dispatchers.IO) {
+        val bitmap = extractAt(uri, 0, width, height) // Extract at start (0ms)
+        if (bitmap != null) {
+            try {
+                java.io.FileOutputStream(destFile).use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+                }
+                Timber.d("Thumbnail saved to ${destFile.absolutePath}")
+                true
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to save thumbnail to file")
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    /**
      * Extract a strip of thumbnails evenly distributed across video duration
      * @param uri Video URI
      * @param count Number of thumbnails to extract

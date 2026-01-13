@@ -31,6 +31,8 @@ import com.chopcut.ui.preview.PreviewManager
 import kotlinx.coroutines.CoroutineScope
 import timber.log.Timber
 
+import androidx.compose.foundation.clickable
+
 /**
  * Video preview component with ExoPlayer integration
  *
@@ -38,13 +40,15 @@ import timber.log.Timber
  * @param previewManager PreviewManager instance
  * @param modifier Modifier for the container
  * @param onPositionChanged Callback when video position changes (in ms)
+ * @param onVideoClick Callback when the video surface is clicked
  */
 @Composable
 fun VideoPreview(
     uri: android.net.Uri,
     previewManager: PreviewManager,
     modifier: Modifier = Modifier,
-    onPositionChanged: (Long) -> Unit = {}
+    onPositionChanged: (Long) -> Unit = {},
+    onVideoClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -85,7 +89,8 @@ fun VideoPreview(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(220.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable { onVideoClick() },
             contentAlignment = Alignment.Center
         ) {
             // Only show PlayerView when player is ready (triggers recomposition)
