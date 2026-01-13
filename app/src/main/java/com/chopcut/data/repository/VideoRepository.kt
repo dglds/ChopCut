@@ -166,17 +166,48 @@ class VideoRepository(
     }
 
     /**
-     * Save processed video to gallery
+     * Save processed video to gallery/storage
+     * Tries to save to root "ChopCut" folder first, falls back to Movies/ChopCut
      */
     suspend fun saveToGallery(file: File, filename: String? = null): Uri? = withContext(Dispatchers.IO) {
+        val videoName = filename ?: "ChopCut_${System.currentTimeMillis()}.mp4"
+        
+        // 1. Try to save to root /ChopCut folder (Legacy/Permissive)
+        try {
+            val root = Environment.getExternalStorageDirectory()
+            val chopCutDir = File(root, "ChopCut")
+            if (!chopCutDir.exists()) {
+                if (!chopCutDir.mkdirs()) {
+                    Timber.w("Failed to create root ChopCut directory, trying MediaStore")
+                    throw java.io.IOException("Cannot create directory")
+                }
+            }
+            
+            val destFile = File(chopCutDir, videoName)
+            file.copyTo(destFile, overwrite = true)
+            
+            // Scan file to make it visible in gallery
+            android.media.MediaScannerConnection.scanFile(
+                context,
+                arrayOf(destFile.absolutePath),
+                arrayOf("video/mp4"),
+                null
+            )
+            
+            Timber.d("Saved to root ChopCut folder: ${destFile.absolutePath}")
+            return@withContext Uri.fromFile(destFile)
+            
+        } catch (e: Exception) {
+            Timber.w("Failed to save to root folder (${e.message}), falling back to MediaStore")
+        }
+
+        // 2. Fallback to MediaStore (Scoped Storage / Android 10+)
         try {
             val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
             } else {
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI
             }
-
-            val videoName = filename ?: "ChopCut_${System.currentTimeMillis()}.mp4"
 
             val contentValues = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, videoName)
@@ -205,7 +236,7 @@ class VideoRepository(
                     contentResolver.update(it, contentValues, null, null)
                 }
 
-                Timber.d("Saved video to gallery: $it")
+                Timber.d("Saved video to gallery via MediaStore: $it")
                 it
             }
         } catch (e: Exception) {

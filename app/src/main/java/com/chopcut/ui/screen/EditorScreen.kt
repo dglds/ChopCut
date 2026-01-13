@@ -1,6 +1,7 @@
 package com.chopcut.ui.screen
 
 import android.net.Uri
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,9 +12,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chopcut.data.thumbnail.ThumbnailExtractor
 import com.chopcut.ui.components.VideoPreview
 import com.chopcut.ui.components.VideoTimeline
+import com.chopcut.ui.components.WaveForm
 import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.preview.PreviewManager
 import kotlinx.coroutines.launch
@@ -57,6 +61,7 @@ import timber.log.Timber
 @Composable
 fun EditorScreen(
     videoUri: Uri,
+    projectId: String? = null,
     onNavigateBack: () -> Unit = {},
     onExportComplete: (Uri) -> Unit = {}
 ) {
@@ -76,17 +81,22 @@ fun EditorScreen(
     val editorViewModel: EditorViewModel = viewModel(
         factory = EditorViewModelFactory(
             context = context,
-            videoUri = currentVideoUri
+            videoUri = videoUri,
+            projectId = projectId
         )
     )
 
+    val project by editorViewModel.project.collectAsStateWithLifecycle()
     val videoInfo by editorViewModel.videoInfo.collectAsStateWithLifecycle()
+    val waveformData by editorViewModel.waveformData.collectAsStateWithLifecycle()
     val exportResult by editorViewModel.exportResult.collectAsStateWithLifecycle()
     val isExporting by editorViewModel.isExporting.collectAsStateWithLifecycle()
 
-    // Load video metadata
-    LaunchedEffect(currentVideoUri) {
-        editorViewModel.loadVideoMetadata(currentVideoUri)
+    // Update currentVideoUri when project loads
+    LaunchedEffect(project) {
+        project?.let {
+            currentVideoUri = Uri.parse(it.sourceVideoUri)
+        }
     }
 
     // Update duration when videoInfo changes
@@ -122,26 +132,11 @@ fun EditorScreen(
                     }
                 },
                 actions = {
-                    Button(
-                        onClick = {
-                            val range = trimRange
-                            if (range != null) {
-                                editorViewModel.exportTrimmedVideo(range)
-                            }
-                        },
-                        enabled = !isExporting && trimRange != null
+                    IconButton(
+                        onClick = { editorViewModel.saveProject() },
+                        enabled = videoInfo != null
                     ) {
-                        if (isExporting) {
-                            Text("Exporting...")
-                        } else {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text("Export")
-                        }
+                        Icon(Icons.Default.Done, contentDescription = "Salvar")
                     }
                 }
             )
@@ -212,6 +207,72 @@ fun EditorScreen(
                             style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                         )
                     }
+                }
+            }
+
+            // Waveform
+            if (waveformData.amplitudes.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "Audio Waveform",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall
+                )
+                Spacer(Modifier.height(8.dp))
+                WaveForm(
+                    amplitudes = waveformData.amplitudes,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                )
+            }
+
+            // Operations Row
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Operations",
+                style = MaterialTheme.typography.titleSmall
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Main Trim/Export Button
+                Button(
+                    onClick = {
+                        val range = trimRange
+                        if (range != null) {
+                            editorViewModel.exportTrimmedVideo(range)
+                        }
+                    },
+                    enabled = !isExporting && trimRange != null
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Trim", style = MaterialTheme.typography.labelSmall)
+                }
+
+                Button(
+                    onClick = { editorViewModel.testOperation("rotate") },
+                    enabled = !isExporting
+                ) {
+                    Text("Rotate 90°", style = MaterialTheme.typography.labelSmall)
+                }
+
+                Button(
+                    onClick = { editorViewModel.testOperation("resize") },
+                    enabled = !isExporting
+                ) {
+                    Text("Resize 50%", style = MaterialTheme.typography.labelSmall)
+                }
+
+                Button(
+                    onClick = { editorViewModel.testOperation("crop") },
+                    enabled = !isExporting
+                ) {
+                    Text("Crop Center", style = MaterialTheme.typography.labelSmall)
                 }
             }
 

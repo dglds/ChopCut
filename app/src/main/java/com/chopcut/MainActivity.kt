@@ -16,6 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.chopcut.ui.screen.EditorScreen
 import com.chopcut.ui.screen.HomeScreen
+import com.chopcut.ui.screen.ProjectsScreen
 import com.chopcut.ui.screen.SettingsScreen
 import com.chopcut.ui.screen.TestScreen
 import com.chopcut.ui.theme.ChopCutTheme
@@ -24,8 +25,9 @@ import com.chopcut.ui.theme.ChopCutTheme
  * Main activity for ChopCut app
  *
  * Navigation structure:
- * - "home" -> Home screen (main entry point)
- * - "editor/{videoUri}" -> Video editor screen
+ * - "projects" -> Projects list screen (start destination)
+ * - "home" -> Home screen (legacy/test)
+ * - "editor?videoUri={videoUri}&projectId={projectId}" -> Video editor screen
  * - "settings" -> Settings screen
  * - "tests" -> Test screen with all test operations
  */
@@ -43,14 +45,32 @@ class MainActivity : ComponentActivity() {
 
                     NavHost(
                         navController = navController,
-                        startDestination = "home"
+                        startDestination = "projects"
                     ) {
+                        // ==================== PROJECTS SCREEN ====================
+                        composable("projects") {
+                            ProjectsScreen(
+                                onNavigateToEditor = { projectId, videoUri ->
+                                    val route = if (projectId != null) {
+                                        "editor?projectId=$projectId"
+                                    } else {
+                                        val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
+                                        "editor?videoUri=$encodedUri"
+                                    }
+                                    navController.navigate(route)
+                                },
+                                onNavigateToSettings = {
+                                    navController.navigate("settings")
+                                }
+                            )
+                        }
+
                         // ==================== HOME SCREEN ====================
                         composable("home") {
                             HomeScreen(
                                 onNavigateToEditor = { videoUri ->
                                     val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
-                                    navController.navigate("editor/$encodedUri")
+                                    navController.navigate("editor?videoUri=$encodedUri")
                                 },
                                 onNavigateToSettings = {
                                     navController.navigate("settings")
@@ -63,30 +83,38 @@ class MainActivity : ComponentActivity() {
 
                         // ==================== EDITOR SCREEN ====================
                         composable(
-                            route = "editor/{videoUri}",
+                            route = "editor?videoUri={videoUri}&projectId={projectId}",
                             arguments = listOf(
                                 navArgument("videoUri") {
                                     type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                },
+                                navArgument("projectId") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
                                 }
                             )
                         ) { backStackEntry ->
                             val videoUriString = backStackEntry.arguments?.getString("videoUri")
+                            val projectId = backStackEntry.arguments?.getString("projectId")
+                            
                             val decodedUri = videoUriString?.let {
                                 java.net.URLDecoder.decode(it, "UTF-8")
                             }
                             val videoUri = decodedUri?.let { Uri.parse(it) }
 
-                            if (videoUri != null) {
-                                EditorScreen(
-                                    videoUri = videoUri,
-                                    onNavigateBack = {
-                                        navController.popBackStack()
-                                    },
-                                    onExportComplete = {
-                                        navController.popBackStack()
-                                    }
-                                )
-                            }
+                            EditorScreen(
+                                videoUri = videoUri ?: Uri.EMPTY,
+                                projectId = projectId,
+                                onNavigateBack = {
+                                    navController.popBackStack()
+                                },
+                                onExportComplete = {
+                                    navController.popBackStack()
+                                }
+                            )
                         }
 
                         // ==================== SETTINGS SCREEN ====================
