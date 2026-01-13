@@ -17,6 +17,10 @@ import com.chopcut.data.model.VideoInfo
 import com.chopcut.data.pipeline.CopyPipeline
 import com.chopcut.data.pipeline.TranscodeOperations
 import com.chopcut.data.repository.VideoRepository
+import com.chopcut.util.error.ChopCutException
+import com.chopcut.util.error.ErrorHandler
+import com.chopcut.util.error.safeExecute
+import com.chopcut.util.error.safeExecuteSuspend
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,8 +63,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _waveformMirrored = MutableStateFlow(false)
     val waveformMirrored: StateFlow<Boolean> = _waveformMirrored.asStateFlow()
 
+    // Structured error state
+    private val _errorState = MutableStateFlow<ErrorHandler.ErrorState?>(null)
+    val errorState: StateFlow<ErrorHandler.ErrorState?> = _errorState.asStateFlow()
+
     init {
         checkCodecs()
+    }
+
+    /**
+     * Clear the current error state
+     */
+    fun clearError() {
+        _errorState.value = null
     }
 
     fun selectVideo(uri: Uri) {
@@ -71,18 +86,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadVideoMetadata(uri: Uri) {
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
+            _errorState.value = null
 
-            try {
-                val metadata = videoRepository.getMetadata(uri)
-                if (metadata != null) {
-                    _uiState.value = HomeUiState.VideoLoaded(metadata)
-                    Timber.d("Video loaded: ${metadata.fileName}")
-                } else {
-                    _uiState.value = HomeUiState.Error("Failed to load video metadata")
+            val result = safeExecuteSuspend(context = getApplication()) {
+                videoRepository.getMetadata(uri)
+            }
+
+            when (result) {
+                is com.chopcut.util.error.ErrorResult.Success -> {
+                    val metadata = result.data
+                    if (metadata != null) {
+                        _uiState.value = HomeUiState.VideoLoaded(metadata)
+                        Timber.d("Video loaded: ${metadata.fileName}")
+                    } else {
+                        _errorState.value = ErrorHandler.ErrorState(
+                            title = "Erro de vídeo",
+                            message = "Falha ao ler metadados do vídeo",
+                            recovery = com.chopcut.util.error.RecoveryStrategy.SelectAnotherVideo
+                        )
+                    }
                 }
-            } catch (e: Exception) {
-                Timber.e(e, "Error loading video")
-                _uiState.value = HomeUiState.Error(e.message ?: "Unknown error")
+                is com.chopcut.util.error.ErrorResult.Error -> {
+                    _errorState.value = result.errorState
+                    _uiState.value = HomeUiState.Error(result.errorState.message)
+                }
             }
         }
     }
@@ -90,12 +117,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun testTrim() {
         val uri = _selectedVideoUri.value
         if (uri == null) {
-            _uiState.value = HomeUiState.Error("Please select a video first")
+            _errorState.value = ErrorHandler.ErrorState(
+                title = "Nenhum vídeo selecionado",
+                message = "Selecione um vídeo primeiro",
+                recovery = com.chopcut.util.error.RecoveryStrategy.SelectAnotherVideo
+            )
             return
         }
 
         viewModelScope.launch {
             _uiState.value = HomeUiState.Processing("Trimming video...")
+            _errorState.value = null
 
             try {
                 // Trim first 5 seconds
@@ -110,12 +142,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         }.onFailure { error ->
                             Timber.e(error, "Trim failed")
-                            _uiState.value = HomeUiState.Error(error.message ?: "Trim failed")
+                            val errorState = ErrorHandler.handle(error, getApplication())
+                            _errorState.value = errorState
+                            _uiState.value = HomeUiState.Error(errorState.message)
                         }
                     }
             } catch (e: Exception) {
                 Timber.e(e, "Error during trim")
-                _uiState.value = HomeUiState.Error(e.message ?: "Trim failed")
+                val errorState = ErrorHandler.handle(e, getApplication())
+                _errorState.value = errorState
+                _uiState.value = HomeUiState.Error(errorState.message)
             }
         }
     }
@@ -123,12 +159,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun testCompress() {
         val uri = _selectedVideoUri.value
         if (uri == null) {
-            _uiState.value = HomeUiState.Error("Please select a video first")
+            _errorState.value = ErrorHandler.ErrorState(
+                title = "Nenhum vídeo selecionado",
+                message = "Selecione um vídeo primeiro",
+                recovery = com.chopcut.util.error.RecoveryStrategy.SelectAnotherVideo
+            )
             return
         }
 
         viewModelScope.launch {
             _uiState.value = HomeUiState.Processing("Compressing video (~2 sec test)...")
+            _errorState.value = null
 
             try {
                 // Compress to 2 Mbps (limited to 60 frames for testing)
@@ -143,12 +184,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         }.onFailure { error ->
                             Timber.e(error, "Compress failed")
-                            _uiState.value = HomeUiState.Error(error.message ?: "Compress failed")
+                            val errorState = ErrorHandler.handle(error, getApplication())
+                            _errorState.value = errorState
+                            _uiState.value = HomeUiState.Error(errorState.message)
                         }
                     }
             } catch (e: Exception) {
                 Timber.e(e, "Error during compress")
-                _uiState.value = HomeUiState.Error(e.message ?: "Compress failed")
+                val errorState = ErrorHandler.handle(e, getApplication())
+                _errorState.value = errorState
+                _uiState.value = HomeUiState.Error(errorState.message)
             }
         }
     }
