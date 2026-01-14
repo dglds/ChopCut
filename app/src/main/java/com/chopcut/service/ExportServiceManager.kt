@@ -98,7 +98,10 @@ class ExportServiceManager(private val context: Context) :
         videoUri: Uri,
         timeRanges: List<TimeRange>,
         outputName: String,
-        exportType: String = ExportForegroundService.EXPORT_TYPE_TRIM
+        exportType: String = ExportForegroundService.EXPORT_TYPE_TRIM,
+        rotation: Int = 0,
+        width: Int = 0,
+        height: Int = 0
     ) {
         val intent = Intent(context, ExportForegroundService::class.java).apply {
             action = ExportForegroundService.ACTION_START_EXPORT
@@ -107,12 +110,15 @@ class ExportServiceManager(private val context: Context) :
                 ExportForegroundService.EXTRA_TIME_RANGES,
                 ArrayList(timeRanges)
             )
-            putExtra("output_name", outputName)  // Usar string literal para evitar ambiguidade
+            putExtra("output_name", outputName)
             putExtra(ExportForegroundService.EXTRA_EXPORT_TYPE, exportType)
+            putExtra(ExportForegroundService.EXTRA_ROTATION, rotation)
+            putExtra(ExportForegroundService.EXTRA_WIDTH, width)
+            putExtra(ExportForegroundService.EXTRA_HEIGHT, height)
         }
         context.startForegroundService(intent)
 
-        Timber.d("Exportação iniciada: $outputName")
+        Timber.d("Exportação iniciada: $outputName (rot=$rotation)")
     }
 
     /**

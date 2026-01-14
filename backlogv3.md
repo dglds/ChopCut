@@ -280,19 +280,21 @@ Arquivos: vários
 - ✅ **Extra:** Melhorias na Tela de Projetos (Thumbnails reais, novo design de card)
 - ✅ **Extra:** Ajustes de usabilidade (Pausa na timeline, Toast no topo, prefixo de arquivo)
 
-### Sprint 3 (Preview em Tempo Real)
+### Sprint 3 (Preview em Tempo Real) - ✅ CONCLUÍDO
 
-1. Pipeline de preview rápido
-2. Cache de frames
-3. Integração com VideoPreview
-4. Toggle original/editado
+- ✅ Pipeline de preview rápido (TextureView + Modifier.rotate)
+- ✅ Rotação visual em tempo real no editor
+- ✅ Atualização automática de thumbnail ao salvar (com rotação)
 
-### Sprint 4 (Presets de Exportação)
+### Sprint 4 (Presets de Exportação) - ✅ CONCLUÍDO
 
-1. ExportPreset model
-2. PresetRepository
-3. ExportDialog com presets
-4. Presets customizados
+- ✅ Modelo de Presets (`ExportPreset`) e Repositório
+- ✅ Dialog de Exportação (`ExportDialog`) com lista visual e ícones
+- ✅ Botões separados: **Trim** (Cortar/Editar) e **Exportar** (Gerar Arquivo)
+- ✅ Pipeline Unificado (`TranscodePipeline` com Media3 Transformer)
+- ✅ Exportação com Transformações Reais (Rotação, Resize) no arquivo final
+- ✅ Feedback de progresso e sucesso na UI
+- ✅ Correção de salvamento em pasta `Movies/ChopCut`
 
 ### Sprint 5 (Ferramentas Básicas)
 

@@ -9,6 +9,7 @@ import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.data.audio.AudioRawData
 import com.chopcut.data.audio.WaveFormGenerator
 import com.chopcut.data.model.EditOperation
+import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.thumbnail.ThumbnailExtractor
 import com.chopcut.data.undo.UndoManager
 import com.chopcut.ui.components.WaveformData
@@ -21,7 +22,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import com.chopcut.data.model.VideoInfo
 import com.chopcut.data.repository.ProjectRepository
+import com.chopcut.data.repository.PresetRepository
 import com.chopcut.data.repository.VideoRepository
+import com.chopcut.service.ExportForegroundService
 import com.chopcut.service.ExportServiceManager
 import com.chopcut.service.ExportWorkScheduler
 import com.chopcut.util.DispatcherProvider
@@ -43,9 +46,13 @@ class EditorViewModel(
     private val contentResolver: ContentResolver = context.contentResolver
     private val videoRepository = VideoRepository(context)
     private val projectRepository = ProjectRepository(context)
+    private val presetRepository = PresetRepository(context)
     private val audioDataExtractor = AudioDataExtractor(context)
     private val transcodePipeline = TranscodePipeline(context, videoRepository)
     private val thumbnailExtractor = ThumbnailExtractor(context)
+    
+    // Presets
+    val availablePresets = presetRepository.getAllPresets()
     
     // Undo Manager
     private val undoManager = UndoManager()
@@ -287,6 +294,7 @@ class EditorViewModel(
                         _isExporting.value = false
                         _exportResult.value = Result.failure(Exception(event.error))
                         Timber.e("Export failed: ${event.error}")
+                        _uiMessage.emit("Erro na exportação: ${event.error}")
                     }
                 }
             }
@@ -363,17 +371,6 @@ class EditorViewModel(
             
             // Notify UI (Fast feedback)
             Timber.d("Test operation $type applied (Logic only)")
-            
-            /* HEAVY TRANSCODE DISABLED FOR TESTING FLUIDITY
-            _isExporting.value = true
-            _exportResult.value = null
-            _exportProgress.value = 0
-            
-            try {
-                val outputName = "ChopCut_test_${type}_${System.currentTimeMillis()}.mp4" // REMOVED TRIMMED, ADDED CHOPCUT
-                // ... transcode logic ...
-            } catch (e: Exception) { ... }
-            */
         }
     }
 
@@ -387,61 +384,64 @@ class EditorViewModel(
     }
 
     /**
-     * Export trimmed video usando ForegroundService
+     * Export processed video using ForegroundService
+     * Applies Trim + Transforms (Rotate) + Preset (Resize)
      */
-    fun exportTrimmedVideo(trimRange: com.chopcut.ui.components.TrimRange) {
+    fun exportVideo(trimRange: com.chopcut.ui.components.TrimRange?, preset: ExportPreset? = null) {
         viewModelScope.launch(DispatcherProvider.io) {
             _isExporting.value = true
             _exportResult.value = null
             _exportProgress.value = 0
 
             try {
-                val timeRange = TimeRange(trimRange.startMs, trimRange.endMs)
+                // 1. Calculate Trim
+                val metadata = _videoInfo.value ?: throw IllegalStateException("Metadata not loaded")
+                val finalTrimRange = if (trimRange != null) {
+                    TimeRange(trimRange.startMs, trimRange.endMs)
+                } else {
+                    TimeRange(0, metadata.durationMs)
+                }
+
+                // 2. Calculate Transforms from history
+                val totalRotation = edits.value.filterIsInstance<EditOperation.Rotation>()
+                    .sumOf { it.degrees }
+                
+                // 3. Determine config (Preset vs Original)
+                val config = preset?.toExportConfig() ?: ExportConfig.fromVideoInfo(metadata)
+                
+                // 4. Determine Pipeline Type
+                // If we have rotation OR a preset that changes dimensions/bitrate, we MUST transcode.
+                // Otherwise we can fast-copy.
+                val hasTransform = totalRotation % 360 != 0
+                val hasFormatChange = preset != null // Assuming preset always implies re-encode preference
+                
+                val exportType = if (hasTransform || hasFormatChange) {
+                    ExportForegroundService.EXPORT_TYPE_TRANSCODE
+                } else {
+                    ExportForegroundService.EXPORT_TYPE_TRIM
+                }
+
                 val outputName = "ChopCut_${System.currentTimeMillis()}.mp4"
+
+                // Use project URI if available (stable internal file), otherwise fallback to initial URI
+                val targetUri = _project.value?.sourceVideoUri?.let { Uri.parse(it) } ?: videoUri
 
                 exportServiceManager.startExport(
-                    videoUri = videoUri,
-                    timeRanges = listOf(timeRange),
+                    videoUri = targetUri,
+                    timeRanges = listOf(finalTrimRange),
                     outputName = outputName,
-                    exportType = "trim"
+                    exportType = exportType,
+                    rotation = totalRotation,
+                    width = config.width,
+                    height = config.height
                 )
 
-                Timber.d("Export started via ForegroundService")
+                Timber.d("Export started: $exportType, rot=$totalRotation, size=${config.width}x${config.height}")
             } catch (e: Exception) {
-                Timber.e(e, "Error during export")
+                Timber.e(e, "Error during export preparation")
                 _exportResult.value = Result.failure(e)
                 _isExporting.value = false
-            }
-        }
-    }
-
-    /**
-     * Exporta vídeo usando WorkManager (para operações muito longas)
-     */
-    fun exportTrimmedVideoLong(trimRange: com.chopcut.ui.components.TrimRange) {
-        viewModelScope.launch(DispatcherProvider.io) {
-            _isExporting.value = true
-            _exportResult.value = null
-            _exportProgress.value = 0
-
-            try {
-                val timeRange = TimeRange(trimRange.startMs, trimRange.endMs)
-                val outputName = "ChopCut_${System.currentTimeMillis()}.mp4"
-
-                val scheduler = ExportWorkScheduler(context)
-                scheduler.scheduleExport(
-                    videoUri = videoUri,
-                    timeRanges = listOf(timeRange),
-                    outputName = outputName
-                )
-
-                Timber.d("Export started via WorkManager")
-                // Nota: WorkManager não envia progresso em tempo real
-                // O resultado será entregue quando o worker completar
-            } catch (e: Exception) {
-                Timber.e(e, "Error during export")
-                _exportResult.value = Result.failure(e)
-                _isExporting.value = false
+                _uiMessage.emit("Falha ao iniciar exportação: ${e.message}")
             }
         }
     }

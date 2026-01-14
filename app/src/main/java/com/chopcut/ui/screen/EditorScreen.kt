@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -63,18 +65,14 @@ import com.chopcut.ui.components.VideoPreview
 import com.chopcut.ui.components.VideoTimeline
 import com.chopcut.ui.components.WaveForm
 import com.chopcut.ui.components.TrimRange
+import com.chopcut.ui.components.ExportDialog
 import com.chopcut.ui.preview.PreviewManager
 import kotlinx.coroutines.launch
 import timber.log.Timber
-
 import androidx.media3.common.util.UnstableApi
 
 /**
  * Editor screen for video editing
- *
- * @param videoUri Initial video URI to edit
- * @param onNavigateBack Callback when user wants to go back
- * @param onExportComplete Callback when export is complete (result Uri)
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,6 +113,9 @@ fun EditorScreen(
     val canUndo by editorViewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by editorViewModel.canRedo.collectAsStateWithLifecycle()
     val saveStatus by editorViewModel.saveStatus.collectAsStateWithLifecycle()
+    val presets by editorViewModel.availablePresets.collectAsStateWithLifecycle(initialValue = emptyList())
+
+    var showExportDialog by remember { mutableStateOf(false) }
 
     // Apply effects when edits change
     LaunchedEffect(edits) {
@@ -155,7 +156,6 @@ fun EditorScreen(
         val result = exportResult
         if (result != null) {
             result.getOrNull()?.let { outputUri ->
-                // onExportComplete(outputUri) // Disable navigation back
                 val toast = android.widget.Toast.makeText(
                     context,
                     "Salvo na galeria! \n$outputUri",
@@ -287,6 +287,21 @@ fun EditorScreen(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Export Button (Starts the real process)
+                Button(
+                    onClick = { showExportDialog = true },
+                    enabled = !isExporting && videoInfo != null,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Exportar", style = MaterialTheme.typography.labelSmall)
+                }
+
+                // Trim Button (Applies logic)
                 Button(
                     onClick = {
                         val range = trimRange
@@ -335,7 +350,7 @@ fun EditorScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // 3. Timeline Row (Play Button + Timeline)
+            // 3. Timeline Row
             if (videoInfo == null) {
                 Box(
                     modifier = Modifier
@@ -400,7 +415,6 @@ fun EditorScreen(
                             .height(40.dp)
                     )
                 } else {
-                    // Loading State for Waveform
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -419,6 +433,39 @@ fun EditorScreen(
                 Spacer(Modifier.height(16.dp))
                 VideoInfoDisplay(videoInfo!!)
             }
+        }
+
+        // Export Presets Dialog
+        if (showExportDialog) {
+            ExportDialog(
+                presets = presets,
+                onPresetSelected = { preset ->
+                    showExportDialog = false
+                    val range = trimRange
+                    // Pass current trim range (or null for full video) and selected preset
+                    editorViewModel.exportVideo(range, preset)
+                },
+                onDismiss = { showExportDialog = false }
+            )
+        }
+
+        // Exporting Progress Dialog
+        if (isExporting) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { /* Prevent dismiss during export */ },
+                title = { Text("Exportando Vídeo") },
+                text = {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(Modifier.height(16.dp))
+                        Text("Processando...", style = MaterialTheme.typography.bodyMedium)
+                    }
+                },
+                confirmButton = {}
+            )
         }
     }
 }

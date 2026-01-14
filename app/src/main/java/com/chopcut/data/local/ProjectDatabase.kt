@@ -3,12 +3,22 @@ package com.chopcut.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.chopcut.data.model.EditOperationEntity
+import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.Project
 
-@Database(entities = [Project::class, EditOperationEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        Project::class, 
+        EditOperationEntity::class,
+        ExportPreset::class
+    ], 
+    version = 2, 
+    exportSchema = false
+)
 abstract class ProjectDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
     abstract fun editOperationDao(): EditOperationDao
+    abstract fun presetDao(): PresetDao
 
     companion object {
         const val DATABASE_NAME = "chopcut_projects.db"
@@ -22,7 +32,9 @@ abstract class ProjectDatabase : RoomDatabase() {
                     context.applicationContext,
                     ProjectDatabase::class.java,
                     DATABASE_NAME
-                ).build()
+                )
+                .fallbackToDestructiveMigration() // Reset DB on schema change
+                .build()
                 INSTANCE = instance
                 instance
             }

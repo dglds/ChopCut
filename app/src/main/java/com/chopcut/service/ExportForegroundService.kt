@@ -7,9 +7,11 @@ import android.net.Uri
 import android.os.Binder
 import android.os.IBinder
 import android.os.PowerManager
-import androidx.core.app.NotificationCompat
+import com.chopcut.data.model.ExportConfig
 import com.chopcut.data.model.TimeRange
+import com.chopcut.data.model.Transform
 import com.chopcut.data.pipeline.CopyPipeline
+import com.chopcut.data.pipeline.TranscodePipeline
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.util.DispatcherProvider
 import com.chopcut.util.TimeTracker
@@ -25,9 +27,6 @@ import timber.log.Timber
 
 /**
  * Serviço em foreground para exportação de vídeos em background.
- *
- * Mantém o processo vivo mesmo com a tela apagada usando WakeLock parcial
- * e mostra notificação de progresso da exportação.
  */
 class ExportForegroundService : Service() {
 
@@ -39,12 +38,15 @@ class ExportForegroundService : Service() {
         const val EXTRA_VIDEO_URI = "video_uri"
         const val EXTRA_TIME_RANGES = "time_ranges"
         const val EXTRA_EXPORT_TYPE = "export_type"
+        
+        // Transform params
+        const val EXTRA_ROTATION = "rotation"
+        const val EXTRA_WIDTH = "width"
+        const val EXTRA_HEIGHT = "height"
 
         // Tipos de exportação
-        const val EXPORT_TYPE_TRIM = "trim"
-        const val EXPORT_TYPE_COMPRESS = "compress"
-        const val EXPORT_TYPE_RESIZE = "resize"
-        const val EXPORT_TYPE_CROP = "crop"
+        const val EXPORT_TYPE_TRIM = "trim" // Fast copy (no transcode)
+        const val EXPORT_TYPE_TRANSCODE = "transcode" // Full processing
 
         // Ações de broadcast para resultados
         const val ACTION_EXPORT_PROGRESS = "com.chopcut.EXPORT_PROGRESS"
@@ -66,9 +68,10 @@ class ExportForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var isRunning = false
 
-    // Repositório e pipeline
+    // Repositório e pipelines
     private lateinit var videoRepository: VideoRepository
     private lateinit var copyPipeline: CopyPipeline
+    private lateinit var transcodePipeline: TranscodePipeline
 
     inner class LocalBinder : Binder() {
         fun getService(): ExportForegroundService = this@ExportForegroundService
@@ -81,6 +84,7 @@ class ExportForegroundService : Service() {
         notificationManager = ExportNotificationManager(this)
         videoRepository = VideoRepository(this)
         copyPipeline = CopyPipeline(this, videoRepository, DispatcherProvider)
+        transcodePipeline = TranscodePipeline(this, videoRepository)
     }
 
     override fun onBind(intent: Intent?): IBinder {
@@ -94,11 +98,23 @@ class ExportForegroundService : Service() {
                 val timeRanges = intent.getParcelableArrayListExtra<TimeRange>(EXTRA_TIME_RANGES)
                 val outputName = intent.getStringExtra("output_name") ?: "video.mp4"
                 val exportType = intent.getStringExtra(EXTRA_EXPORT_TYPE) ?: EXPORT_TYPE_TRIM
+                
+                val rotation = intent.getIntExtra(EXTRA_ROTATION, 0)
+                val width = intent.getIntExtra(EXTRA_WIDTH, 0)
+                val height = intent.getIntExtra(EXTRA_HEIGHT, 0)
 
-                if (videoUri != null && timeRanges != null) {
-                    startExport(videoUri, timeRanges, outputName, exportType)
+                if (videoUri != null) {
+                    startExport(
+                        videoUri, 
+                        timeRanges ?: emptyList(), 
+                        outputName, 
+                        exportType,
+                        rotation,
+                        width,
+                        height
+                    )
                 } else {
-                    Timber.tag("ExportForegroundService").e("URI ou timeRanges inválidos")
+                    Timber.tag("ExportForegroundService").e("URI inválida")
                     stopSelf()
                 }
             }
@@ -117,7 +133,10 @@ class ExportForegroundService : Service() {
         videoUri: Uri,
         timeRanges: List<TimeRange>,
         outputName: String,
-        exportType: String
+        exportType: String,
+        rotation: Int,
+        width: Int,
+        height: Int
     ) {
         if (isRunning) {
             Timber.tag("ExportForegroundService").w("Exportação já em andamento")
@@ -134,19 +153,35 @@ class ExportForegroundService : Service() {
         exportJob = serviceScope.launch {
             val tracker = TimeTracker.start("export_service")
             try {
-                Timber.tag("TIME").d("export_service_start: $outputName")
+                Timber.tag("TIME").d("export_service_start: $outputName (type=$exportType)")
 
-                // Coletar o resultado do pipeline
-                var finalResult: kotlinx.coroutines.flow.Flow<kotlin.Result<java.io.File>> =
+                // Selecionar pipeline
+                val resultFlow = if (exportType == EXPORT_TYPE_TRANSCODE) {
+                    // Configurar transformação e encoding
+                    val transform = Transform(
+                        rotation = rotation.toFloat()
+                        // TODO: Add crop support here if needed
+                    )
+                    
+                    val config = ExportConfig(
+                        width = if (width > 0) width else 1920, // Fallback
+                        height = if (height > 0) height else 1080,
+                        bitrate = 5_000_000 // Default
+                    )
+                    
+                    transcodePipeline.process(videoUri, transform, config)
+                } else {
+                    // Copy pipeline (apenas trim, sem re-encode)
                     copyPipeline.trim(videoUri, timeRanges)
+                }
 
                 // Coletar o primeiro (e único) resultado
                 var outputUri: Uri? = null
 
-                finalResult
+                resultFlow
                     .flowOn(DispatcherProvider.io)
                     .onEach { result ->
-                        // Progresso intermediário
+                        // Progresso intermediário (simulado ou real se o pipeline suportar)
                         broadcastProgress(50)
                     }
                     .catch { e ->
