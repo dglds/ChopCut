@@ -120,7 +120,7 @@ fun VideoTimeline(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(120.dp)
+            .height(50.dp)
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outline)
     ) {
@@ -153,7 +153,6 @@ fun VideoTimeline(
                 Timber.d("Rendering ${thumbnails.size} thumbnails in LazyRow")
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(1.dp) // Gap de 1dp entre thumbnails
                 ) {
                     items(thumbnails.size) { index ->
                         val thumbnail = thumbnails[index]
@@ -198,7 +197,7 @@ fun TimelineThumbnailItem(
     Box(
         modifier = Modifier
             .width(100.dp) // Largura fixa para cada thumbnail
-            .height(90.dp) // Altura fixa também para garantir visibilidade
+            .height(50.dp) // Altura fixa também para garantir visibilidade
             .clickable(onClick = onClick)
             .then(
                 if (!isInRange) {
@@ -243,14 +242,14 @@ fun TrimRangeOverlay(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(90.dp)
+            .height(50.dp)
     ) {
         // Trimmed area overlay (left)
         if (startFraction > 0) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(startFraction)
-                    .height(90.dp)
+                    .height(50.dp)
                     .background(Color.Black.copy(alpha = 0.5f))
                     .align(Alignment.CenterStart)
             )
@@ -261,7 +260,7 @@ fun TrimRangeOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(90.dp)
+                    .height(50.dp)
                     .background(Color.Black.copy(alpha = 0.5f))
                     .align(Alignment.CenterEnd)
             )
