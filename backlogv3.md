@@ -160,15 +160,7 @@ Arquivos:
 - Intensidade ajustável
 - Preview em tempo real
 
-### 4.2 Ajustes de Velocidade
-
-Arquivo: `app/src/main/java/com/chopcut/data/pipeline/SpeedPipeline.kt`
-- Slow motion (0.25x - 0.75x)
-- Normal (1x)
-- Fast forward (1.25x - 4x)
-- Reverse (reprodução reversa)
-
-### 4.3 Ajustes de Áudio
+### 4.2 Ajustes de Áudio
 
 Arquivo: `app/src/main/java/com/chopcut/data/pipeline/AudioPipeline.kt`
 - Volume (0-200%)
@@ -176,7 +168,7 @@ Arquivo: `app/src/main/java/com/chopcut/data/pipeline/AudioPipeline.kt`
 - Mute
 - Extração de áudio (já existe, integrar no editor)
 
-### 4.4 Transições
+### 4.3 Transições
 
 Arquivo: `app/src/main/java/com/chopcut/data/transition/Transition.kt`
 - Fade in/out
@@ -298,10 +290,9 @@ Arquivos: vários
 
 ### Sprint 5 (Ferramentas Básicas)
 
-1. Filtros (grayscale, sepia, etc.)
-2. Ajustes de velocidade
-3. Ajustes de volume
-4. Fade in/out
+1. Filtros (grayscale, sepia, etc.) ✅
+2. Ajustes de volume
+3. Fade in/out
 
 ### Sprint 6 (Compartilhamento)
 
@@ -329,7 +320,6 @@ Arquivos: vários
 - `data/repository/PresetRepository.kt`
 - `data/undo/UndoManager.kt`
 - `data/filter/VideoFilter.kt`
-- `data/pipeline/SpeedPipeline.kt`
 - `data/pipeline/AudioPipeline.kt`
 - `ui/project/ProjectsScreen.kt`
 - `ui/project/ProjectsViewModel.kt`
@@ -383,7 +373,6 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 ### Sprint 5-6 (Ferramentas + Share)
 
 - Aplicar filtros de vídeo
-- Alterar velocidade
 - Ajustar volume e fade
 - Compartilhar vídeo exportado
 
