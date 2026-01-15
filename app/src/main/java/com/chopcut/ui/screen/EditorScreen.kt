@@ -3,7 +3,6 @@ package com.chopcut.ui.screen
 import android.net.Uri
 import android.view.Gravity
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -12,11 +11,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
@@ -36,10 +32,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.util.UnstableApi
 import com.chopcut.data.model.EditOperation
+import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
 import com.chopcut.data.thumbnail.ThumbnailExtractor
-import com.chopcut.ui.components.EditorBottomBar
-import com.chopcut.ui.components.ExportDialog
 import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.components.VideoPreview
 import com.chopcut.ui.components.VideoTimeline
@@ -48,8 +43,6 @@ import com.chopcut.ui.preview.PreviewManager
 import com.chopcut.ui.filter.FilterDialog
 import com.chopcut.ui.filter.SpeedDialog
 import com.chopcut.ui.filter.VolumeDialog
-import kotlinx.coroutines.launch
-import java.io.File
 import timber.log.Timber
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -62,7 +55,6 @@ fun EditorScreen(
     onExportComplete: (Uri) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
 
     val previewManager = remember { PreviewManager(context) }
     val thumbnailExtractor = remember { ThumbnailExtractor(context) }
@@ -84,19 +76,23 @@ fun EditorScreen(
     val waveformData by editorViewModel.waveformData.collectAsStateWithLifecycle()
     val exportResult by editorViewModel.exportResult.collectAsStateWithLifecycle()
     val isExporting by editorViewModel.isExporting.collectAsStateWithLifecycle()
+    val exportProgress by editorViewModel.exportProgress.collectAsStateWithLifecycle()
     val edits by editorViewModel.edits.collectAsStateWithLifecycle()
     val canUndo by editorViewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by editorViewModel.canRedo.collectAsStateWithLifecycle()
     val saveStatus by editorViewModel.saveStatus.collectAsStateWithLifecycle()
     val presets by editorViewModel.availablePresets.collectAsStateWithLifecycle(initialValue = emptyList())
 
-    var showExportDialog by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showVolumeDialog by remember { mutableStateOf(false) }
-    var showExportResult by remember { mutableStateOf(false) }
+
+    // Estado da tela de exportação unificada
+    var exportScreenState by remember { mutableStateOf(ExportScreenState.SELECTING_PRESET) }
+    var showExportScreen by remember { mutableStateOf(false) }
     var lastExportUri by remember { mutableStateOf<Uri?>(null) }
     var lastExportName by remember { mutableStateOf<String?>(null) }
+    var lastExportError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(edits) {
         previewManager.applyEffects(edits)
@@ -126,17 +122,26 @@ fun EditorScreen(
         }
     }
 
+    // Gerenciar estado de exportação baseado no resultado
     LaunchedEffect(exportResult) {
         val result = exportResult
         if (result != null) {
             result.getOrNull()?.let { outputUri ->
-                // Salvar informações do último export para a tela de resultado
                 lastExportUri = outputUri
                 lastExportName = outputUri.lastPathSegment?.substringAfterLast('/')
                     ?: "ChopCut_${System.currentTimeMillis()}.mp4"
-                // Mostrar tela de resultado
-                showExportResult = true
+                exportScreenState = ExportScreenState.SUCCESS
+            } ?: run {
+                lastExportError = result.exceptionOrNull()?.message ?: "Erro desconhecido"
+                exportScreenState = ExportScreenState.ERROR
             }
+        }
+    }
+
+    // Atualizar estado para EXPORTING quando isExporting muda
+    LaunchedEffect(isExporting) {
+        if (isExporting && showExportScreen) {
+            exportScreenState = ExportScreenState.EXPORTING
         }
     }
 
@@ -159,7 +164,7 @@ fun EditorScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -169,11 +174,15 @@ fun EditorScreen(
                     IconButton(onClick = { editorViewModel.redo() }, enabled = canRedo) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Refazer")
                     }
+                    // Botão Exportar (antes era Salvar)
                     IconButton(
-                        onClick = { editorViewModel.saveProject(manual = true) },
-                        enabled = videoInfo != null
+                        onClick = {
+                            exportScreenState = ExportScreenState.SELECTING_PRESET
+                            showExportScreen = true
+                        },
+                        enabled = videoInfo != null && !isExporting
                     ) {
-                        Icon(Icons.Default.Done, contentDescription = "Salvar")
+                        Icon(Icons.Default.Share, contentDescription = "Exportar")
                     }
                 }
             )
@@ -222,8 +231,7 @@ fun EditorScreen(
                 ) {
                     items(edits.size) { i ->
                         val op = edits.reversed()[i]
-                        val index = edits.size - i
-                        
+
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer
@@ -255,7 +263,7 @@ fun EditorScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
-            // Barra de ferramentas principal
+            // Barra de ferramentas principal (sem botão Exportar, agora está na toolbar)
             EditorToolbar(
                 isExporting = isExporting,
                 videoInfo = videoInfo != null,
@@ -263,7 +271,6 @@ fun EditorScreen(
                 currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull(),
                 currentSpeed = edits.filterIsInstance<EditOperation.Speed>().lastOrNull(),
                 currentVolume = edits.filterIsInstance<EditOperation.Volume>().lastOrNull(),
-                onExportClick = { showExportDialog = true },
                 onTrimClick = { range ->
                     if (range != null) editorViewModel.applyTrim(range)
                 },
@@ -355,21 +362,6 @@ fun EditorScreen(
             }
         }
 
-        if (showExportDialog) {
-            ExportDialog(
-                presets = presets,
-                onPresetSelected = { preset ->
-                    showExportDialog = false
-                    val range = trimRange
-                    editorViewModel.exportVideo(range, preset)
-                },
-                onDismiss = { showExportDialog = false },
-                originalWidth = videoInfo?.width ?: 0,
-                originalHeight = videoInfo?.height ?: 0,
-                originalBitrate = (videoInfo?.bitrate ?: 0).toInt()
-            )
-        }
-
         // Diálogo de filtros
         if (showFilterDialog) {
             val currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()
@@ -411,34 +403,40 @@ fun EditorScreen(
             )
         }
 
-        if (isExporting) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { },
-                title = { Text("Exportando Vídeo") },
-                text = {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(16.dp))
-                        Text("Processando...", style = MaterialTheme.typography.bodyMedium)
+        // Tela unificada de Exportação e Resultado
+        if (showExportScreen) {
+            ExportResultScreen(
+                state = exportScreenState,
+                presets = presets,
+                inputData = ExportInputData(
+                    trimRange = trimRange,
+                    originalWidth = videoInfo?.width ?: 0,
+                    originalHeight = videoInfo?.height ?: 0,
+                    originalBitrate = (videoInfo?.bitrate ?: 0).toInt()
+                ),
+                resultUri = lastExportUri,
+                resultName = lastExportName,
+                exportProgress = exportProgress,
+                exportError = lastExportError,
+                onPresetSelected = { preset ->
+                    exportScreenState = ExportScreenState.EXPORTING
+                    editorViewModel.exportVideo(trimRange, preset)
+                },
+                onDismiss = {
+                    showExportScreen = false
+                    // Resetar estado ao fechar
+                    if (!isExporting) {
+                        exportScreenState = ExportScreenState.SELECTING_PRESET
                     }
                 },
-                confirmButton = {}
-            )
-        }
-
-        // Tela de resultado da exportação
-        if (showExportResult && lastExportUri != null && lastExportName != null) {
-            ExportResultScreen(
-                resultData = ExportResultData(
-                    videoUri = lastExportUri!!,
-                    outputName = lastExportName!!,
-                    durationMs = videoInfo?.durationMs
-                ),
-                onDismiss = { showExportResult = false },
-                onBackToEditor = { showExportResult = false }
+                onBackToEditor = {
+                    showExportScreen = false
+                    exportScreenState = ExportScreenState.SELECTING_PRESET
+                },
+                onRetry = {
+                    // Tentar novamente com o mesmo preset
+                    exportScreenState = ExportScreenState.SELECTING_PRESET
+                }
             )
         }
     }
@@ -451,28 +449,28 @@ fun VideoInfoDisplay(videoInfo: com.chopcut.data.model.VideoInfo) {
     ) {
         Text(
             text = "Video Information",
-            style = androidx.compose.material3.MaterialTheme.typography.titleSmall
+            style = MaterialTheme.typography.titleSmall
         )
         Spacer(Modifier.height(8.dp))
         Text(
             text = "Resolution: ${videoInfo.width}x${videoInfo.height}",
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+            style = MaterialTheme.typography.bodySmall
         )
         Text(
             text = "Duration: ${formatTime(videoInfo.durationMs)}",
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+            style = MaterialTheme.typography.bodySmall
         )
         Text(
             text = "Frame Rate: ${videoInfo.frameRate} fps",
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+            style = MaterialTheme.typography.bodySmall
         )
         Text(
             text = "Bitrate: ${videoInfo.bitrate / 1_000_000} Mbps",
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+            style = MaterialTheme.typography.bodySmall
         )
         Text(
             text = "Codec: ${videoInfo.videoCodec ?: "Unknown"}",
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }
@@ -486,6 +484,7 @@ private fun formatTime(timeMs: Long): String {
 
 /**
  * Barra de ferramentas principal do editor com botões organizados por categoria.
+ * NOTA: O botão Exportar foi movido para a toolbar do TopAppBar
  */
 @Composable
 private fun EditorToolbar(
@@ -495,7 +494,6 @@ private fun EditorToolbar(
     currentFilter: EditOperation.Filter?,
     currentSpeed: EditOperation.Speed?,
     currentVolume: EditOperation.Volume?,
-    onExportClick: () -> Unit,
     onTrimClick: (TrimRange?) -> Unit,
     onRotateClick: () -> Unit,
     onFilterClick: () -> Unit,
@@ -505,27 +503,13 @@ private fun EditorToolbar(
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        // Linha 1: Ações principais (Export, Trim, Rotate)
+        // Linha 1: Ações principais (Trim, Rotate)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Exportar (destaque)
-            Button(
-                onClick = onExportClick,
-                enabled = !isExporting && videoInfo,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Exportar", style = MaterialTheme.typography.labelMedium)
-            }
-
             // Trim
             Button(
                 onClick = { onTrimClick(trimRange) },
@@ -649,7 +633,7 @@ private fun SpeedButton(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Icon(
-            if (isActive && currentSpeed!!.speed < 1f) Icons.Default.ArrowBack else Icons.Default.ArrowForward,
+            if (isActive && currentSpeed!!.speed < 1f) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
             contentDescription = null,
             modifier = Modifier.size(16.dp),
             tint = if (isActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface

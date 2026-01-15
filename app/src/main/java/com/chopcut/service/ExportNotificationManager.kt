@@ -24,8 +24,8 @@ class ExportNotificationManager(private val context: Context) {
 
         // Ações da notificação
         private const val ACTION_CANCEL = "com.chopcut.ACTION_CANCEL_EXPORT"
-        private const val ACTION_SHARE = "com.chopcut.ACTION_SHARE"
-        private const val ACTION_OPEN = "com.chopcut.ACTION_OPEN"
+        const val ACTION_SHARE = "com.chopcut.ACTION_SHARE"
+        const val ACTION_OPEN = "com.chopcut.ACTION_OPEN"
 
         // Extras para passar dados nas ações
         const val EXTRA_VIDEO_URI = "video_uri"

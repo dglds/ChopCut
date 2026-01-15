@@ -314,7 +314,8 @@ class ShareManager(private val context: Context) {
                 }
                 "content" -> {
                     // Para content URIs, tentar deletar usando ContentResolver
-                    context.contentResolver.delete(videoUri, null, null)
+                    val deleted = context.contentResolver.delete(videoUri, null, null)
+                    deleted > 0
                 }
                 else -> false
             }
