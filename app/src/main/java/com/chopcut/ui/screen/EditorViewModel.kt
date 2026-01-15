@@ -438,7 +438,6 @@ class EditorViewModel(
                     timeRanges = listOf(finalTrimRange),
                     outputName = outputName,
                     exportType = exportType,
-                    edits = edits.value, // PASS ALL EDITS
                     rotation = totalRotation,
                     width = config.width,
                     height = config.height

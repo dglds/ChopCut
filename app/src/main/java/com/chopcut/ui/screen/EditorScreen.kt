@@ -185,15 +185,12 @@ fun EditorScreen(
             val totalRotation = edits.filterIsInstance<EditOperation.Rotation>()
                 .sumOf { it.degrees }
                 .toFloat() % 360f
-            
-            val activeFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()?.filterType
 
             VideoPreview(
                 uri = currentVideoUri,
                 previewManager = previewManager,
                 modifier = Modifier.fillMaxWidth(),
                 rotationDegrees = totalRotation,
-                activeFilter = activeFilter,
                 onPositionChanged = { positionMs ->
                     Timber.d("Position: ${positionMs}ms")
                 },
