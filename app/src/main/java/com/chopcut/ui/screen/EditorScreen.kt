@@ -3,16 +3,19 @@ package com.chopcut.ui.screen
 import android.net.Uri
 import android.view.Gravity
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
@@ -23,7 +26,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -145,6 +150,14 @@ fun EditorScreen(
         }
     }
 
+    // Estados ativos das features
+    val hasTrim by remember { derivedStateOf { edits.any { it is EditOperation.Trim } } }
+    val hasFilter by remember { derivedStateOf { edits.any { it is EditOperation.Filter } } }
+    val hasSpeed by remember { derivedStateOf { edits.any { it is EditOperation.Speed && it.speed != 1.0f } } }
+    val hasVolume by remember { derivedStateOf {
+        edits.any { it is EditOperation.Volume && it.volume != 1.0f } }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -174,7 +187,7 @@ fun EditorScreen(
                     IconButton(onClick = { editorViewModel.redo() }, enabled = canRedo) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Refazer")
                     }
-                    // Botão Exportar (antes era Salvar)
+                    // Botão Exportar
                     IconButton(
                         onClick = {
                             exportScreenState = ExportScreenState.SELECTING_PRESET
@@ -185,6 +198,22 @@ fun EditorScreen(
                         Icon(Icons.Default.Share, contentDescription = "Exportar")
                     }
                 }
+            )
+        },
+        bottomBar = {
+            EditorBottomBar(
+                isExporting = isExporting,
+                hasTrim = hasTrim,
+                hasFilter = hasFilter,
+                hasSpeed = hasSpeed,
+                hasVolume = hasVolume,
+                onTrimClick = { range ->
+                    if (range != null) editorViewModel.applyTrim(range)
+                },
+                onRotateClick = { editorViewModel.testOperation("rotate") },
+                onFilterClick = { showFilterDialog = true },
+                onSpeedClick = { showSpeedDialog = true },
+                onVolumeClick = { showVolumeDialog = true }
             )
         }
     ) { paddingValues ->
@@ -262,25 +291,6 @@ fun EditorScreen(
                 }
                 Spacer(Modifier.height(8.dp))
             }
-
-            // Barra de ferramentas principal (sem botão Exportar, agora está na toolbar)
-            EditorToolbar(
-                isExporting = isExporting,
-                videoInfo = videoInfo != null,
-                trimRange = trimRange,
-                currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull(),
-                currentSpeed = edits.filterIsInstance<EditOperation.Speed>().lastOrNull(),
-                currentVolume = edits.filterIsInstance<EditOperation.Volume>().lastOrNull(),
-                onTrimClick = { range ->
-                    if (range != null) editorViewModel.applyTrim(range)
-                },
-                onRotateClick = { editorViewModel.testOperation("rotate") },
-                onFilterClick = { showFilterDialog = true },
-                onSpeedClick = { showSpeedDialog = true },
-                onVolumeClick = { showVolumeDialog = true }
-            )
-
-            Spacer(Modifier.height(16.dp))
 
             if (videoInfo == null) {
                 Box(
@@ -361,84 +371,84 @@ fun EditorScreen(
                 VideoInfoDisplay(videoInfo!!)
             }
         }
+    }
 
-        // Diálogo de filtros
-        if (showFilterDialog) {
-            val currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()
-            FilterDialog(
-                currentFilter = currentFilter,
-                onConfirm = { filter ->
-                    showFilterDialog = false
-                    if (filter != null) {
-                        editorViewModel.addOperation(filter)
-                    }
-                },
-                onDismiss = { showFilterDialog = false }
-            )
-        }
+    // Diálogo de filtros
+    if (showFilterDialog) {
+        val currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()
+        FilterDialog(
+            currentFilter = currentFilter,
+            onConfirm = { filter ->
+                showFilterDialog = false
+                if (filter != null) {
+                    editorViewModel.addOperation(filter)
+                }
+            },
+            onDismiss = { showFilterDialog = false }
+        )
+    }
 
-        // Diálogo de velocidade
-        if (showSpeedDialog) {
-            val currentSpeed = edits.filterIsInstance<EditOperation.Speed>().lastOrNull()
-            SpeedDialog(
-                currentSpeed = currentSpeed,
-                onConfirm = { speed ->
-                    showSpeedDialog = false
-                    editorViewModel.addOperation(speed)
-                },
-                onDismiss = { showSpeedDialog = false }
-            )
-        }
+    // Diálogo de velocidade
+    if (showSpeedDialog) {
+        val currentSpeed = edits.filterIsInstance<EditOperation.Speed>().lastOrNull()
+        SpeedDialog(
+            currentSpeed = currentSpeed,
+            onConfirm = { speed ->
+                showSpeedDialog = false
+                editorViewModel.addOperation(speed)
+            },
+            onDismiss = { showSpeedDialog = false }
+        )
+    }
 
-        // Diálogo de volume
-        if (showVolumeDialog) {
-            val currentVolume = edits.filterIsInstance<EditOperation.Volume>().lastOrNull()
-            VolumeDialog(
-                currentVolume = currentVolume,
-                onConfirm = { volume ->
-                    showVolumeDialog = false
-                    editorViewModel.addOperation(volume)
-                },
-                onDismiss = { showVolumeDialog = false }
-            )
-        }
+    // Diálogo de volume
+    if (showVolumeDialog) {
+        val currentVolume = edits.filterIsInstance<EditOperation.Volume>().lastOrNull()
+        VolumeDialog(
+            currentVolume = currentVolume,
+            onConfirm = { volume ->
+                showVolumeDialog = false
+                editorViewModel.addOperation(volume)
+            },
+            onDismiss = { showVolumeDialog = false }
+        )
+    }
 
-        // Tela unificada de Exportação e Resultado
-        if (showExportScreen) {
-            ExportResultScreen(
-                state = exportScreenState,
-                presets = presets,
-                inputData = ExportInputData(
-                    trimRange = trimRange,
-                    originalWidth = videoInfo?.width ?: 0,
-                    originalHeight = videoInfo?.height ?: 0,
-                    originalBitrate = (videoInfo?.bitrate ?: 0).toInt()
-                ),
-                resultUri = lastExportUri,
-                resultName = lastExportName,
-                exportProgress = exportProgress,
-                exportError = lastExportError,
-                onPresetSelected = { preset ->
-                    exportScreenState = ExportScreenState.EXPORTING
-                    editorViewModel.exportVideo(trimRange, preset)
-                },
-                onDismiss = {
-                    showExportScreen = false
-                    // Resetar estado ao fechar
-                    if (!isExporting) {
-                        exportScreenState = ExportScreenState.SELECTING_PRESET
-                    }
-                },
-                onBackToEditor = {
-                    showExportScreen = false
-                    exportScreenState = ExportScreenState.SELECTING_PRESET
-                },
-                onRetry = {
-                    // Tentar novamente com o mesmo preset
+    // Tela unificada de Exportação e Resultado
+    if (showExportScreen) {
+        ExportResultScreen(
+            state = exportScreenState,
+            presets = presets,
+            inputData = ExportInputData(
+                trimRange = trimRange,
+                originalWidth = videoInfo?.width ?: 0,
+                originalHeight = videoInfo?.height ?: 0,
+                originalBitrate = (videoInfo?.bitrate ?: 0).toInt()
+            ),
+            resultUri = lastExportUri,
+            resultName = lastExportName,
+            exportProgress = exportProgress,
+            exportError = lastExportError,
+            onPresetSelected = { preset ->
+                exportScreenState = ExportScreenState.EXPORTING
+                editorViewModel.exportVideo(trimRange, preset)
+            },
+            onDismiss = {
+                showExportScreen = false
+                // Resetar estado ao fechar
+                if (!isExporting) {
                     exportScreenState = ExportScreenState.SELECTING_PRESET
                 }
-            )
-        }
+            },
+            onBackToEditor = {
+                showExportScreen = false
+                exportScreenState = ExportScreenState.SELECTING_PRESET
+            },
+            onRetry = {
+                // Tentar novamente com o mesmo preset
+                exportScreenState = ExportScreenState.SELECTING_PRESET
+            }
+        )
     }
 }
 
@@ -483,201 +493,136 @@ private fun formatTime(timeMs: Long): String {
 }
 
 /**
- * Barra de ferramentas principal do editor com botões organizados por categoria.
- * NOTA: O botão Exportar foi movido para a toolbar do TopAppBar
+ * BottomBar do editor com botões de features.
  */
 @Composable
-private fun EditorToolbar(
+private fun EditorBottomBar(
     isExporting: Boolean,
-    videoInfo: Boolean,
-    trimRange: TrimRange?,
-    currentFilter: EditOperation.Filter?,
-    currentSpeed: EditOperation.Speed?,
-    currentVolume: EditOperation.Volume?,
+    hasTrim: Boolean,
+    hasFilter: Boolean,
+    hasSpeed: Boolean,
+    hasVolume: Boolean,
     onTrimClick: (TrimRange?) -> Unit,
     onRotateClick: () -> Unit,
     onFilterClick: () -> Unit,
     onSpeedClick: () -> Unit,
     onVolumeClick: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        tonalElevation = 3.dp,
+        shadowElevation = 3.dp
     ) {
-        // Linha 1: Ações principais (Trim, Rotate)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .height(64.dp)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             // Trim
-            Button(
-                onClick = { onTrimClick(trimRange) },
-                enabled = !isExporting && trimRange != null,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Trim", style = MaterialTheme.typography.labelSmall)
-            }
-
-            // Rotacionar
-            Button(
-                onClick = onRotateClick,
+            FeatureButton(
+                icon = Icons.Default.Check,
+                label = "Trim",
+                isActive = hasTrim,
                 enabled = !isExporting,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Rotacionar", style = MaterialTheme.typography.labelSmall)
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // Linha 2: Efeitos (Filtros, Velocidade, Volume)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Filtros
-            FilterButton(
-                currentFilter = currentFilter,
-                onClick = onFilterClick,
-                enabled = !isExporting
+                onClick = { onTrimClick(null) }
             )
 
-            // Velocidade
-            SpeedButton(
-                currentSpeed = currentSpeed,
-                onClick = onSpeedClick,
-                enabled = !isExporting
+            // Rotate
+            FeatureButton(
+                icon = Icons.Default.Refresh,
+                label = "Girar",
+                isActive = false,
+                enabled = !isExporting,
+                onClick = onRotateClick
+            )
+
+            // Filter
+            FeatureButton(
+                icon = Icons.Default.Settings,
+                label = "Filtro",
+                isActive = hasFilter,
+                enabled = !isExporting,
+                onClick = onFilterClick
+            )
+
+            // Speed
+            FeatureButton(
+                icon = Icons.Default.PlayArrow,
+                label = "Veloc",
+                isActive = hasSpeed,
+                enabled = !isExporting,
+                onClick = onSpeedClick
             )
 
             // Volume
-            VolumeButton(
-                currentVolume = currentVolume,
-                onClick = onVolumeClick,
-                enabled = !isExporting
+            FeatureButton(
+                icon = Icons.Default.Notifications,
+                label = "Volume",
+                isActive = hasVolume,
+                enabled = !isExporting,
+                onClick = onVolumeClick
             )
         }
     }
 }
 
 /**
- * Botão de filtros com indicador de filtro ativo.
+ * Botão de feature para a BottomBar.
  */
 @Composable
-private fun FilterButton(
-    currentFilter: EditOperation.Filter?,
-    onClick: () -> Unit,
-    enabled: Boolean
+private fun FeatureButton(
+    icon: ImageVector,
+    label: String,
+    isActive: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
 ) {
-    val isActive = currentFilter != null
-    val filterName = when (currentFilter?.filterType) {
-        FilterType.GRAYSCALE -> "P&B"
-        FilterType.SEPIA -> "Sépia"
-        FilterType.BRIGHTNESS -> "Brilho"
-        FilterType.CONTRAST -> "Contraste"
-        FilterType.SATURATION -> "Saturação"
-        else -> "Filtros"
-    }
-
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = if (isActive) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
-        ),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+    Column(
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            Icons.Default.Settings,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(Modifier.width(4.dp))
-        Text(filterName, style = MaterialTheme.typography.labelSmall)
-        if (isActive) {
-            Spacer(Modifier.width(4.dp))
-            Text(
-                String.format("%.0f%%", currentFilter.intensity * 100),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(
+                    if (isActive) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        Color.Transparent
+                    },
+                    CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = label,
+                modifier = Modifier.size(24.dp),
+                tint = if (enabled) {
+                    if (isActive) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
         }
-    }
-}
-
-/**
- * Botão de velocidade com indicador de velocidade atual.
- */
-@Composable
-private fun SpeedButton(
-    currentSpeed: EditOperation.Speed?,
-    onClick: () -> Unit,
-    enabled: Boolean
-) {
-    val isActive = currentSpeed != null && currentSpeed.speed != 1.0f
-    val speedText = if (isActive) String.format("%.1fx", currentSpeed!!.speed) else "Velocidade"
-
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = if (isActive) MaterialTheme.colorScheme.tertiaryContainer else Color.Transparent
-        ),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        Icon(
-            if (isActive && currentSpeed!!.speed < 1f) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = if (isActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(Modifier.width(4.dp))
-        Text(speedText, style = MaterialTheme.typography.labelSmall)
-    }
-}
-
-/**
- * Botão de volume com indicador de volume atual.
- */
-@Composable
-private fun VolumeButton(
-    currentVolume: EditOperation.Volume?,
-    onClick: () -> Unit,
-    enabled: Boolean
-) {
-    val isActive = currentVolume != null && currentVolume.volume != 1.0f
-    val volumePercent = currentVolume?.volume?.let { (it * 100).toInt() } ?: 100
-    val volumeText = if (isActive) "$volumePercent%" else "Volume"
-
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = when {
-                currentVolume?.volume == 0f -> MaterialTheme.colorScheme.errorContainer
-                isActive -> MaterialTheme.colorScheme.primaryContainer
-                else -> Color.Transparent
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (enabled) {
+                if (isActive) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
             }
-        ),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        Icon(
-            when {
-                currentVolume?.volume == 0f -> Icons.Default.Close
-                else -> Icons.Default.Notifications
-            },
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
         )
-        Spacer(Modifier.width(4.dp))
-        Text(volumeText, style = MaterialTheme.typography.labelSmall)
     }
 }
