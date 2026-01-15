@@ -14,8 +14,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,12 +36,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
@@ -62,6 +64,8 @@ fun SettingsScreen(
     }
 
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
+    val cleanupResult by (settingsViewModel as? SettingsViewModel)?.cleanupResult?.collectAsStateWithLifecycle()
+        ?: remember { mutableStateOf(null) }
 
     Scaffold(
         topBar = {
@@ -69,7 +73,7 @@ fun SettingsScreen(
                 title = { Text("Configurações") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                 }
             )
@@ -107,6 +111,13 @@ fun SettingsScreen(
 
             // Info Card
             InfoCard()
+
+            // Storage Card
+            StorageSettingsCard(
+                onClearCache = { settingsViewModel.clearChopCutDirectory() },
+                cleanupResult = cleanupResult,
+                onDismissResult = { settingsViewModel.clearCleanupResult() }
+            )
 
             // Reset Button
             Button(
@@ -396,6 +407,111 @@ fun InfoCard() {
                 )
             }
         }
+    }
+}
+
+/**
+ * Storage settings card - clear cache/directories
+ */
+@Composable
+fun StorageSettingsCard(
+    onClearCache: () -> Unit,
+    cleanupResult: CleanupResult?,
+    onDismissResult: () -> Unit
+) {
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Armazenamento",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        text = "Limpar diretório Movies/ChopCut",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = { showConfirmDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Limpar Arquivos Temporários")
+            }
+        }
+    }
+
+    // Confirmation dialog
+    if (showConfirmDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text("Limpar Arquivos Temporários?") },
+            text = {
+                Text(
+                    "Isso irá excluir todos os arquivos do diretório Movies/ChopCut, " +
+                    "incluindo vídeos exportados temporários. Esta ação não pode ser desfeita."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showConfirmDialog = false
+                        onClearCache()
+                    }
+                ) {
+                    Text("Limpar", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Result dialog
+    if (cleanupResult != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = onDismissResult,
+            title = { Text("Resultado") },
+            text = {
+                Text(cleanupResult.message)
+            },
+            confirmButton = {
+                TextButton(onClick = onDismissResult) {
+                    Text("OK")
+                }
+            }
+        )
     }
 }
 

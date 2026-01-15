@@ -9,12 +9,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import timber.log.Timber
+import java.io.File
 
 /**
  * ViewModel for managing app settings
  */
 class SettingsViewModel(
-    context: Context
+    private val context: Context
 ) : ViewModel() {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(
@@ -25,6 +27,10 @@ class SettingsViewModel(
     // Settings state
     private val _settings = MutableStateFlow(loadSettings())
     val settings: StateFlow<ExportSettings> = _settings.asStateFlow()
+
+    // Storage cleanup state
+    private val _cleanupResult = MutableStateFlow<CleanupResult?>(null)
+    val cleanupResult: StateFlow<CleanupResult?> = _cleanupResult.asStateFlow()
 
     /**
      * Update video codec
@@ -103,6 +109,100 @@ class SettingsViewModel(
     }
 
     /**
+     * Clear all files in the Movies/ChopCut directory
+     * @return Pair of (filesDeleted, totalSizeFreedInBytes)
+     */
+    fun clearChopCutDirectory() {
+        viewModelScope.launch {
+            try {
+                val chopCutDir = File(
+                    context.getExternalFilesDir(null),
+                    "Movies/ChopCut"
+                )
+
+                if (!chopCutDir.exists()) {
+                    _cleanupResult.value = CleanupResult(0, 0L, "Diretório não existe ou já está vazio")
+                    return@launch
+                }
+
+                var filesDeleted = 0
+                var totalSize = 0L
+                val filesToDelete = chopCutDir.listFiles()?.toList() ?: emptyList()
+
+                for (file in filesToDelete) {
+                    if (file.isDirectory) {
+                        // Delete directory contents recursively
+                        val deleted = deleteRecursively(file)
+                        filesDeleted += deleted.first
+                        totalSize += deleted.second
+                    } else {
+                        val size = file.length()
+                        if (file.delete()) {
+                            filesDeleted++
+                            totalSize += size
+                        }
+                    }
+                }
+
+                // Try to delete the ChopCut directory itself if empty
+                if (chopCutDir.listFiles()?.isEmpty() == true) {
+                    chopCutDir.delete()
+                }
+
+                val sizeText = formatFileSize(totalSize)
+                _cleanupResult.value = CleanupResult(
+                    filesDeleted,
+                    totalSize,
+                    "$filesDeleted arquivos excluídos ($sizeText liberados)"
+                )
+
+                Timber.d("ChopCut directory cleared: $filesDeleted files, $sizeText freed")
+            } catch (e: Exception) {
+                Timber.e(e, "Error clearing ChopCut directory")
+                _cleanupResult.value = CleanupResult(0, 0L, "Erro: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Reset cleanup result after showing it
+     */
+    fun clearCleanupResult() {
+        _cleanupResult.value = null
+    }
+
+    private fun deleteRecursively(dir: File): Pair<Int, Long> {
+        var filesDeleted = 0
+        var totalSize = 0L
+
+        dir.listFiles()?.forEach { file ->
+            if (file.isDirectory) {
+                val deleted = deleteRecursively(file)
+                filesDeleted += deleted.first
+                totalSize += deleted.second
+            } else {
+                totalSize += file.length()
+                if (file.delete()) {
+                    filesDeleted++
+                }
+            }
+        }
+
+        // Delete the directory itself after clearing contents
+        dir.delete()
+        return Pair(filesDeleted, totalSize)
+    }
+
+    private fun formatFileSize(bytes: Long): String {
+        return when {
+            bytes < 1024 -> "$bytes B"
+            bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+            bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
+            else -> String.format("%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+        }
+    }
+
+    /**
      * Load settings from SharedPreferences
      */
     private fun loadSettings(): ExportSettings {
@@ -141,3 +241,12 @@ class SettingsViewModel(
         private const val KEY_FAST_PATH = "use_fast_path"
     }
 }
+
+/**
+ * Result of directory cleanup operation
+ */
+data class CleanupResult(
+    val filesDeleted: Int,
+    val bytesFreed: Long,
+    val message: String
+)
