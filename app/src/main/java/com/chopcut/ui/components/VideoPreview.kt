@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -32,6 +35,7 @@ import com.chopcut.R
 import com.chopcut.ui.preview.PreviewManager
 import timber.log.Timber
 import android.view.LayoutInflater
+import androidx.compose.material3.ExperimentalMaterial3Api
 
 /**
  * Video preview component with ExoPlayer integration
@@ -43,6 +47,7 @@ import android.view.LayoutInflater
  * @param onPositionChanged Callback when video position changes (in ms)
  * @param onVideoClick Callback when the video surface is clicked
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoPreview(
     uri: android.net.Uri,
@@ -124,7 +129,7 @@ fun VideoPreview(
             }
         }
 
-        // Seek bar
+        // Seek bar (sem thumb/playhead)
         if (isReady && duration > 0) {
             Slider(
                 value = sliderPosition,
@@ -139,7 +144,18 @@ fun VideoPreview(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp)
+                    .height(4.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = Color.Transparent,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    activeTickColor = Color.Transparent,
+                    inactiveTickColor = Color.Transparent
+                ),
+                thumb = {
+                    // Thumb vazio/removido
+                    Box(modifier = Modifier.height(0.dp))
+                }
             )
         }
     }

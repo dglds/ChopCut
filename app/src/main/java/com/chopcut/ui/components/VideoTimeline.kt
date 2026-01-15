@@ -122,7 +122,6 @@ fun VideoTimeline(
             .fillMaxWidth()
             .height(50.dp)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         when {
             isLoading -> {
