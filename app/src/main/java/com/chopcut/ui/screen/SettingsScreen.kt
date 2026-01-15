@@ -448,7 +448,7 @@ fun StorageSettingsCard(
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Text(
-                        text = "Limpar diretório Movies/ChopCut",
+                        text = "Limpar pasta de exportações (Movies/ChopCut)",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
                     )
@@ -464,7 +464,7 @@ fun StorageSettingsCard(
                     containerColor = MaterialTheme.colorScheme.error
                 )
             ) {
-                Text("Limpar Arquivos Temporários")
+                Text("Limpar Vídeos Exportados")
             }
         }
     }
@@ -473,11 +473,11 @@ fun StorageSettingsCard(
     if (showConfirmDialog) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
-            title = { Text("Limpar Arquivos Temporários?") },
+            title = { Text("Limpar Vídeos Exportados?") },
             text = {
                 Text(
-                    "Isso irá excluir todos os arquivos do diretório Movies/ChopCut, " +
-                    "incluindo vídeos exportados temporários. Esta ação não pode ser desfeita."
+                    "Isso irá excluir todos os vídeos da pasta Movies/ChopCut. " +
+                    "Esta ação não pode ser desfeita."
                 )
             },
             confirmButton = {

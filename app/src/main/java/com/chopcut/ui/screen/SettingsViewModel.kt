@@ -1,7 +1,12 @@
 package com.chopcut.ui.screen
 
+import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Environment
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chopcut.data.model.VideoCodec
@@ -109,54 +114,138 @@ class SettingsViewModel(
     }
 
     /**
-     * Clear all files in the Movies/ChopCut directory
-     * @return Pair of (filesDeleted, totalSizeFreedInBytes)
+     * Clear all exported videos in the Movies/ChopCut directory
+     * Uses MediaStore on Android 10+ for proper scoped storage handling
      */
     fun clearChopCutDirectory() {
         viewModelScope.launch {
             try {
-                val chopCutDir = File(
-                    context.getExternalFilesDir(null),
-                    "Movies/ChopCut"
-                )
-
-                if (!chopCutDir.exists()) {
-                    _cleanupResult.value = CleanupResult(0, 0L, "Diretório não existe ou já está vazio")
-                    return@launch
+                // Check storage permission on older Android versions
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                    val permissionCheck = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    )
+                    if (permissionCheck != PackageManager.PERMISSION_GRANTED) {
+                        _cleanupResult.value = CleanupResult(
+                            0, 0L,
+                            "Permissão de armazenamento necessária"
+                        )
+                        return@launch
+                    }
                 }
 
                 var filesDeleted = 0
                 var totalSize = 0L
-                val filesToDelete = chopCutDir.listFiles()?.toList() ?: emptyList()
 
-                for (file in filesToDelete) {
-                    if (file.isDirectory) {
-                        // Delete directory contents recursively
-                        val deleted = deleteRecursively(file)
-                        filesDeleted += deleted.first
-                        totalSize += deleted.second
-                    } else {
-                        val size = file.length()
-                        if (file.delete()) {
-                            filesDeleted++
+                // 1. Try to clear root /ChopCut folder (legacy path)
+                try {
+                    val rootDir = File(Environment.getExternalStorageDirectory(), "ChopCut")
+                    if (rootDir.exists()) {
+                        val (deleted, size) = deleteRecursively(rootDir)
+                        filesDeleted += deleted
+                        totalSize += size
+                    }
+                } catch (e: Exception) {
+                    Timber.w("Failed to clear root ChopCut: ${e.message}")
+                }
+
+                // 2. Clear Movies/ChopCut via MediaStore (Android 10+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        val collection = android.provider.MediaStore.Video.Media.getContentUri(
+                            android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY
+                        )
+
+                        // Query all videos in Movies/ChopCut
+                        val projection = arrayOf(
+                            android.provider.MediaStore.Video.Media._ID,
+                            android.provider.MediaStore.Video.Media.DISPLAY_NAME,
+                            android.provider.MediaStore.Video.Media.SIZE,
+                            android.provider.MediaStore.Video.Media.DATA
+                        )
+
+                        val selection = "${android.provider.MediaStore.Video.Media.RELATIVE_PATH} LIKE ?"
+                        val selectionArgs = arrayOf("%${Environment.DIRECTORY_MOVIES}/ChopCut%")
+
+                        context.contentResolver.query(
+                            collection,
+                            projection,
+                            selection,
+                            selectionArgs,
+                            null
+                        )?.use { cursor ->
+                            while (cursor.moveToNext()) {
+                                val idColumn = cursor.getColumnIndexOrThrow(
+                                    android.provider.MediaStore.Video.Media._ID
+                                )
+                                val sizeColumn = cursor.getColumnIndexOrThrow(
+                                    android.provider.MediaStore.Video.Media.SIZE
+                                )
+                                val dataColumn = cursor.getColumnIndexOrThrow(
+                                    android.provider.MediaStore.Video.Media.DATA
+                                )
+
+                                val id = cursor.getLong(idColumn)
+                                val size = if (sizeColumn >= 0) cursor.getLong(sizeColumn) else 0L
+                                val dataPath = if (dataColumn >= 0) cursor.getString(dataColumn) else null
+
+                                // Delete via MediaStore
+                                val uri = android.content.ContentUris.withAppendedId(collection, id)
+                                val rowsDeleted = context.contentResolver.delete(uri, null, null)
+
+                                if (rowsDeleted > 0) {
+                                    filesDeleted++
+                                    totalSize += size
+                                }
+
+                                // Also try to delete the actual file if path exists
+                                dataPath?.let {
+                                    try {
+                                        File(it).delete()
+                                    } catch (e: Exception) {
+                                        // Ignore
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to clear Movies/ChopCut via MediaStore")
+                    }
+                } else {
+                    // Android 9 and below: direct file access
+                    try {
+                        val moviesDir = File(
+                            Environment.getExternalStoragePublicDirectory(
+                                Environment.DIRECTORY_MOVIES
+                            ),
+                            "ChopCut"
+                        )
+                        if (moviesDir.exists()) {
+                            val (deleted, size) = deleteRecursively(moviesDir)
+                            filesDeleted += deleted
                             totalSize += size
                         }
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to clear Movies/ChopCut directory")
                     }
                 }
 
-                // Try to delete the ChopCut directory itself if empty
-                if (chopCutDir.listFiles()?.isEmpty() == true) {
-                    chopCutDir.delete()
+                if (filesDeleted == 0 && totalSize == 0L) {
+                    _cleanupResult.value = CleanupResult(
+                        0, 0L,
+                        "Nenhum arquivo encontrado em Movies/ChopCut"
+                    )
+                } else {
+                    val sizeText = formatFileSize(totalSize)
+                    _cleanupResult.value = CleanupResult(
+                        filesDeleted,
+                        totalSize,
+                        "$filesDeleted arquivos excluídos ($sizeText liberados)"
+                    )
+                    Timber.d("ChopCut directory cleared: $filesDeleted files, $sizeText freed")
                 }
 
-                val sizeText = formatFileSize(totalSize)
-                _cleanupResult.value = CleanupResult(
-                    filesDeleted,
-                    totalSize,
-                    "$filesDeleted arquivos excluídos ($sizeText liberados)"
-                )
-
-                Timber.d("ChopCut directory cleared: $filesDeleted files, $sizeText freed")
             } catch (e: Exception) {
                 Timber.e(e, "Error clearing ChopCut directory")
                 _cleanupResult.value = CleanupResult(0, 0L, "Erro: ${e.message}")
