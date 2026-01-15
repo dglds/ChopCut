@@ -81,11 +81,7 @@ fun WaveForm(
                 size.height - barHeight
             }
 
-            val baseColor = when {
-                amp > highThreshold -> Color(0xFF00D9FF)
-                amp > lowThreshold -> Color(0xFF00FFB3)
-                else -> Color(0xFFFF6B6B)
-            }
+            val baseColor = Color.White
 
             val glowColor = baseColor.copy(alpha = 0.3f)
 
@@ -106,13 +102,7 @@ fun WaveForm(
             }
 
             drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        baseColor,
-                        baseColor.copy(alpha = 0.7f),
-                        baseColor.copy(alpha = 0.4f)
-                    )
-                ),
+                color = Color.White,
                 topLeft = androidx.compose.ui.geometry.Offset(x + gap, y),
                 size = androidx.compose.ui.geometry.Size(barWidth - gap * 2, barHeight),
                 cornerRadius = CornerRadius(2f, 2f)
