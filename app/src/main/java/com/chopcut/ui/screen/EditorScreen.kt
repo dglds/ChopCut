@@ -208,6 +208,8 @@ fun EditorScreen(
                 hasFilter = hasFilter,
                 hasSpeed = hasSpeed,
                 hasVolume = hasVolume,
+                videoInfo = videoInfo,
+                trimRange = trimRange,
                 onTrimClick = { range ->
                     if (range != null) editorViewModel.applyTrim(range)
                 },
@@ -369,7 +371,6 @@ fun EditorScreen(
                 }
 
                 Spacer(Modifier.height(16.dp))
-                VideoInfoDisplay(videoInfo!!)
             }
         }
     }
@@ -494,7 +495,7 @@ private fun formatTime(timeMs: Long): String {
 }
 
 /**
- * BottomBar do editor com botões de features.
+ * BottomBar do editor com botões de features e informações do vídeo.
  */
 @Composable
 private fun EditorBottomBar(
@@ -503,6 +504,8 @@ private fun EditorBottomBar(
     hasFilter: Boolean,
     hasSpeed: Boolean,
     hasVolume: Boolean,
+    videoInfo: com.chopcut.data.model.VideoInfo?,
+    trimRange: TrimRange?,
     onTrimClick: (TrimRange?) -> Unit,
     onRotateClick: () -> Unit,
     onFilterClick: () -> Unit,
@@ -514,14 +517,51 @@ private fun EditorBottomBar(
         tonalElevation = 3.dp,
         shadowElevation = 3.dp
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(WindowInsets.navigationBars.asPaddingValues())
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Informações do vídeo (compactas)
+            if (videoInfo != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    VideoInfoBadge(
+                        icon = Icons.Default.PlayArrow,
+                        text = formatTime(videoInfo.durationMs)
+                    )
+                    VideoInfoBadge(
+                        icon = Icons.Default.Edit,
+                        text = "${videoInfo.width}x${videoInfo.height}"
+                    )
+                    VideoInfoBadge(
+                        icon = Icons.Default.Notifications,
+                        text = "${videoInfo.frameRate} fps"
+                    )
+                    VideoInfoBadge(
+                        icon = Icons.Default.Share,
+                        text = "${videoInfo.bitrate / 1_000_000}M"
+                    )
+                }
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+            }
+
+            // Botões de features
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
             // Trim
             FeatureButton(
                 icon = Icons.Default.Check,
@@ -566,6 +606,7 @@ private fun EditorBottomBar(
                 enabled = !isExporting,
                 onClick = onVolumeClick
             )
+            }
         }
     }
 }
@@ -624,6 +665,34 @@ private fun FeatureButton(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
+        )
+    }
+}
+
+/**
+ * Badge compacto para informações do vídeo na BottomBar.
+ */
+@Composable
+private fun VideoInfoBadge(
+    icon: ImageVector,
+    text: String
+) {
+    Row(
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(horizontal = 2.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(12.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(3.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
