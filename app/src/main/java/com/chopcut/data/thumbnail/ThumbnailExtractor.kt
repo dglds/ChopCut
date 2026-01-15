@@ -73,7 +73,7 @@ class ThumbnailExtractor(
         rotation: Int = 0
     ): Boolean = withContext(Dispatchers.IO) {
         var bitmap = extractAt(uri, 0, width, height) // Extract at start (0ms)
-        
+
         if (bitmap != null) {
             try {
                 // Apply rotation if needed
@@ -116,8 +116,8 @@ class ThumbnailExtractor(
     suspend fun extractStrip(
         uri: Uri,
         count: Int,
-        width: Int = 160,
-        height: Int =80
+        width: Int = 50,
+        height: Int =50
     ): List<Bitmap> = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
         val thumbnails = mutableListOf<Bitmap>()
@@ -188,8 +188,8 @@ class ThumbnailExtractor(
     suspend fun extractAtPositions(
         uri: Uri,
         positionsMs: List<Long>,
-        width: Int = 160,
-        height: Int = 90
+        width: Int = 50,
+        height: Int = 50
     ): List<Bitmap?> = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
 
@@ -245,8 +245,8 @@ class ThumbnailExtractor(
         uri: Uri,
         columns: Int,
         rows: Int,
-        width: Int = 160,
-        height: Int = 90
+        width: Int = 50,
+        height: Int =50
     ): List<List<Bitmap?>> = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
 
@@ -310,8 +310,8 @@ class ThumbnailExtractor(
         /**
          * Default thumbnail size for timeline
          */
-        const val DEFAULT_THUMB_WIDTH = 160
-        const val DEFAULT_THUMB_HEIGHT = 90
+        const val DEFAULT_THUMB_WIDTH = 50
+        const val DEFAULT_THUMB_HEIGHT = 50
 
         /**
          * Recommended number of thumbnails for timeline
