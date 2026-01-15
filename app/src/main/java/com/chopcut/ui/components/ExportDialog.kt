@@ -30,11 +30,14 @@ import com.chopcut.data.model.ExportPreset
 fun ExportDialog(
     presets: List<ExportPreset>,
     onPresetSelected: (ExportPreset) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    originalWidth: Int = 0,
+    originalHeight: Int = 0,
+    originalBitrate: Int = 0
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { 
+        title = {
             Column {
                 Text("Exportar Vídeo")
                 Text(
@@ -52,6 +55,7 @@ fun ExportDialog(
                 ) {
                     items(presets) { preset ->
                         val emoji = when {
+                            preset.isOriginal -> "🎬"
                             preset.name.contains("Instagram", true) -> "📸"
                             preset.name.contains("TikTok", true) -> "🎵"
                             preset.name.contains("YouTube", true) -> "▶️"
@@ -59,15 +63,24 @@ fun ExportDialog(
                             else -> "⚙️"
                         }
 
+                        // Mostra dimensões originais para preset Original
+                        val displayInfo = if (preset.isOriginal && originalWidth > 0) {
+                            "${originalWidth}x${originalHeight} • ${originalBitrate / 1_000_000}Mbps"
+                        } else if (preset.isOriginal) {
+                            "Igual ao original"
+                        } else {
+                            "${preset.width}x${preset.height} • ${preset.bitrate / 1_000_000}Mbps"
+                        }
+
                         ListItem(
-                            headlineContent = { 
-                                Text(preset.name, fontWeight = FontWeight.Bold) 
+                            headlineContent = {
+                                Text(preset.name, fontWeight = FontWeight.Bold)
                             },
-                            supportingContent = { 
+                            supportingContent = {
                                 Text(
-                                    "${preset.width}x${preset.height} • ${preset.bitrate / 1_000_000}Mbps",
+                                    displayInfo,
                                     fontSize = 12.sp
-                                ) 
+                                )
                             },
                             leadingContent = {
                                 Text(emoji, fontSize = 24.sp)

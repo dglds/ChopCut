@@ -394,28 +394,35 @@ class EditorViewModel(
             _exportProgress.value = 0
 
             try {
-                // 1. Calculate Trim
+                // 1. Calculate Trim from history (last trim wins) or parameter
                 val metadata = _videoInfo.value ?: throw IllegalStateException("Metadata not loaded")
-                val finalTrimRange = if (trimRange != null) {
-                    TimeRange(trimRange.startMs, trimRange.endMs)
-                } else {
-                    TimeRange(0, metadata.durationMs)
+                
+                val lastTrim = edits.value.filterIsInstance<EditOperation.Trim>().lastOrNull()
+                
+                val finalTrimRange = when {
+                    lastTrim != null -> TimeRange(lastTrim.startTime, lastTrim.endTime)
+                    trimRange != null -> TimeRange(trimRange.startMs, trimRange.endMs)
+                    else -> TimeRange(0, metadata.durationMs)
                 }
 
-                // 2. Calculate Transforms from history
+                // 2. Calculate Transforms from history (Total Rotation)
                 val totalRotation = edits.value.filterIsInstance<EditOperation.Rotation>()
                     .sumOf { it.degrees }
-                
+
                 // 3. Determine config (Preset vs Original)
-                val config = preset?.toExportConfig() ?: ExportConfig.fromVideoInfo(metadata)
+                val config = preset?.toExportConfig(
+                    originalWidth = metadata.width,
+                    originalHeight = metadata.height,
+                    originalBitrate = metadata.bitrate.toInt()
+                ) ?: ExportConfig.fromVideoInfo(metadata)
                 
                 // 4. Determine Pipeline Type
-                // If we have rotation OR a preset that changes dimensions/bitrate, we MUST transcode.
-                // Otherwise we can fast-copy.
+                // If we have rotation OR filters OR a preset, we MUST transcode.
                 val hasTransform = totalRotation % 360 != 0
-                val hasFormatChange = preset != null // Assuming preset always implies re-encode preference
+                val hasFilters = edits.value.any { it is EditOperation.Filter }
+                val hasFormatChange = preset != null
                 
-                val exportType = if (hasTransform || hasFormatChange) {
+                val exportType = if (hasTransform || hasFilters || hasFormatChange) {
                     ExportForegroundService.EXPORT_TYPE_TRANSCODE
                 } else {
                     ExportForegroundService.EXPORT_TYPE_TRIM
@@ -431,12 +438,13 @@ class EditorViewModel(
                     timeRanges = listOf(finalTrimRange),
                     outputName = outputName,
                     exportType = exportType,
+                    edits = edits.value, // PASS ALL EDITS
                     rotation = totalRotation,
                     width = config.width,
                     height = config.height
                 )
 
-                Timber.d("Export started: $exportType, rot=$totalRotation, size=${config.width}x${config.height}")
+                Timber.d("Export started: $exportType, edits=${edits.value.size}, rot=$totalRotation")
             } catch (e: Exception) {
                 Timber.e(e, "Error during export preparation")
                 _exportResult.value = Result.failure(e)

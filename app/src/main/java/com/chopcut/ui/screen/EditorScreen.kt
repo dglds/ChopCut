@@ -362,7 +362,10 @@ fun EditorScreen(
                     val range = trimRange
                     editorViewModel.exportVideo(range, preset)
                 },
-                onDismiss = { showExportDialog = false }
+                onDismiss = { showExportDialog = false },
+                originalWidth = videoInfo?.width ?: 0,
+                originalHeight = videoInfo?.height ?: 0,
+                originalBitrate = (videoInfo?.bitrate ?: 0).toInt()
             )
         }
 
