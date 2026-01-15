@@ -41,6 +41,27 @@
             android:name=".service.ExportForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.chopcut.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Receiver para ações de compartilhamento da notificação -->
+        <receiver
+            android:name=".service.ShareBroadcastReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.chopcut.ACTION_SHARE" />
+                <action android:name="com.chopcut.ACTION_OPEN" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

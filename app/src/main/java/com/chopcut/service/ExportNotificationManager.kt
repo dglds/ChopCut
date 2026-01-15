@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.chopcut.MainActivity
@@ -23,6 +24,12 @@ class ExportNotificationManager(private val context: Context) {
 
         // Ações da notificação
         private const val ACTION_CANCEL = "com.chopcut.ACTION_CANCEL_EXPORT"
+        private const val ACTION_SHARE = "com.chopcut.ACTION_SHARE"
+        private const val ACTION_OPEN = "com.chopcut.ACTION_OPEN"
+
+        // Extras para passar dados nas ações
+        const val EXTRA_VIDEO_URI = "video_uri"
+        const val EXTRA_VIDEO_NAME = "video_name"
     }
 
     private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -121,7 +128,7 @@ class ExportNotificationManager(private val context: Context) {
     /**
      * Mostra notificação de sucesso
      */
-    fun showSuccess(videoName: String) {
+    fun showSuccess(videoName: String, videoUri: Uri? = null) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -132,15 +139,53 @@ class ExportNotificationManager(private val context: Context) {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("Exportação concluída")
             .setContentText(videoName)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .build()
 
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        // Adicionar botões de ação se tiver URI do vídeo
+        videoUri?.let { uri ->
+            // Botão de compartilhar
+            val shareIntent = Intent(ACTION_SHARE).apply {
+                putExtra(EXTRA_VIDEO_URI, uri.toString())
+                putExtra(EXTRA_VIDEO_NAME, videoName)
+            }
+            val sharePendingIntent = PendingIntent.getBroadcast(
+                context,
+                0,
+                shareIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            builder.addAction(
+                android.R.drawable.ic_menu_share,
+                "Compartilhar",
+                sharePendingIntent
+            )
+
+            // Botão de abrir
+            val openIntent = Intent(ACTION_OPEN).apply {
+                putExtra(EXTRA_VIDEO_URI, uri.toString())
+                putExtra(EXTRA_VIDEO_NAME, videoName)
+                setDataAndType(uri, "video/mp4")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            val openPendingIntent = PendingIntent.getActivity(
+                context,
+                0,
+                openIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            builder.addAction(
+                android.R.drawable.ic_menu_view,
+                "Abrir",
+                openPendingIntent
+            )
+        }
+
+        notificationManager.notify(NOTIFICATION_ID, builder.build())
     }
 
     /**

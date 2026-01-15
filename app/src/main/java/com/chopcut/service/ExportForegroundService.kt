@@ -201,7 +201,7 @@ class ExportForegroundService : Service() {
                             Timber.tag("TIME").d("export_save_to_gallery_success: ${outputFile.name} -> $outputUri")
                             tracker.end()
                             broadcastSuccess(outputUri, outputName)
-                            notificationManager.showSuccess(outputName)
+                            notificationManager.showSuccess(outputName, outputUri)
                         } ?: run {
                             val error = result.exceptionOrNull()?.message ?: "Erro desconhecido"
                             Timber.tag("ExportForegroundService").e("Export falhou: $error")

@@ -38,6 +38,7 @@ import androidx.media3.common.util.UnstableApi
 import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.FilterType
 import com.chopcut.data.thumbnail.ThumbnailExtractor
+import com.chopcut.ui.components.EditorBottomBar
 import com.chopcut.ui.components.ExportDialog
 import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.components.VideoPreview
@@ -48,6 +49,7 @@ import com.chopcut.ui.filter.FilterDialog
 import com.chopcut.ui.filter.SpeedDialog
 import com.chopcut.ui.filter.VolumeDialog
 import kotlinx.coroutines.launch
+import java.io.File
 import timber.log.Timber
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -92,6 +94,9 @@ fun EditorScreen(
     var showFilterDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showVolumeDialog by remember { mutableStateOf(false) }
+    var showExportResult by remember { mutableStateOf(false) }
+    var lastExportUri by remember { mutableStateOf<Uri?>(null) }
+    var lastExportName by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(edits) {
         previewManager.applyEffects(edits)
@@ -125,13 +130,12 @@ fun EditorScreen(
         val result = exportResult
         if (result != null) {
             result.getOrNull()?.let { outputUri ->
-                val toast = android.widget.Toast.makeText(
-                    context,
-                    "Salvo na galeria! \n$outputUri",
-                    android.widget.Toast.LENGTH_LONG
-                )
-                toast.setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 200)
-                toast.show()
+                // Salvar informações do último export para a tela de resultado
+                lastExportUri = outputUri
+                lastExportName = outputUri.lastPathSegment?.substringAfterLast('/')
+                    ?: "ChopCut_${System.currentTimeMillis()}.mp4"
+                // Mostrar tela de resultado
+                showExportResult = true
             }
         }
     }
@@ -422,6 +426,19 @@ fun EditorScreen(
                     }
                 },
                 confirmButton = {}
+            )
+        }
+
+        // Tela de resultado da exportação
+        if (showExportResult && lastExportUri != null && lastExportName != null) {
+            ExportResultScreen(
+                resultData = ExportResultData(
+                    videoUri = lastExportUri!!,
+                    outputName = lastExportName!!,
+                    durationMs = videoInfo?.durationMs
+                ),
+                onDismiss = { showExportResult = false },
+                onBackToEditor = { showExportResult = false }
             )
         }
     }

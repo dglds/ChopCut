@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Cache directory -->
+    <cache-path name="cache" path="." />
+
+    <!-- External cache directory -->
+    <external-cache-path name="external_cache" path="." />
+
+    <!-- Files directory -->
+    <files-path name="files" path="." />
+
+    <!-- External files directory -->
+    <external-files-path name="external_files" path="." />
+
+    <!-- Movies directory for exported videos -->
+    <external-files-path
+        name="movies"
+        path="Movies/" />
+
+    <!-- Projects directory -->
+    <files-path name="projects" path="projects/" />
+</paths>
