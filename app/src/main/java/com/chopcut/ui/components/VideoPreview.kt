@@ -124,36 +124,23 @@ fun VideoPreview(
             }
         }
 
-        // Controls area
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            // Seek bar
-            if (isReady && duration > 0) {
-                Slider(
-                    value = sliderPosition,
-                    onValueChange = { newValue ->
-                        sliderPosition = newValue
-                        isUserSeeking = true
-                    },
-                    onValueChangeFinished = {
-                        isUserSeeking = false
-                        val positionMs = (sliderPosition * duration).toLong()
-                        previewManager.seekTo(positionMs)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Time display
-                Text(
-                    text = "${formatTime(currentPosition)} / ${formatTime(duration)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.End)
-                )
-            }
+        // Seek bar
+        if (isReady && duration > 0) {
+            Slider(
+                value = sliderPosition,
+                onValueChange = { newValue ->
+                    sliderPosition = newValue
+                    isUserSeeking = true
+                },
+                onValueChangeFinished = {
+                    isUserSeeking = false
+                    val positionMs = (sliderPosition * duration).toLong()
+                    previewManager.seekTo(positionMs)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+            )
         }
     }
 }
