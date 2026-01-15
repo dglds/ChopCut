@@ -2,78 +2,54 @@ package com.chopcut.ui.screen
 
 import android.net.Uri
 import android.view.Gravity
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import com.chopcut.data.model.EditOperation
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.util.UnstableApi
+import com.chopcut.data.model.EditOperation
+import com.chopcut.data.model.FilterType
 import com.chopcut.data.thumbnail.ThumbnailExtractor
+import com.chopcut.ui.components.ExportDialog
+import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.components.VideoPreview
 import com.chopcut.ui.components.VideoTimeline
 import com.chopcut.ui.components.WaveForm
-import com.chopcut.ui.components.TrimRange
-import com.chopcut.ui.components.ExportDialog
 import com.chopcut.ui.preview.PreviewManager
+import com.chopcut.ui.filter.FilterDialog
+import com.chopcut.ui.filter.SpeedDialog
+import com.chopcut.ui.filter.VolumeDialog
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import androidx.media3.common.util.UnstableApi
 
-/**
- * Editor screen for video editing
- */
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,16 +62,13 @@ fun EditorScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Managers
     val previewManager = remember { PreviewManager(context) }
     val thumbnailExtractor = remember { ThumbnailExtractor(context) }
 
-    // State
     var trimRange by remember { mutableStateOf<TrimRange?>(null) }
     var currentVideoUri by remember { mutableStateOf(videoUri) }
     var videoDurationMs by remember { mutableLongStateOf(0L) }
 
-    // ViewModel
     val editorViewModel: EditorViewModel = viewModel(
         factory = EditorViewModelFactory(
             context = context,
@@ -116,13 +89,14 @@ fun EditorScreen(
     val presets by editorViewModel.availablePresets.collectAsStateWithLifecycle(initialValue = emptyList())
 
     var showExportDialog by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
+    var showSpeedDialog by remember { mutableStateOf(false) }
+    var showVolumeDialog by remember { mutableStateOf(false) }
 
-    // Apply effects when edits change
     LaunchedEffect(edits) {
         previewManager.applyEffects(edits)
     }
 
-    // Handle UI messages
     LaunchedEffect(Unit) {
         editorViewModel.messageFlow.collect { message ->
             val toast = android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT)
@@ -131,27 +105,22 @@ fun EditorScreen(
         }
     }
 
-    // Update currentVideoUri when project loads
     LaunchedEffect(project) {
         project?.let {
             currentVideoUri = Uri.parse(it.sourceVideoUri)
         }
     }
 
-    // Update duration when videoInfo changes
     LaunchedEffect(videoInfo) {
         val info = videoInfo
         if (info != null) {
             videoDurationMs = info.durationMs
-            Timber.d("Video duration loaded: ${videoDurationMs}ms")
             if (videoDurationMs > 0 && trimRange == null) {
                 trimRange = TrimRange(0L, videoDurationMs)
-                Timber.d("Initial trim range: 0 - ${videoDurationMs}ms")
             }
         }
     }
 
-    // Handle export result
     LaunchedEffect(exportResult) {
         val result = exportResult
         if (result != null) {
@@ -213,17 +182,18 @@ fun EditorScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Calculate total rotation
             val totalRotation = edits.filterIsInstance<EditOperation.Rotation>()
                 .sumOf { it.degrees }
                 .toFloat() % 360f
+            
+            val activeFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()?.filterType
 
-            // Video Preview
             VideoPreview(
                 uri = currentVideoUri,
                 previewManager = previewManager,
                 modifier = Modifier.fillMaxWidth(),
                 rotationDegrees = totalRotation,
+                activeFilter = activeFilter,
                 onPositionChanged = { positionMs ->
                     Timber.d("Position: ${positionMs}ms")
                 },
@@ -238,7 +208,6 @@ fun EditorScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // 1. Applied Operations (Compact Horizontal List)
             if (edits.isNotEmpty()) {
                 Text(
                     text = "Histórico",
@@ -246,11 +215,14 @@ fun EditorScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(4.dp))
-                androidx.compose.foundation.lazy.LazyRow(
+                LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    itemsIndexed(edits.reversed()) { index, op ->
+                    items(edits.size) { i ->
+                        val op = edits.reversed()[i]
+                        val index = edits.size - i
+                        
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer
@@ -267,7 +239,9 @@ fun EditorScreen(
                                         is EditOperation.Rotation -> "Rot"
                                         is EditOperation.Resize -> "Size"
                                         is EditOperation.Crop -> "Crop"
-                                        else -> "Op"
+                                        is EditOperation.Filter -> "Filter"
+                                        is EditOperation.Speed -> "Speed"
+                                        is EditOperation.Volume -> "Vol"
                                     },
                                     style = MaterialTheme.typography.labelSmall,
                                     maxLines = 1,
@@ -280,77 +254,26 @@ fun EditorScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
-            // 2. Operations Buttons (Trim, Test, etc)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Export Button (Starts the real process)
-                Button(
-                    onClick = { showExportDialog = true },
-                    enabled = !isExporting && videoInfo != null,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Exportar", style = MaterialTheme.typography.labelSmall)
-                }
-
-                // Trim Button (Applies logic)
-                Button(
-                    onClick = {
-                        val range = trimRange
-                        if (range != null) {
-                            editorViewModel.applyTrim(range)
-                        }
-                    },
-                    enabled = !isExporting && trimRange != null,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Trim", style = MaterialTheme.typography.labelSmall)
-                }
-
-                Button(
-                    onClick = { editorViewModel.testOperation("rotate") },
-                    enabled = !isExporting,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Rot", style = MaterialTheme.typography.labelSmall)
-                }
-
-                Button(
-                    onClick = { editorViewModel.testOperation("resize") },
-                    enabled = !isExporting,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Size", style = MaterialTheme.typography.labelSmall)
-                }
-
-                Button(
-                    onClick = { editorViewModel.testOperation("crop") },
-                    enabled = !isExporting,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp)
-                ) {
-                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Crop", style = MaterialTheme.typography.labelSmall)
-                }
-            }
+            // Barra de ferramentas principal
+            EditorToolbar(
+                isExporting = isExporting,
+                videoInfo = videoInfo != null,
+                trimRange = trimRange,
+                currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull(),
+                currentSpeed = edits.filterIsInstance<EditOperation.Speed>().lastOrNull(),
+                currentVolume = edits.filterIsInstance<EditOperation.Volume>().lastOrNull(),
+                onExportClick = { showExportDialog = true },
+                onTrimClick = { range ->
+                    if (range != null) editorViewModel.applyTrim(range)
+                },
+                onRotateClick = { editorViewModel.testOperation("rotate") },
+                onFilterClick = { showFilterDialog = true },
+                onSpeedClick = { showSpeedDialog = true },
+                onVolumeClick = { showVolumeDialog = true }
+            )
 
             Spacer(Modifier.height(16.dp))
 
-            // 3. Timeline Row
             if (videoInfo == null) {
                 Box(
                     modifier = Modifier
@@ -361,7 +284,6 @@ fun EditorScreen(
                     CircularProgressIndicator()
                 }
             } else {
-                // Timeline
                 if (videoDurationMs > 0) {
                     VideoTimeline(
                         uri = currentVideoUri,
@@ -379,7 +301,6 @@ fun EditorScreen(
                     )
                 }
 
-                // Trim Info (Below timeline)
                 val range = trimRange
                 if (range != null) {
                     Spacer(Modifier.height(4.dp))
@@ -395,7 +316,7 @@ fun EditorScreen(
                         Text(
                             text = formatTime(range.endMs - range.startMs),
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = formatTime(range.endMs),
@@ -405,7 +326,6 @@ fun EditorScreen(
                     }
                 }
 
-                // Waveform
                 Spacer(Modifier.height(16.dp))
                 if (waveformData.amplitudes.isNotEmpty()) {
                     WaveForm(
@@ -429,30 +349,67 @@ fun EditorScreen(
                     }
                 }
 
-                // Video info
                 Spacer(Modifier.height(16.dp))
                 VideoInfoDisplay(videoInfo!!)
             }
         }
 
-        // Export Presets Dialog
         if (showExportDialog) {
             ExportDialog(
                 presets = presets,
                 onPresetSelected = { preset ->
                     showExportDialog = false
                     val range = trimRange
-                    // Pass current trim range (or null for full video) and selected preset
                     editorViewModel.exportVideo(range, preset)
                 },
                 onDismiss = { showExportDialog = false }
             )
         }
 
-        // Exporting Progress Dialog
+        // Diálogo de filtros
+        if (showFilterDialog) {
+            val currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()
+            FilterDialog(
+                currentFilter = currentFilter,
+                onConfirm = { filter ->
+                    showFilterDialog = false
+                    if (filter != null) {
+                        editorViewModel.addOperation(filter)
+                    }
+                },
+                onDismiss = { showFilterDialog = false }
+            )
+        }
+
+        // Diálogo de velocidade
+        if (showSpeedDialog) {
+            val currentSpeed = edits.filterIsInstance<EditOperation.Speed>().lastOrNull()
+            SpeedDialog(
+                currentSpeed = currentSpeed,
+                onConfirm = { speed ->
+                    showSpeedDialog = false
+                    editorViewModel.addOperation(speed)
+                },
+                onDismiss = { showSpeedDialog = false }
+            )
+        }
+
+        // Diálogo de volume
+        if (showVolumeDialog) {
+            val currentVolume = edits.filterIsInstance<EditOperation.Volume>().lastOrNull()
+            VolumeDialog(
+                currentVolume = currentVolume,
+                onConfirm = { volume ->
+                    showVolumeDialog = false
+                    editorViewModel.addOperation(volume)
+                },
+                onDismiss = { showVolumeDialog = false }
+            )
+        }
+
         if (isExporting) {
             androidx.compose.material3.AlertDialog(
-                onDismissRequest = { /* Prevent dismiss during export */ },
+                onDismissRequest = { },
                 title = { Text("Exportando Vídeo") },
                 text = {
                     Column(
@@ -470,9 +427,6 @@ fun EditorScreen(
     }
 }
 
-/**
- * Display video information
- */
 @Composable
 fun VideoInfoDisplay(videoInfo: com.chopcut.data.model.VideoInfo) {
     Column(
@@ -506,12 +460,223 @@ fun VideoInfoDisplay(videoInfo: com.chopcut.data.model.VideoInfo) {
     }
 }
 
-/**
- * Format time in milliseconds to MM:SS
- */
 private fun formatTime(timeMs: Long): String {
     val totalSeconds = timeMs / 1000
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d", minutes, seconds)
+}
+
+/**
+ * Barra de ferramentas principal do editor com botões organizados por categoria.
+ */
+@Composable
+private fun EditorToolbar(
+    isExporting: Boolean,
+    videoInfo: Boolean,
+    trimRange: TrimRange?,
+    currentFilter: EditOperation.Filter?,
+    currentSpeed: EditOperation.Speed?,
+    currentVolume: EditOperation.Volume?,
+    onExportClick: () -> Unit,
+    onTrimClick: (TrimRange?) -> Unit,
+    onRotateClick: () -> Unit,
+    onFilterClick: () -> Unit,
+    onSpeedClick: () -> Unit,
+    onVolumeClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // Linha 1: Ações principais (Export, Trim, Rotate)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Exportar (destaque)
+            Button(
+                onClick = onExportClick,
+                enabled = !isExporting && videoInfo,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Exportar", style = MaterialTheme.typography.labelMedium)
+            }
+
+            // Trim
+            Button(
+                onClick = { onTrimClick(trimRange) },
+                enabled = !isExporting && trimRange != null,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Trim", style = MaterialTheme.typography.labelSmall)
+            }
+
+            // Rotacionar
+            Button(
+                onClick = onRotateClick,
+                enabled = !isExporting,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Rotacionar", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Linha 2: Efeitos (Filtros, Velocidade, Volume)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Filtros
+            FilterButton(
+                currentFilter = currentFilter,
+                onClick = onFilterClick,
+                enabled = !isExporting
+            )
+
+            // Velocidade
+            SpeedButton(
+                currentSpeed = currentSpeed,
+                onClick = onSpeedClick,
+                enabled = !isExporting
+            )
+
+            // Volume
+            VolumeButton(
+                currentVolume = currentVolume,
+                onClick = onVolumeClick,
+                enabled = !isExporting
+            )
+        }
+    }
+}
+
+/**
+ * Botão de filtros com indicador de filtro ativo.
+ */
+@Composable
+private fun FilterButton(
+    currentFilter: EditOperation.Filter?,
+    onClick: () -> Unit,
+    enabled: Boolean
+) {
+    val isActive = currentFilter != null
+    val filterName = when (currentFilter?.filterType) {
+        FilterType.GRAYSCALE -> "P&B"
+        FilterType.SEPIA -> "Sépia"
+        FilterType.BRIGHTNESS -> "Brilho"
+        FilterType.CONTRAST -> "Contraste"
+        FilterType.SATURATION -> "Saturação"
+        else -> "Filtros"
+    }
+
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (isActive) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+        ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Icon(
+            Icons.Default.Settings,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(filterName, style = MaterialTheme.typography.labelSmall)
+        if (isActive) {
+            Spacer(Modifier.width(4.dp))
+            Text(
+                String.format("%.0f%%", currentFilter.intensity * 100),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+/**
+ * Botão de velocidade com indicador de velocidade atual.
+ */
+@Composable
+private fun SpeedButton(
+    currentSpeed: EditOperation.Speed?,
+    onClick: () -> Unit,
+    enabled: Boolean
+) {
+    val isActive = currentSpeed != null && currentSpeed.speed != 1.0f
+    val speedText = if (isActive) String.format("%.1fx", currentSpeed!!.speed) else "Velocidade"
+
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (isActive) MaterialTheme.colorScheme.tertiaryContainer else Color.Transparent
+        ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Icon(
+            if (isActive && currentSpeed!!.speed < 1f) Icons.Default.ArrowBack else Icons.Default.ArrowForward,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = if (isActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(speedText, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+/**
+ * Botão de volume com indicador de volume atual.
+ */
+@Composable
+private fun VolumeButton(
+    currentVolume: EditOperation.Volume?,
+    onClick: () -> Unit,
+    enabled: Boolean
+) {
+    val isActive = currentVolume != null && currentVolume.volume != 1.0f
+    val volumePercent = currentVolume?.volume?.let { (it * 100).toInt() } ?: 100
+    val volumeText = if (isActive) "$volumePercent%" else "Volume"
+
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = when {
+                currentVolume?.volume == 0f -> MaterialTheme.colorScheme.errorContainer
+                isActive -> MaterialTheme.colorScheme.primaryContainer
+                else -> Color.Transparent
+            }
+        ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Icon(
+            when {
+                currentVolume?.volume == 0f -> Icons.Default.Close
+                else -> Icons.Default.Notifications
+            },
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(volumeText, style = MaterialTheme.typography.labelSmall)
+    }
 }
