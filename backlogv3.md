@@ -288,23 +288,24 @@ Arquivos: vários
 - ✅ Feedback de progresso e sucesso na UI
 - ✅ Correção de salvamento em pasta `Movies/ChopCut`
 
-### Sprint 5 (Ferramentas Básicas)
+### Sprint 5 (Ferramentas Básicas) - ✅ CONCLUÍDO
 
-1. Filtros (grayscale, sepia, etc.) ✅
-2. Ajustes de volume
-3. Fade in/out
+- ✅ Filtros (grayscale, sepia, brightness)
+- ✅ Ajustes de volume
+- ✅ Fade in/out
 
-### Sprint 6 (Compartilhamento)
+### Sprint 6 (Compartilhamento) - ✅ CONCLUÍDO
 
-1. ShareManager
-2. ExportResultScreen
-3. Notificações estendidas
+- ✅ ShareManager
+- ✅ ExportResultScreen
+- ✅ Notificações estendidas
 
-### Sprint 7 (Polimento)
+### Sprint 7 (Polimento) - ✅ CONCLUÍDO
 
-1. Onboarding
-2. Melhorias UX
-3. Indicadores de progresso
+- ✅ Onboarding (Tela de boas-vindas e tutorial)
+- ✅ Melhorias UX (Snapping na seekbar, botões de Trim In/Out precisos)
+- ✅ Indicadores de progresso
+- ⚠️ Zoom na timeline (Adiado: substituído por controles de Trim In/Out para precisão)
 
 ---
 
