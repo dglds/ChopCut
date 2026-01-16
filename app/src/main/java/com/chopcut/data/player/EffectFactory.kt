@@ -2,10 +2,9 @@ package com.chopcut.data.player
 
 import androidx.media3.common.Effect
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.effect.ScaleAndRotateTransformation
-import androidx.media3.effect.Brightness
-import androidx.media3.effect.Contrast
 import androidx.media3.effect.RgbAdjustment
+import androidx.media3.effect.RgbFilter
+import androidx.media3.effect.ScaleAndRotateTransformation
 import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.FilterType
 import timber.log.Timber
@@ -68,69 +67,48 @@ object EffectFactory {
      * Cria um efeito de filtro baseado no tipo e intensidade.
      *
      * @param filterType Tipo do filtro
-     * @param intensity Intensidade do filtro (0.0 a 1.0+, depende do filtro)
+     * @param intensity Intensidade do filtro (varia por tipo)
      * @return O efeito correspondente ou null se não aplicável
      */
-    private fun createFilterEffect(filterType: FilterType, intensity: Float): Effect? {
+    fun createFilterEffect(filterType: FilterType, intensity: Float): Effect? {
         return when (filterType) {
             FilterType.NONE -> null
-            FilterType.BRIGHTNESS -> {
-                // Intensidade: -1.0 (escuro) a 1.0 (claro), 0.0 = normal
-                // Mapeamos de 0-1 para -0.5 a 0.5 para não ser extremo
-                Brightness(intensity * 0.5f)
-            }
-            FilterType.CONTRAST -> {
-                // Intensidade: 0.0 (cinza) a 2.0+ (alto contraste), 1.0 = normal
-                // Mapeamos de 0-1 para 0.5 a 1.5
-                val contrastValue = 0.5f + intensity
-                Contrast(contrastValue)
-            }
-            FilterType.GRAYSCALE -> {
-                // Grayscale: igualar os canais RGB
-                // Intensidade controla a força do efeito (0 = original, 1 = grayscale completo)
-                RgbAdjustment.Builder()
-                    .setRedScale(1f - intensity * 0.5f)
-                    .setGreenScale(1f - intensity * 0.2f)
-                    .setBlueScale(1f - intensity * 0.5f)
-                    .build()
-            }
+            
+            FilterType.GRAYSCALE -> RgbFilter.createGrayscaleFilter()
+            
             FilterType.SEPIA -> {
-                // Matriz sépia clássica: R=1.2, G=1.0, B=0.8
-                // Intensidade controla a força
-                val baseRed = 1.2f * intensity
-                val baseGreen = 1.0f * intensity
-                val baseBlue = 0.8f * intensity
+                // Simulação simples de Sépia (Tint)
+                // R=1.2, G=1.0, B=0.8
                 RgbAdjustment.Builder()
-                    .setRedScale(1f - intensity + baseRed)
-                    .setGreenScale(1f - intensity + baseGreen)
-                    .setBlueScale(1f - intensity + baseBlue)
+                    .setRedScale(1.2f)
+                    .setGreenScale(1.0f)
+                    .setBlueScale(0.8f)
                     .build()
             }
-            FilterType.SATURATION -> {
-                // Saturação usando RgbAdjustment
-                // Intensidade: 0.0 (cinza/PB) a 1.0 (saturado), 0.5 = normal
-                // Mapeamos de 0-1 para saturação
-                // < 0.5: dessaturar, > 0.5: saturar
-                val saturation = intensity * 2f // 0.0 a 2.0
-                if (saturation < 1f) {
-                    // Dessaturar: reduzir diferença entre RGB
-                    val factor = saturation // 0.0 a 1.0
-                    val gray = 1f - factor
-                    RgbAdjustment.Builder()
-                        .setRedScale(factor + gray * 0.299f)
-                        .setGreenScale(factor + gray * 0.587f)
-                        .setBlueScale(factor + gray * 0.114f)
-                        .build()
+            
+            FilterType.BRIGHTNESS -> {
+                // Simulação de Exposição
+                // intensity: -1.0 a 1.0
+                // scale: 0.5x a 2.0x
+                val scale = if (intensity >= 0) {
+                    1.0f + intensity // 1.0 a 2.0
                 } else {
-                    // Saturar: aumentar escala de cores
-                    val factor = saturation // 1.0 a 2.0
-                    RgbAdjustment.Builder()
-                        .setRedScale(factor)
-                        .setGreenScale(factor)
-                        .setBlueScale(factor)
-                        .build()
+                    1.0f / (1.0f - intensity) // 1.0 a 0.5
                 }
+                val finalScale = scale.coerceIn(0.1f, 3.0f)
+                
+                RgbAdjustment.Builder()
+                    .setRedScale(finalScale)
+                    .setGreenScale(finalScale)
+                    .setBlueScale(finalScale)
+                    .build()
             }
+            
+            // Contrast e Saturation requerem matrizes complexas ou APIs específicas
+            // que podem não estar disponíveis ou estáveis.
+            // Implementação futura.
+            FilterType.CONTRAST -> null 
+            FilterType.SATURATION -> null
         }
     }
 

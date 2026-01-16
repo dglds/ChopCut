@@ -46,6 +46,7 @@ import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.components.VideoPreview
 import com.chopcut.ui.components.VideoTimeline
 import com.chopcut.ui.components.WaveForm
+import com.chopcut.ui.filter.TrimContent
 import com.chopcut.ui.preview.PreviewManager
 import com.chopcut.ui.filter.FilterContent
 import com.chopcut.ui.filter.SpeedContent
@@ -219,6 +220,8 @@ fun EditorScreen(
             EditorBottomBar(
                 activeTool = activeTool,
                 onToolChange = { tool -> activeTool = tool },
+                currentPosition = currentPosition,
+                duration = videoInfo?.durationMs ?: 0L,
                 isExporting = isExporting,
                 hasTrim = hasTrim,
                 hasFilter = hasFilter,
@@ -466,6 +469,8 @@ private fun formatTime(timeMs: Long): String {
 private fun EditorBottomBar(
     activeTool: EditorTool,
     onToolChange: (EditorTool) -> Unit,
+    currentPosition: Long,
+    duration: Long,
     isExporting: Boolean,
     hasTrim: Boolean,
     hasFilter: Boolean,
@@ -531,15 +536,14 @@ private fun EditorBottomBar(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Trim
-                    FeatureButton(
-                        icon = Icons.Default.Check,
-                        label = "Trim",
-                        isActive = hasTrim,
-                        enabled = !isExporting,
-                        onClick = { onTrimClick(null) }
-                    )
-
+                                // Trim
+                                FeatureButton(
+                                    icon = Icons.Default.Check,
+                                    label = "Trim",
+                                    isActive = hasTrim,
+                                    enabled = !isExporting,
+                                    onClick = { onToolChange(EditorTool.TRIM) }
+                                )
                     // Rotate
                     FeatureButton(
                         icon = Icons.Default.Refresh,
@@ -582,6 +586,18 @@ private fun EditorBottomBar(
                     modifier = Modifier.fillMaxWidth().animateContentSize()
                 ) {
                     when (activeTool) {
+                        EditorTool.TRIM -> {
+                            TrimContent(
+                                currentPosition = currentPosition,
+                                duration = duration,
+                                initialTrim = trimRange,
+                                onConfirm = { range ->
+                                    onTrimClick(range)
+                                    onToolChange(EditorTool.NONE)
+                                },
+                                onDismiss = { onToolChange(EditorTool.NONE) }
+                            )
+                        }
                         EditorTool.FILTER -> {
                             val currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()
                             val state = rememberFilterState(currentFilter)

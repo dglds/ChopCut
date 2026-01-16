@@ -57,6 +57,7 @@ val AVAILABLE_FILTERS = listOf(
     FilterPreset(
         type = FilterType.BRIGHTNESS,
         name = "Brilho",
+        defaultIntensity = 0.0f,
         minIntensity = -1.0f,
         maxIntensity = 1.0f,
         intensityStep = 0.1f

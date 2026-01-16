@@ -8,12 +8,16 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.chopcut.data.local.PreferencesManager
+import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.EditorScreen
 import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.ProjectsScreen
@@ -25,6 +29,7 @@ import com.chopcut.ui.theme.ChopCutTheme
  * Main activity for ChopCut app
  *
  * Navigation structure:
+ * - "onboarding" -> Onboarding screen (first run only)
  * - "projects" -> Projects list screen (start destination)
  * - "home" -> Home screen (legacy/test)
  * - "editor?videoUri={videoUri}&projectId={projectId}" -> Video editor screen
@@ -41,12 +46,27 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    val context = LocalContext.current
+                    val preferencesManager = remember { PreferencesManager(context) }
+                    val startDestination = if (preferencesManager.isFirstRun) "onboarding" else "projects"
                     val navController = rememberNavController()
 
                     NavHost(
                         navController = navController,
-                        startDestination = "projects"
+                        startDestination = startDestination
                     ) {
+                        // ==================== ONBOARDING SCREEN ====================
+                        composable("onboarding") {
+                            OnboardingScreen(
+                                onFinish = {
+                                    preferencesManager.isFirstRun = false
+                                    navController.navigate("projects") {
+                                        popUpTo("onboarding") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+
                         // ==================== PROJECTS SCREEN ====================
                         composable("projects") {
                             ProjectsScreen(

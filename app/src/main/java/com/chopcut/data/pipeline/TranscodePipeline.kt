@@ -73,17 +73,14 @@ class TranscodePipeline(
             effects.add(scaleAndRotate)
         }
         
+import com.chopcut.data.player.EffectFactory
+
+// ...
+
         // 1.05 Apply Color Filters
-        when (transform.filter) {
-            FilterType.GRAYSCALE -> {
-                Timber.d("Applying Grayscale filter")
-                effects.add(RgbFilter.createGrayscaleFilter())
-            }
-            // FilterType.SEPIA -> { ... } // Methods not found, disabling for now
-            // FilterType.BRIGHTNESS -> { ... }
-            // FilterType.CONTRAST -> { ... }
-            // FilterType.SATURATION -> { ... }
-            else -> { /* No filter */ }
+        EffectFactory.createFilterEffect(transform.filter, transform.filterIntensity)?.let {
+            Timber.d("Applying Filter: ${transform.filter} (intensity=${transform.filterIntensity})")
+            effects.add(it)
         }
         
         // TODO: Add crop effect if needed (Crop transformation)

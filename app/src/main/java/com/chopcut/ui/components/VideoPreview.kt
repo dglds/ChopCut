@@ -175,6 +175,7 @@ fun VideoPreview(
         if (isReady && duration > 0) {
             SeekBar(
                 progress = sliderPosition,
+                durationMs = duration,
                 onProgressChange = { newProgress ->
                     sliderPosition = newProgress
                     val positionMs = (newProgress * duration).toLong()
@@ -205,49 +206,83 @@ private fun formatTime(timeMs: Long): String {
     return String.format("%02d:%02d", minutes, seconds)
 }
 
+import android.view.HapticFeedbackConstants
+import androidx.compose.ui.platform.LocalView
+
+// ...
+
 /**
  * Seek bar customizada com cantos retos (sem arredondamento)
  */
 @Composable
 private fun SeekBar(
     progress: Float,
+    durationMs: Long,
     onProgressChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val inactiveColor = MaterialTheme.colorScheme.surfaceContainerHighest
     val activeColor = MaterialTheme.colorScheme.primary
+    val view = LocalView.current
+
+    fun snapProgress(rawProgress: Float): Float {
+        if (durationMs <= 0) return rawProgress
+        
+        val currentMs = rawProgress * durationMs
+        val secondInMs = 1000f
+        val nearestSecond = (currentMs / secondInMs).let { kotlin.math.round(it) } * secondInMs
+        
+        val diff = kotlin.math.abs(currentMs - nearestSecond)
+        val threshold = 50f // Snap if within 50ms
+        
+        return if (diff < threshold) {
+            // Perform haptic feedback only if we snapped and it's a "new" snap (not checking here for simplicity)
+             if (diff > 1f) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            nearestSecond / durationMs
+        } else {
+            rawProgress
+        }
+    }
 
     Box(
         modifier = modifier
-            .height(4.dp)
+            .height(24.dp) // Aumentar área de toque
             .drawBehind {
+                // Centralizar verticalmente o track
+                val trackHeight = 4.dp.toPx()
+                val trackTop = (size.height - trackHeight) / 2
+                
                 // Track de fundo (inativo) - cantos retos
-                drawRoundRect(
+                drawRect(
                     color = inactiveColor,
-                    cornerRadius = CornerRadius(0f)
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, trackTop),
+                    size = androidx.compose.ui.geometry.Size(size.width, trackHeight)
                 )
 
                 // Track ativo (posição atual) - cantos retos
-                drawRoundRect(
+                drawRect(
                     color = activeColor,
-                    size = androidx.compose.ui.geometry.Size(size.width * progress, size.height),
-                    cornerRadius = CornerRadius(0f)
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, trackTop),
+                    size = androidx.compose.ui.geometry.Size(size.width * progress, trackHeight)
                 )
             }
             .pointerInput(Unit) {
                 detectTapGestures { offset ->
                     val clickPosition = offset.x / size.width
-                    onProgressChange(clickPosition.coerceIn(0f, 1f))
+                    val snapped = snapProgress(clickPosition.coerceIn(0f, 1f))
+                    onProgressChange(snapped)
                 }
             }
             .pointerInput(Unit) {
-                detectDragGestures { _, dragAmount ->
-                    // Note: This simple drag logic adds delta to current progress.
-                    // Ideally we should track start position. But for simple seeking it works if updates are fast.
-                    // However, we don't have access to 'size' easily here inside detectDragGestures callback if not captured? 
-                    // Wait, PointerInputScope has 'size'.
-                    val dragPosition = (dragAmount.x / size.width)
-                    onProgressChange((progress + dragPosition).coerceIn(0f, 1f))
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    // Calculate new progress based on drag
+                    // We need current progress? No, we should track drag position relative to width
+                    // Ideally we map touch X to progress
+                    val currentX = change.position.x
+                    val dragPosition = (currentX / size.width)
+                    val snapped = snapProgress(dragPosition.coerceIn(0f, 1f))
+                    onProgressChange(snapped)
                 }
             }
     )
