@@ -150,28 +150,11 @@ fun AudioControlContent(
         Spacer(Modifier.height(24.dp))
 
         // Actions
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        Button(
+            onClick = { onConfirm(audioState.toEditOperations()) },
+            modifier = Modifier.fillMaxWidth()
         ) {
-            OutlinedButton(
-                onClick = {
-                    audioState.volume = 1.0f
-                    audioState.fadeInMs = 0L
-                    audioState.fadeOutMs = 0L
-                    onConfirm(audioState.toEditOperations())
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Resetar")
-            }
-
-            Button(
-                onClick = { onConfirm(audioState.toEditOperations()) },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Aplicar")
-            }
+            Text("Aplicar")
         }
     }
 }

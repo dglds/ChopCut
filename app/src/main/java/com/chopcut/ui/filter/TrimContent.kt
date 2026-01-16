@@ -1,16 +1,10 @@
 package com.chopcut.ui.filter
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.chopcut.ui.components.TrimRange
@@ -20,8 +14,7 @@ fun TrimContent(
     currentPosition: Long,
     duration: Long,
     initialTrim: TrimRange?,
-    onConfirm: (TrimRange) -> Unit,
-    onDismiss: () -> Unit
+    onConfirm: (TrimRange) -> Unit
 ) {
     var startMs by remember { mutableStateOf(initialTrim?.startMs ?: 0L) }
     var endMs by remember { mutableStateOf(initialTrim?.endMs ?: duration) }
@@ -99,25 +92,13 @@ fun TrimContent(
         Spacer(Modifier.height(24.dp))
 
         // Action Buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        Button(
+            onClick = { 
+                onConfirm(TrimRange(startMs, endMs)) 
+            },
+            modifier = Modifier.fillMaxWidth()
         ) {
-            OutlinedButton(
-                onClick = onDismiss,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Cancelar")
-            }
-
-            Button(
-                onClick = { 
-                    onConfirm(TrimRange(startMs, endMs)) 
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Aplicar Corte")
-            }
+            Text("Aplicar Corte")
         }
     }
 }

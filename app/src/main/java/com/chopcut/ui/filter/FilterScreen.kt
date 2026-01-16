@@ -199,26 +199,11 @@ fun FilterContent(
         Spacer(Modifier.height(24.dp))
 
         // Botões de ação
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        Button(
+            onClick = { onConfirm(filterState.toEditOperation()) },
+            modifier = Modifier.fillMaxWidth()
         ) {
-            OutlinedButton(
-                onClick = {
-                    filterState.applyPreset(AVAILABLE_FILTERS[0]) // Reset para NONE
-                    onConfirm(null)
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Remover")
-            }
-
-            Button(
-                onClick = { onConfirm(filterState.toEditOperation()) },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Aplicar")
-            }
+            Text("Aplicar")
         }
 
         Spacer(Modifier.height(8.dp))

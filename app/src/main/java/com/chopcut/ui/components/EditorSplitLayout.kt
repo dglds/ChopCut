@@ -14,30 +14,28 @@ import androidx.compose.ui.Modifier
 fun EditorSplitLayout(
     topContent: @Composable BoxScope.() -> Unit,
     bottomContent: @Composable BoxScope.() -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    topWeight: Float = 0.6f,
+    bottomWeight: Float = 0.4f
 ) {
     Column(
         modifier = modifier.fillMaxSize()
     ) {
-        // Área 1: Topo - Fixa (Preview, Timeline, etc)
-        // Usamos weight(1f) para ocupar o espaço disponível, deixando a parte inferior crescer conforme necessário
-        // ou podemos fixar o topo e deixar a base dinâmica. 
-        // A especificação diz "Área 1 (Topo - Fixa)... Área 2 (Base - Dinâmica)".
-        // Geralmente editores de vídeo dão prioridade ao preview.
-        
+        // Área 1: Topo - Fixa
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .weight(topWeight)
                 .background(MaterialTheme.colorScheme.surface)
         ) {
             topContent()
         }
 
-        // Área 2: Base - Dinâmica (Controles)
+        // Área 2: Base - Dinâmica
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(bottomWeight)
                 .background(MaterialTheme.colorScheme.surfaceContainer)
         ) {
             bottomContent()
