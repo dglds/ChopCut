@@ -25,7 +25,10 @@ fun WaveForm(
     maxAmp: Float = 0.5f,
     avgAmp: Float = 0.1f,
     mirrored: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    fadeInMs: Long = 0L,
+    fadeOutMs: Long = 0L,
+    durationMs: Long = 0L
 ) {
     if (amplitudes.isEmpty()) {
         Text(
@@ -69,9 +72,30 @@ fun WaveForm(
             val normalizedAmp = if (maxAmp > 0) (amp / maxAmp).coerceIn(0f, 1f) else 0f
             val animatedAmp = normalizedAmp * animatedProgress.value
 
+            // Calculate fade multiplier based on position
+            var fadeMultiplier = 1.0f
+            if (durationMs > 0 && amplitudes.isNotEmpty()) {
+                val positionMs = (index.toFloat() / amplitudes.size) * durationMs
+
+                // Fade in
+                if (fadeInMs > 0 && positionMs < fadeInMs) {
+                    fadeMultiplier = positionMs / fadeInMs
+                }
+
+                // Fade out
+                if (fadeOutMs > 0) {
+                    val fadeOutStart = durationMs - fadeOutMs
+                    if (positionMs > fadeOutStart) {
+                        val remaining = durationMs - positionMs
+                        fadeMultiplier = remaining / fadeOutMs
+                    }
+                }
+            }
+            fadeMultiplier = fadeMultiplier.coerceIn(0f, 1f)
+
             val barHeight = when {
                 amp <= lowThreshold -> size.height * 0.08f
-                else -> size.height * (animatedAmp * 0.80f + 0.15f)
+                else -> size.height * (animatedAmp * 0.80f + 0.15f) * fadeMultiplier
             }
 
             val x = index * barWidth

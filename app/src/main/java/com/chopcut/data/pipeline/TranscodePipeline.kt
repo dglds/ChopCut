@@ -5,13 +5,20 @@ import android.net.Uri
 import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.audio.AudioProcessor
+import androidx.media3.effect.RgbAdjustment
+import androidx.media3.effect.RgbFilter
 import androidx.media3.effect.ScaleAndRotateTransformation
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
+import com.chopcut.data.audio.processor.FadeAudioProcessor
+import com.chopcut.data.audio.processor.VolumeAudioProcessor
 import com.chopcut.data.model.ExportConfig
+import com.chopcut.data.model.FilterType
+import com.chopcut.data.model.TimeRange
 import com.chopcut.data.model.Transform
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.util.DispatcherProvider
@@ -31,7 +38,8 @@ class TranscodePipeline(
     suspend fun process(
         uri: Uri,
         transform: Transform = Transform.IDENTITY,
-        config: ExportConfig
+        config: ExportConfig,
+        trimRange: TimeRange? = null
     ): Flow<Result<File>> = callbackFlow {
         val outputFile = withContext(dispatcherProvider.io) {
             videoRepository.createTempFile(".mp4")
@@ -52,7 +60,7 @@ class TranscodePipeline(
         }
 
         Timber.d("Output File: ${outputFile.absolutePath}")
-        Timber.d("Transform: $transform, Config: $config")
+        Timber.d("Transform: $transform, Config: $config, Trim: $trimRange")
 
         // 1. Build Effects
         val effects = mutableListOf<Effect>()
@@ -65,13 +73,55 @@ class TranscodePipeline(
             effects.add(scaleAndRotate)
         }
         
+        // 1.05 Apply Color Filters
+        when (transform.filter) {
+            FilterType.GRAYSCALE -> {
+                Timber.d("Applying Grayscale filter")
+                effects.add(RgbFilter.createGrayscaleFilter())
+            }
+            // FilterType.SEPIA -> { ... } // Methods not found, disabling for now
+            // FilterType.BRIGHTNESS -> { ... }
+            // FilterType.CONTRAST -> { ... }
+            // FilterType.SATURATION -> { ... }
+            else -> { /* No filter */ }
+        }
+        
         // TODO: Add crop effect if needed (Crop transformation)
 
+        // 1.1 Build Audio Processors
+        val audioProcessors = mutableListOf<AudioProcessor>()
+        if (transform.volume != 1.0f) {
+            Timber.d("Applying volume: ${transform.volume}")
+            audioProcessors.add(VolumeAudioProcessor(transform.volume))
+        }
+
+        if (transform.fadeInMs > 0 || transform.fadeOutMs > 0) {
+            val durationMs = if (trimRange != null) {
+                trimRange.endMs - trimRange.startMs
+            } else {
+                Long.MAX_VALUE 
+            }
+            
+            Timber.d("Applying Fade: In=${transform.fadeInMs}, Out=${transform.fadeOutMs}, TotalDur=$durationMs")
+            audioProcessors.add(FadeAudioProcessor(transform.fadeInMs, transform.fadeOutMs, durationMs))
+        }
+
         // 2. Build Media Item with Effects
-        val mediaItem = MediaItem.fromUri(uri)
+        var mediaItemBuilder = MediaItem.Builder().setUri(uri)
+        
+        if (trimRange != null) {
+            mediaItemBuilder = mediaItemBuilder.setClippingConfiguration(
+                MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(trimRange.startMs)
+                    .setEndPositionMs(trimRange.endMs)
+                    .build()
+            )
+        }
+        
+        val mediaItem = mediaItemBuilder.build()
         val editedMediaItem = EditedMediaItem.Builder(mediaItem)
             .setEffects(androidx.media3.transformer.Effects(
-                /* audioProcessors = */ emptyList(),
+                /* audioProcessors = */ audioProcessors,
                 /* videoEffects = */ effects
             ))
             .build()

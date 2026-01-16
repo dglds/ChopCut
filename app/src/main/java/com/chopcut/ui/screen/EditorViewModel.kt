@@ -405,9 +405,20 @@ class EditorViewModel(
                     else -> TimeRange(0, metadata.durationMs)
                 }
 
-                // 2. Calculate Transforms from history (Total Rotation)
+                // 2. Calculate Transforms from history
                 val totalRotation = edits.value.filterIsInstance<EditOperation.Rotation>()
                     .sumOf { it.degrees }
+
+                val volumeOp = edits.value.filterIsInstance<EditOperation.Volume>().lastOrNull()
+                val volume = volumeOp?.volume ?: 1.0f
+
+                val fadeOp = edits.value.filterIsInstance<EditOperation.Fade>().lastOrNull()
+                val fadeInMs = fadeOp?.fadeInMs ?: 0L
+                val fadeOutMs = fadeOp?.fadeOutMs ?: 0L
+
+                val filterOp = edits.value.filterIsInstance<EditOperation.Filter>().lastOrNull()
+                val filter = filterOp?.filterType ?: com.chopcut.data.model.FilterType.NONE
+                val filterIntensity = filterOp?.intensity ?: 1.0f
 
                 // 3. Determine config (Preset vs Original)
                 val config = preset?.toExportConfig(
@@ -417,12 +428,14 @@ class EditorViewModel(
                 ) ?: ExportConfig.fromVideoInfo(metadata)
                 
                 // 4. Determine Pipeline Type
-                // If we have rotation OR filters OR a preset, we MUST transcode.
+                // If we have rotation OR filters OR a preset OR VOLUME change OR FADE, we MUST transcode.
                 val hasTransform = totalRotation % 360 != 0
-                val hasFilters = edits.value.any { it is EditOperation.Filter }
+                val hasFilters = filter != com.chopcut.data.model.FilterType.NONE
                 val hasFormatChange = preset != null
-                
-                val exportType = if (hasTransform || hasFilters || hasFormatChange) {
+                val hasVolumeChange = volume != 1.0f
+                val hasFade = fadeInMs > 0 || fadeOutMs > 0
+
+                val exportType = if (hasTransform || hasFilters || hasFormatChange || hasVolumeChange || hasFade) {
                     ExportForegroundService.EXPORT_TYPE_TRANSCODE
                 } else {
                     ExportForegroundService.EXPORT_TYPE_TRIM
@@ -440,10 +453,15 @@ class EditorViewModel(
                     exportType = exportType,
                     rotation = totalRotation,
                     width = config.width,
-                    height = config.height
+                    height = config.height,
+                    volume = volume,
+                    filter = filter,
+                    filterIntensity = filterIntensity,
+                    fadeInMs = fadeInMs,
+                    fadeOutMs = fadeOutMs
                 )
 
-                Timber.d("Export started: $exportType, edits=${edits.value.size}, rot=$totalRotation")
+                Timber.d("Export started: $exportType, rot=$totalRotation, vol=$volume, fade_in=$fadeInMs, fade_out=$fadeOutMs, filter=$filter, int=$filterIntensity")
             } catch (e: Exception) {
                 Timber.e(e, "Error during export preparation")
                 _exportResult.value = Result.failure(e)

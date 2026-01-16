@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
+import com.chopcut.data.model.FilterType
+
 /**
  * Gerenciador para controlar o ExportForegroundService
  *
@@ -101,7 +103,12 @@ class ExportServiceManager(private val context: Context) :
         exportType: String = ExportForegroundService.EXPORT_TYPE_TRIM,
         rotation: Int = 0,
         width: Int = 0,
-        height: Int = 0
+        height: Int = 0,
+        volume: Float = 1.0f,
+        filter: FilterType = FilterType.NONE,
+        filterIntensity: Float = 1.0f,
+        fadeInMs: Long = 0L,
+        fadeOutMs: Long = 0L
     ) {
         val intent = Intent(context, ExportForegroundService::class.java).apply {
             action = ExportForegroundService.ACTION_START_EXPORT
@@ -115,10 +122,15 @@ class ExportServiceManager(private val context: Context) :
             putExtra(ExportForegroundService.EXTRA_ROTATION, rotation)
             putExtra(ExportForegroundService.EXTRA_WIDTH, width)
             putExtra(ExportForegroundService.EXTRA_HEIGHT, height)
+            putExtra(ExportForegroundService.EXTRA_VOLUME, volume)
+            putExtra(ExportForegroundService.EXTRA_FILTER, filter.name)
+            putExtra(ExportForegroundService.EXTRA_FILTER_INTENSITY, filterIntensity)
+            putExtra(ExportForegroundService.EXTRA_FADE_IN, fadeInMs)
+            putExtra(ExportForegroundService.EXTRA_FADE_OUT, fadeOutMs)
         }
         context.startForegroundService(intent)
 
-        Timber.d("Exportação iniciada: $outputName (rot=$rotation)")
+        Timber.d("Exportação iniciada: $outputName (rot=$rotation, vol=$volume, filter=$filter, int=$filterIntensity, fadeIn=$fadeInMs, fadeOut=$fadeOutMs)")
     }
 
     /**

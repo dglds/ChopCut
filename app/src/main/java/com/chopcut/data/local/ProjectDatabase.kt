@@ -2,6 +2,8 @@ package com.chopcut.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.chopcut.data.model.EditOperationEntity
 import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.Project
@@ -12,7 +14,7 @@ import com.chopcut.data.model.Project
         EditOperationEntity::class,
         ExportPreset::class
     ], 
-    version = 2, 
+    version = 3, 
     exportSchema = false
 )
 abstract class ProjectDatabase : RoomDatabase() {
@@ -22,6 +24,14 @@ abstract class ProjectDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "chopcut_projects.db"
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Add Fade columns to EditOperationEntity
+                db.execSQL("ALTER TABLE edit_operations ADD COLUMN fadeInMs INTEGER DEFAULT NULL")
+                db.execSQL("ALTER TABLE edit_operations ADD COLUMN fadeOutMs INTEGER DEFAULT NULL")
+            }
+        }
 
         @Volatile
         private var INSTANCE: ProjectDatabase? = null
@@ -33,7 +43,8 @@ abstract class ProjectDatabase : RoomDatabase() {
                     ProjectDatabase::class.java,
                     DATABASE_NAME
                 )
-                .fallbackToDestructiveMigration() // Reset DB on schema change
+                .addMigrations(MIGRATION_2_3)
+                .fallbackToDestructiveMigration() // Reset DB on schema change if migration fails
                 .build()
                 INSTANCE = instance
                 instance

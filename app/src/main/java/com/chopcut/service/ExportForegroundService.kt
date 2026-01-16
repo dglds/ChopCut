@@ -8,6 +8,7 @@ import android.os.Binder
 import android.os.IBinder
 import android.os.PowerManager
 import com.chopcut.data.model.ExportConfig
+import com.chopcut.data.model.FilterType
 import com.chopcut.data.model.TimeRange
 import com.chopcut.data.model.Transform
 import com.chopcut.data.pipeline.CopyPipeline
@@ -43,6 +44,11 @@ class ExportForegroundService : Service() {
         const val EXTRA_ROTATION = "rotation"
         const val EXTRA_WIDTH = "width"
         const val EXTRA_HEIGHT = "height"
+        const val EXTRA_VOLUME = "volume"
+        const val EXTRA_FILTER = "filter"
+        const val EXTRA_FILTER_INTENSITY = "filter_intensity"
+        const val EXTRA_FADE_IN = "fade_in_ms"
+        const val EXTRA_FADE_OUT = "fade_out_ms"
 
         // Tipos de exportação
         const val EXPORT_TYPE_TRIM = "trim" // Fast copy (no transcode)
@@ -102,16 +108,31 @@ class ExportForegroundService : Service() {
                 val rotation = intent.getIntExtra(EXTRA_ROTATION, 0)
                 val width = intent.getIntExtra(EXTRA_WIDTH, 0)
                 val height = intent.getIntExtra(EXTRA_HEIGHT, 0)
+                val volume = intent.getFloatExtra(EXTRA_VOLUME, 1.0f)
+                val filterName = intent.getStringExtra(EXTRA_FILTER)
+                val filterIntensity = intent.getFloatExtra(EXTRA_FILTER_INTENSITY, 1.0f)
+                val fadeInMs = intent.getLongExtra(EXTRA_FADE_IN, 0L)
+                val fadeOutMs = intent.getLongExtra(EXTRA_FADE_OUT, 0L)
+                val filter = try {
+                    if (filterName != null) FilterType.valueOf(filterName) else FilterType.NONE
+                } catch (e: Exception) {
+                    FilterType.NONE
+                }
 
                 if (videoUri != null) {
                     startExport(
-                        videoUri, 
-                        timeRanges ?: emptyList(), 
-                        outputName, 
+                        videoUri,
+                        timeRanges ?: emptyList(),
+                        outputName,
                         exportType,
                         rotation,
                         width,
-                        height
+                        height,
+                        volume,
+                        filter,
+                        filterIntensity,
+                        fadeInMs,
+                        fadeOutMs
                     )
                 } else {
                     Timber.tag("ExportForegroundService").e("URI inválida")
@@ -136,7 +157,12 @@ class ExportForegroundService : Service() {
         exportType: String,
         rotation: Int,
         width: Int,
-        height: Int
+        height: Int,
+        volume: Float,
+        filter: FilterType,
+        filterIntensity: Float,
+        fadeInMs: Long = 0L,
+        fadeOutMs: Long = 0L
     ) {
         if (isRunning) {
             Timber.tag("ExportForegroundService").w("Exportação já em andamento")
@@ -159,7 +185,12 @@ class ExportForegroundService : Service() {
                 val resultFlow = if (exportType == EXPORT_TYPE_TRANSCODE) {
                     // Configurar transformação e encoding
                     val transform = Transform(
-                        rotation = rotation.toFloat()
+                        rotation = rotation.toFloat(),
+                        volume = volume,
+                        filter = filter,
+                        filterIntensity = filterIntensity,
+                        fadeInMs = fadeInMs,
+                        fadeOutMs = fadeOutMs
                         // TODO: Add crop support here if needed
                     )
                     
@@ -169,7 +200,10 @@ class ExportForegroundService : Service() {
                         bitrate = 5_000_000 // Default
                     )
                     
-                    transcodePipeline.process(videoUri, transform, config)
+                    // Pegar o primeiro trim range se existir
+                    val trimRange = if (timeRanges.isNotEmpty()) timeRanges[0] else null
+                    
+                    transcodePipeline.process(videoUri, transform, config, trimRange)
                 } else {
                     // Copy pipeline (apenas trim, sem re-encode)
                     copyPipeline.trim(videoUri, timeRanges)

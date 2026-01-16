@@ -11,7 +11,12 @@ data class Transform(
     val scaleY: Float = 1f,          // Vertical scale
     val cropRect: RectF? = null,     // Crop region (normalized 0-1)
     val translationX: Float = 0f,    // X translation (normalized)
-    val translationY: Float = 0f     // Y translation (normalized)
+    val translationY: Float = 0f,    // Y translation (normalized)
+    val volume: Float = 1.0f,        // Audio volume multiplier
+    val filter: FilterType = FilterType.NONE, // Video filter
+    val filterIntensity: Float = 1.0f, // Filter intensity
+    val fadeInMs: Long = 0L,         // Audio Fade In duration in ms
+    val fadeOutMs: Long = 0L         // Audio Fade Out duration in ms
 ) {
     companion object {
         val IDENTITY = Transform()

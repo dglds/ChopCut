@@ -37,21 +37,73 @@ class PreviewManager(private val context: Context) {
      */
     fun applyEffects(operations: List<EditOperation>) {
         val player = exoPlayer ?: return
-        
+
         try {
             val effects = EffectFactory.createEffects(operations)
             player.setVideoEffects(effects)
-            
+
+            // Extract audio settings
+            baseVolume = operations.filterIsInstance<EditOperation.Volume>()
+                .lastOrNull()?.volume ?: 1.0f
+
+            val fadeOp = operations.filterIsInstance<EditOperation.Fade>().lastOrNull()
+            fadeInDuration = fadeOp?.fadeInMs ?: 0L
+            fadeOutDuration = fadeOp?.fadeOutMs ?: 0L
+
+            // Calculate trim duration for fade calculation
+            val trimOp = operations.filterIsInstance<EditOperation.Trim>().lastOrNull()
+            trimDuration = if (trimOp != null) {
+                trimOp.endTime - trimOp.startTime
+            } else {
+                player.duration.takeIf { it > 0 } ?: 0L
+            }
+
+            // Apply initial volume
+            updateAudioFade(player.currentPosition)
+
             // Force visual update if paused
             if (!player.isPlaying) {
                  // Seeking to the exact same position often forces a redraw
-                 player.seekTo(player.currentPosition) 
+                 player.seekTo(player.currentPosition)
             }
-            
-            Timber.d("Applied ${effects.size} video effects. First: ${effects.firstOrNull()}")
+
+            Timber.d("Applied ${effects.size} video effects. Volume: $baseVolume, FadeIn: ${fadeInDuration}ms, FadeOut: ${fadeOutDuration}ms")
         } catch (e: Exception) {
             Timber.e(e, "Failed to apply video effects")
         }
+    }
+
+    /**
+     * Update audio fade based on current position
+     */
+    private fun updateAudioFade(currentPositionMs: Long) {
+        val player = exoPlayer ?: return
+
+        var fadeMultiplier = 1.0f
+
+        // Apply fade in
+        if (fadeInDuration > 0 && currentPositionMs < fadeInDuration) {
+            fadeMultiplier = currentPositionMs.toFloat() / fadeInDuration.toFloat()
+        }
+
+        // Apply fade out
+        if (fadeOutDuration > 0 && trimDuration > 0) {
+            val fadeOutStart = trimDuration - fadeOutDuration
+            if (currentPositionMs > fadeOutStart) {
+                val remaining = trimDuration - currentPositionMs
+                fadeMultiplier = remaining.toFloat() / fadeOutDuration.toFloat()
+            }
+        }
+
+        // Clamp multiplier
+        fadeMultiplier = fadeMultiplier.coerceIn(0f, 1f)
+
+        // Apply to base volume
+        val finalVolume = baseVolume * fadeMultiplier
+        player.volume = finalVolume.coerceIn(0f, 1f)
+
+        // Expose for UI
+        _currentVolume.value = finalVolume
     }
 
     // Coroutine scope for position updates
@@ -78,6 +130,15 @@ class PreviewManager(private val context: Context) {
 
     private val _videoHeight = MutableStateFlow(0)
     val videoHeight: StateFlow<Int> = _videoHeight.asStateFlow()
+
+    // Audio fade state
+    private var baseVolume: Float = 1.0f
+    private var fadeInDuration: Long = 0L
+    private var fadeOutDuration: Long = 0L
+    private var trimDuration: Long = 0L // Duration after trim for fade calculation
+
+    private val _currentVolume = MutableStateFlow(1.0f)
+    val currentVolume: StateFlow<Float> = _currentVolume.asStateFlow()
 
     /**
      * Prepare player with video URI - follows cropy's VideoPlayerController pattern
@@ -156,6 +217,8 @@ class PreviewManager(private val context: Context) {
             while (true) {
                 exoPlayer?.let { player ->
                     _currentPosition.value = player.currentPosition
+                    // Update audio fade in real-time
+                    updateAudioFade(player.currentPosition)
                 }
                 delay(100) // Update 10 times per second
             }

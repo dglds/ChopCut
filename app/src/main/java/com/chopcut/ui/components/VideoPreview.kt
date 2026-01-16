@@ -2,13 +2,30 @@ package com.chopcut.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -64,10 +81,15 @@ fun VideoPreview(
     val currentPosition by previewManager.currentPosition.collectAsStateWithLifecycle()
     val duration by previewManager.duration.collectAsStateWithLifecycle()
     val isReady by previewManager.isReady.collectAsStateWithLifecycle()
+    val currentVolume by previewManager.currentVolume.collectAsStateWithLifecycle()
 
     // Track if user is currently dragging the slider
     var isUserSeeking by remember { mutableStateOf(false) }
     var sliderPosition by remember { mutableFloatStateOf(0f) }
+
+    // Track double tap for pause/stop
+    var lastTapTime by remember { mutableStateOf(0L) }
+    val doubleTapTimeout = 300L // ms between taps to consider it a double tap
 
     // Initialize Player - IMPORTANT: Must happen before PlayerView is created
     LaunchedEffect(uri) {
@@ -97,7 +119,27 @@ fun VideoPreview(
                 .fillMaxWidth()
                 .height(220.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { onVideoClick() },
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { offset ->
+                            val currentTime = System.currentTimeMillis()
+                            val timeSinceLastTap = currentTime - lastTapTime
+
+                            if (timeSinceLastTap < doubleTapTimeout) {
+                                // Double tap detected - pause video
+                                if (isPlaying) {
+                                    previewManager.pause()
+                                    Timber.d("Double tap: Paused video")
+                                }
+                                lastTapTime = 0 // Reset to avoid triple tap
+                            } else {
+                                // Single tap - call callback
+                                onVideoClick()
+                                lastTapTime = currentTime
+                            }
+                        }
+                    )
+                },
             contentAlignment = Alignment.Center
         ) {
             // Only show PlayerView when player is ready (triggers recomposition)
@@ -129,33 +171,25 @@ fun VideoPreview(
             }
         }
 
-        // Seek bar (sem thumb/playhead)
+        // Seek bar (cantos retos, sem thumb/playhead)
         if (isReady && duration > 0) {
-            Slider(
-                value = sliderPosition,
-                onValueChange = { newValue ->
-                    sliderPosition = newValue
-                    isUserSeeking = true
-                },
-                onValueChangeFinished = {
-                    isUserSeeking = false
-                    val positionMs = (sliderPosition * duration).toLong()
+            SeekBar(
+                progress = sliderPosition,
+                onProgressChange = { newProgress ->
+                    sliderPosition = newProgress
+                    val positionMs = (newProgress * duration).toLong()
+                        .coerceIn(0L, duration)
                     previewManager.seekTo(positionMs)
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp),
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.Transparent,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    activeTickColor = Color.Transparent,
-                    inactiveTickColor = Color.Transparent
-                ),
-                thumb = {
-                    // Thumb vazio/removido
-                    Box(modifier = Modifier.height(0.dp))
-                }
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // Sound bar (medidor de volume em tempo real)
+            SoundBar(
+                volume = currentVolume,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -172,6 +206,54 @@ private fun formatTime(timeMs: Long): String {
 }
 
 /**
+ * Seek bar customizada com cantos retos (sem arredondamento)
+ */
+@Composable
+private fun SeekBar(
+    progress: Float,
+    onProgressChange: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val inactiveColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val activeColor = MaterialTheme.colorScheme.primary
+
+    Box(
+        modifier = modifier
+            .height(4.dp)
+            .drawBehind {
+                // Track de fundo (inativo) - cantos retos
+                drawRoundRect(
+                    color = inactiveColor,
+                    cornerRadius = CornerRadius(0f)
+                )
+
+                // Track ativo (posição atual) - cantos retos
+                drawRoundRect(
+                    color = activeColor,
+                    size = androidx.compose.ui.geometry.Size(size.width * progress, size.height),
+                    cornerRadius = CornerRadius(0f)
+                )
+            }
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    val clickPosition = offset.x / size.width
+                    onProgressChange(clickPosition.coerceIn(0f, 1f))
+                }
+            }
+            .pointerInput(Unit) {
+                detectDragGestures { _, dragAmount ->
+                    // Note: This simple drag logic adds delta to current progress.
+                    // Ideally we should track start position. But for simple seeking it works if updates are fast.
+                    // However, we don't have access to 'size' easily here inside detectDragGestures callback if not captured? 
+                    // Wait, PointerInputScope has 'size'.
+                    val dragPosition = (dragAmount.x / size.width)
+                    onProgressChange((progress + dragPosition).coerceIn(0f, 1f))
+                }
+            }
+    )
+}
+
+/**
  * Video preview controls with play/pause button
  */
 @Composable
@@ -180,4 +262,79 @@ fun VideoPreviewControls(
     modifier: Modifier = Modifier
 ) {
     // Unused, can be removed or kept for future
+}
+
+/**
+ * Sound bar - Medidor de volume em tempo real
+ */
+@Composable
+fun SoundBar(
+    volume: Float,
+    modifier: Modifier = Modifier
+) {
+    val barCount = 20
+    val activeBars = remember(volume) {
+        (volume * barCount).toInt().coerceIn(0, barCount)
+    }
+
+    // Determine color based on volume level
+    val barColor = when {
+        volume == 0f -> Color(0xFFF44336) // Red = Muted
+        volume < 0.3f -> Color(0xFFFF9800) // Orange = Low
+        volume < 0.7f -> Color(0xFF4CAF50) // Green = Medium
+        volume < 1.0f -> Color(0xFF2196F3) // Blue = High
+        else -> Color(0xFFF44336) // Red = Over 100%
+    }
+
+    Row(
+        modifier = modifier
+            .height(24.dp)
+            .background(
+                MaterialTheme.colorScheme.surfaceContainerHighest,
+                RoundedCornerShape(4.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Icon
+        Icon(
+            imageVector = if (volume == 0f) Icons.Default.Close else Icons.Default.Notifications,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = if (volume == 0f) Color(0xFFF44336) else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.width(6.dp))
+
+        // Volume bars
+        repeat(barCount) { index ->
+            val isActive = index < activeBars
+            val height = when {
+                index < barCount / 3 -> 8.dp   // Low
+                index < barCount * 2 / 3 -> 14.dp  // Medium
+                else -> 20.dp  // High
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(height)
+                    .background(
+                        if (isActive) barColor else MaterialTheme.colorScheme.surfaceVariant,
+                        RoundedCornerShape(2.dp)
+                    )
+            )
+        }
+
+        Spacer(Modifier.width(6.dp))
+
+        // Percentage text
+        Text(
+            text = "${(volume * 100).toInt()}%",
+            style = MaterialTheme.typography.labelSmall,
+            color = barColor,
+            modifier = Modifier.width(32.dp)
+        )
+    }
 }

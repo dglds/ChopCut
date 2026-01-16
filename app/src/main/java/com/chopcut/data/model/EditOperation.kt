@@ -16,6 +16,7 @@ sealed class EditOperation {
     data class Filter(val filterType: FilterType, val intensity: Float) : EditOperation()
     data class Speed(val speed: Float) : EditOperation()
     data class Volume(val volume: Float) : EditOperation()
+    data class Fade(val fadeInMs: Long, val fadeOutMs: Long) : EditOperation()
 }
 
 /**
@@ -54,7 +55,9 @@ data class EditOperationEntity(
     val filterType: String? = null,
     val filterIntensity: Float? = null,
     val speed: Float? = null,
-    val volume: Float? = null
+    val volume: Float? = null,
+    val fadeInMs: Long? = null,
+    val fadeOutMs: Long? = null
 ) {
     fun toEditOperation(): EditOperation {
         return when (type) {
@@ -65,6 +68,7 @@ data class EditOperationEntity(
             "FILTER" -> EditOperation.Filter(FilterType.valueOf(filterType!!), filterIntensity!!)
             "SPEED" -> EditOperation.Speed(speed!!)
             "VOLUME" -> EditOperation.Volume(volume!!)
+            "FADE" -> EditOperation.Fade(fadeInMs ?: 0L, fadeOutMs ?: 0L)
             else -> throw IllegalArgumentException("Unknown edit operation type: $type")
         }
     }
@@ -100,6 +104,10 @@ data class EditOperationEntity(
                 is EditOperation.Volume -> EditOperationEntity(
                     projectId = projectId, type = "VOLUME", orderIndex = orderIndex,
                     volume = operation.volume
+                )
+                is EditOperation.Fade -> EditOperationEntity(
+                    projectId = projectId, type = "FADE", orderIndex = orderIndex,
+                    fadeInMs = operation.fadeInMs, fadeOutMs = operation.fadeOutMs
                 )
             }
         }
