@@ -214,8 +214,7 @@ Arquivo: `app/src/main/java/com/chopcut/ui/onboarding/OnboardingScreen.kt`
 ### 6.2 Melhorias na UX do Editor
 
 Arquivo: `EditorScreen.kt`
-- Snapping na timeline (a cada segundo)
-- Zoom na timeline
+- ✅ Snapping na timeline (a cada segundo)
 - Marcadores (in/out points)
 - Atalhos gestuais
 
@@ -305,7 +304,6 @@ Arquivos: vários
 - ✅ Onboarding (Tela de boas-vindas e tutorial)
 - ✅ Melhorias UX (Snapping na seekbar, botões de Trim In/Out precisos)
 - ✅ Indicadores de progresso
-- ⚠️ Zoom na timeline (Adiado: substituído por controles de Trim In/Out para precisão)
 
 ---
 
