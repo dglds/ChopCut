@@ -53,6 +53,8 @@ import com.chopcut.ui.preview.PreviewManager
 import timber.log.Timber
 import android.view.LayoutInflater
 import androidx.compose.material3.ExperimentalMaterial3Api
+import android.view.HapticFeedbackConstants
+import androidx.compose.ui.platform.LocalView
 
 /**
  * Video preview component with ExoPlayer integration
@@ -205,11 +207,6 @@ private fun formatTime(timeMs: Long): String {
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d", minutes, seconds)
 }
-
-import android.view.HapticFeedbackConstants
-import androidx.compose.ui.platform.LocalView
-
-// ...
 
 /**
  * Seek bar customizada com cantos retos (sem arredondamento)

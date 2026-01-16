@@ -2,6 +2,12 @@ package com.chopcut.ui.screen
 
 import android.net.Uri
 import android.view.Gravity
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -47,6 +53,7 @@ import com.chopcut.ui.components.VideoPreview
 import com.chopcut.ui.components.VideoTimeline
 import com.chopcut.ui.components.WaveForm
 import com.chopcut.ui.filter.TrimContent
+import com.chopcut.ui.components.EditorSplitLayout
 import com.chopcut.ui.preview.PreviewManager
 import com.chopcut.ui.filter.FilterContent
 import com.chopcut.ui.filter.SpeedContent
@@ -55,14 +62,6 @@ import com.chopcut.ui.filter.rememberFilterState
 import com.chopcut.ui.filter.rememberSpeedState
 import com.chopcut.ui.filter.rememberAudioState
 import timber.log.Timber
-
-enum class EditorTool {
-    NONE,
-    TRIM,
-    FILTER,
-    SPEED,
-    VOLUME
-}
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,8 +101,8 @@ fun EditorScreen(
     val saveStatus by editorViewModel.saveStatus.collectAsStateWithLifecycle()
     val presets by editorViewModel.availablePresets.collectAsStateWithLifecycle(initialValue = emptyList())
 
-    // Active Tool State
-    var activeTool by remember { mutableStateOf(EditorTool.NONE) }
+    // Active Tool State from ViewModel
+    val activeTool by editorViewModel.activeTool.collectAsStateWithLifecycle()
 
     // Estado da tela de exportação unificada
     var exportScreenState by remember { mutableStateOf(ExportScreenState.SELECTING_PRESET) }
@@ -215,173 +214,178 @@ fun EditorScreen(
                     }
                 }
             )
-        },
-        bottomBar = {
-            EditorBottomBar(
-                activeTool = activeTool,
-                onToolChange = { tool -> activeTool = tool },
-                currentPosition = currentPosition,
-                duration = videoInfo?.durationMs ?: 0L,
-                isExporting = isExporting,
-                hasTrim = hasTrim,
-                hasFilter = hasFilter,
-                hasSpeed = hasSpeed,
-                hasVolume = hasVolume,
-                videoInfo = videoInfo,
-                trimRange = trimRange,
-                edits = edits,
-                onApplyEdit = { op ->
-                    editorViewModel.addOperation(op)
-                    activeTool = EditorTool.NONE
-                },
-                onTrimClick = { range ->
-                    if (range != null) editorViewModel.applyTrim(range)
-                },
-                onRotateClick = { editorViewModel.testOperation("rotate") }
-            )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            val totalRotation = edits.filterIsInstance<EditOperation.Rotation>()
-                .sumOf { it.degrees }
-                .toFloat() % 360f
-
-            VideoPreview(
-                uri = currentVideoUri,
-                previewManager = previewManager,
-                modifier = Modifier.fillMaxWidth(),
-                rotationDegrees = totalRotation,
-                onPositionChanged = { positionMs ->
-                    Timber.d("Position: ${positionMs}ms")
-                },
-                onVideoClick = {
-                    if (previewManager.isPlaying.value) {
-                        previewManager.pause()
-                    } else {
-                        previewManager.play()
-                    }
-                }
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            if (edits.isNotEmpty()) {
-                val opNames = edits.reversed().map { op ->
-                    when (op) {
-                        is EditOperation.Trim -> "Trim"
-                        is EditOperation.Rotation -> "Rotation"
-                        is EditOperation.Resize -> "Resize"
-                        is EditOperation.Crop -> "Crop"
-                        is EditOperation.Filter -> "Filter"
-                        is EditOperation.Speed -> "Speed"
-                        is EditOperation.Volume -> "Volume"
-                        is EditOperation.Fade -> "Fade"
-                        else -> "Op"
-                    }
-                }
-
-                Text(
-                    text = "Histórico: ${opNames.joinToString(", ")}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 8.sp
-                )
-                Spacer(Modifier.height(8.dp))
-            }
-
-            if (videoInfo == null) {
-                Box(
+        // Split Layout Refactoring
+        EditorSplitLayout(
+            modifier = Modifier.padding(paddingValues),
+            topContent = {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp),
-                    contentAlignment = Alignment.Center
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                if (videoDurationMs > 0) {
-                    VideoTimeline(
+                    val totalRotation = edits.filterIsInstance<EditOperation.Rotation>()
+                        .sumOf { it.degrees }
+                        .toFloat() % 360f
+
+                    VideoPreview(
                         uri = currentVideoUri,
-                        durationMs = videoDurationMs,
-                        thumbnailExtractor = thumbnailExtractor,
-                        trimRange = trimRange,
-                        onTrimRangeChange = { newRange ->
-                            trimRange = newRange
-                        },
-                        onPositionClick = { positionMs ->
-                            previewManager.pause()
-                            previewManager.seekTo(positionMs)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                val range = trimRange
-                if (range != null) {
-                    Spacer(Modifier.height(4.dp))
-                    Row(
+                        previewManager = previewManager,
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                        rotationDegrees = totalRotation,
+                        onPositionChanged = { positionMs ->
+                            Timber.d("Position: ${positionMs}ms")
+                        },
+                        onVideoClick = {
+                            if (previewManager.isPlaying.value) {
+                                previewManager.pause()
+                            } else {
+                                previewManager.play()
+                            }
+                        }
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    if (edits.isNotEmpty()) {
+                        val opNames = edits.reversed().map { op ->
+                            when (op) {
+                                is EditOperation.Trim -> "Trim"
+                                is EditOperation.Rotation -> "Rotation"
+                                is EditOperation.Resize -> "Resize"
+                                is EditOperation.Crop -> "Crop"
+                                is EditOperation.Filter -> "Filter"
+                                is EditOperation.Speed -> "Speed"
+                                is EditOperation.Volume -> "Volume"
+                                is EditOperation.Fade -> "Fade"
+                                else -> "Op"
+                            }
+                        }
+
                         Text(
-                            text = formatTime(range.startMs),
+                            text = "Histórico: ${opNames.joinToString(", ")}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 8.sp
                         )
-                        Text(
-                            text = formatTime(range.endMs - range.startMs),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = formatTime(range.endMs),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    if (videoInfo == null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else {
+                        if (videoDurationMs > 0) {
+                            VideoTimeline(
+                                uri = currentVideoUri,
+                                durationMs = videoDurationMs,
+                                thumbnailExtractor = thumbnailExtractor,
+                                trimRange = trimRange,
+                                onTrimRangeChange = { newRange ->
+                                    trimRange = newRange
+                                },
+                                onPositionClick = { positionMs ->
+                                    previewManager.pause()
+                                    previewManager.seekTo(positionMs)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        val range = trimRange
+                        if (range != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = formatTime(range.startMs),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = formatTime(range.endMs - range.startMs),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = formatTime(range.endMs),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+                        if (waveformData.amplitudes.isNotEmpty()) {
+                            // Extract fade settings
+                            val fadeOp = edits.filterIsInstance<EditOperation.Fade>().lastOrNull()
+                            val fadeInMs = fadeOp?.fadeInMs ?: 0L
+                            val fadeOutMs = fadeOp?.fadeOutMs ?: 0L
+                            val duration = videoInfo?.durationMs ?: 0L
+
+                            WaveForm(
+                                amplitudes = waveformData.amplitudes,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp),
+                                fadeInMs = fadeInMs,
+                                fadeOutMs = fadeOutMs,
+                                durationMs = duration
+                            )
+                        } else {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Gerando forma de onda...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                LinearProgressIndicator(modifier = Modifier.width(120.dp))
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
                     }
                 }
-
-                Spacer(Modifier.height(16.dp))
-                if (waveformData.amplitudes.isNotEmpty()) {
-                    // Extract fade settings
-                    val fadeOp = edits.filterIsInstance<EditOperation.Fade>().lastOrNull()
-                    val fadeInMs = fadeOp?.fadeInMs ?: 0L
-                    val fadeOutMs = fadeOp?.fadeOutMs ?: 0L
-                    val duration = videoInfo?.durationMs ?: 0L
-
-                    WaveForm(
-                        amplitudes = waveformData.amplitudes,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(40.dp),
-                        fadeInMs = fadeInMs,
-                        fadeOutMs = fadeOutMs,
-                        durationMs = duration
-                    )
-                } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Gerando forma de onda...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        LinearProgressIndicator(modifier = Modifier.width(120.dp))
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
+            },
+            bottomContent = {
+                EditorControlsPanel(
+                    activeTool = activeTool,
+                    onToolChange = { tool -> editorViewModel.setActiveTool(tool) },
+                    currentPosition = previewManager.currentPosition.collectAsState().value,
+                    duration = videoInfo?.durationMs ?: 0L,
+                    isExporting = isExporting,
+                    hasTrim = hasTrim,
+                    hasFilter = hasFilter,
+                    hasSpeed = hasSpeed,
+                    hasVolume = hasVolume,
+                    videoInfo = videoInfo,
+                    trimRange = trimRange,
+                    edits = edits,
+                    onApplyEdit = { op ->
+                        editorViewModel.addOperation(op)
+                        editorViewModel.setActiveTool(EditorTool.NONE)
+                    },
+                    onTrimClick = { range ->
+                        if (range != null) editorViewModel.applyTrim(range)
+                    },
+                    onRotateClick = { editorViewModel.testOperation("rotate") }
+                )
             }
-        }
+        )
     }
 
     // Tela unificada de Exportação e Resultado
@@ -463,10 +467,10 @@ private fun formatTime(timeMs: Long): String {
 }
 
 /**
- * BottomBar do editor com botões de features e informações do vídeo.
+ * Painel de controles na parte inferior da tela dividida.
  */
 @Composable
-private fun EditorBottomBar(
+private fun EditorControlsPanel(
     activeTool: EditorTool,
     onToolChange: (EditorTool) -> Unit,
     currentPosition: Long,
@@ -536,14 +540,14 @@ private fun EditorBottomBar(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                                // Trim
-                                FeatureButton(
-                                    icon = Icons.Default.Check,
-                                    label = "Trim",
-                                    isActive = hasTrim,
-                                    enabled = !isExporting,
-                                    onClick = { onToolChange(EditorTool.TRIM) }
-                                )
+                    // Trim
+                    FeatureButton(
+                        icon = Icons.Default.Check,
+                        label = "Trim",
+                        isActive = hasTrim,
+                        enabled = !isExporting,
+                        onClick = { onToolChange(EditorTool.TRIM) }
+                    )
                     // Rotate
                     FeatureButton(
                         icon = Icons.Default.Refresh,
@@ -582,10 +586,16 @@ private fun EditorBottomBar(
                 }
             } else {
                 // Tool Content
-                Box(
-                    modifier = Modifier.fillMaxWidth().animateContentSize()
-                ) {
-                    when (activeTool) {
+                AnimatedContent(
+                    targetState = activeTool,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(300)) togetherWith
+                                fadeOut(animationSpec = tween(300)) using
+                                SizeTransform(clip = false)
+                    },
+                    label = "ToolTransition"
+                ) { targetTool ->
+                    when (targetTool) {
                         EditorTool.TRIM -> {
                             TrimContent(
                                 currentPosition = currentPosition,

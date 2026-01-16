@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Refatoração da UI do Editor para Visualização Dividida**
+- [x] **Track: Refatoração da UI do Editor para Visualização Dividida**
   *Link: [./tracks/editor_refactor_20260116/](./tracks/editor_refactor_20260116/)*

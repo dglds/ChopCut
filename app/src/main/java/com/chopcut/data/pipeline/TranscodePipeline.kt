@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import com.chopcut.data.player.EffectFactory
 
 class TranscodePipeline(
     private val context: Context,
@@ -73,10 +74,6 @@ class TranscodePipeline(
             effects.add(scaleAndRotate)
         }
         
-import com.chopcut.data.player.EffectFactory
-
-// ...
-
         // 1.05 Apply Color Filters
         EffectFactory.createFilterEffect(transform.filter, transform.filterIntensity)?.let {
             Timber.d("Applying Filter: ${transform.filter} (intensity=${transform.filterIntensity})")

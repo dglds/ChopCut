@@ -34,6 +34,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
+enum class EditorTool {
+    NONE,
+    TRIM,
+    FILTER,
+    SPEED,
+    VOLUME
+}
+
 /**
  * ViewModel for the editor screen
  */
@@ -106,6 +114,10 @@ class EditorViewModel(
     // Export progress
     private val _exportProgress = MutableStateFlow(0)
     val exportProgress: StateFlow<Int> = _exportProgress.asStateFlow()
+
+    // Active Tool State
+    private val _activeTool = MutableStateFlow(EditorTool.NONE)
+    val activeTool: StateFlow<EditorTool> = _activeTool.asStateFlow()
 
     init {
         if (projectId != null) {
@@ -479,6 +491,10 @@ class EditorViewModel(
         _isExporting.value = false
         _exportProgress.value = 0
         Timber.d("Export cancelled")
+    }
+
+    fun setActiveTool(tool: EditorTool) {
+        _activeTool.value = tool
     }
 
     override fun onCleared() {
