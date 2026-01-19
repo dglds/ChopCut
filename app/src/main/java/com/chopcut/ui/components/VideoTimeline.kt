@@ -321,6 +321,7 @@ enum class TimelineMode {
  * @param uri Video URI
  * @param durationMs Video duration in milliseconds
  * @param thumbnailExtractor ThumbnailExtractor instance
+ * @param dimensionPreset Size preset for thumbnails (default: MEDIUM)
  * @param trimRange Current trim range (null if no trim)
  * @param onTrimRangeChange Callback when trim range changes
  * @param onPositionClick Callback when user clicks on a position
@@ -332,6 +333,7 @@ fun TimelineFilmstrip(
     uri: android.net.Uri,
     durationMs: Long,
     thumbnailExtractor: ThumbnailExtractor,
+    dimensionPreset: com.chopcut.data.model.DimensionPreset = com.chopcut.data.model.DimensionPreset.MEDIUM,
     trimRange: TrimRange? = null,
     onTrimRangeChange: (TrimRange?) -> Unit = {},
     onPositionClick: (Long) -> Unit = {},
@@ -356,7 +358,7 @@ fun TimelineFilmstrip(
                 try {
                     val settings = com.chopcut.data.model.ThumbnailSettings(
                         thumbsPerSecond = thumbsPerSecond,
-                        dimensionPreset = com.chopcut.data.model.DimensionPreset.SMALL  // 240x135
+                        dimensionPreset = dimensionPreset  // Usar parâmetro
                     )
 
                     thumbnailExtractor.extractFilmstrip(
@@ -387,7 +389,7 @@ fun TimelineFilmstrip(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp)
+            .height(dimensionPreset.height.dp)  // Altura dinâmica baseada no preset
             .background(MaterialTheme.colorScheme.surface)
             .clickable(
                 onClick = {
@@ -438,7 +440,7 @@ fun TimelineFilmstrip(
             TrimRangeOverlay(
                 trimRange = trimRange,
                 durationMs = durationMs,
-                height = 50.dp  // Altura fixa para TimelineFilmstrip
+                height = dimensionPreset.height.dp  // Altura dinâmica
             )
         }
     }
