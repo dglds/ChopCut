@@ -9,6 +9,9 @@ import android.os.Environment
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chopcut.data.model.DimensionPreset
+import com.chopcut.data.model.ThumbnailFormat
+import com.chopcut.data.model.ThumbnailSettings
 import com.chopcut.data.model.VideoCodec
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +39,10 @@ class SettingsViewModel(
     // Storage cleanup state
     private val _cleanupResult = MutableStateFlow<CleanupResult?>(null)
     val cleanupResult: StateFlow<CleanupResult?> = _cleanupResult.asStateFlow()
+
+    // Thumbnail settings state
+    private val _thumbnailSettings = MutableStateFlow(loadThumbnailSettings())
+    val thumbnailSettings: StateFlow<ThumbnailSettings> = _thumbnailSettings.asStateFlow()
 
     /**
      * Update video codec
@@ -94,12 +101,46 @@ class SettingsViewModel(
     }
 
     /**
+     * Update thumbnails per second
+     */
+    fun updateThumbsPerSecond(thumbsPerSecond: Int) {
+        _thumbnailSettings.value = _thumbnailSettings.value.copy(thumbsPerSecond = thumbsPerSecond)
+        prefs.edit().putInt(KEY_THUMB_PER_SECOND, thumbsPerSecond).apply()
+    }
+
+    /**
+     * Update thumbnail quality
+     */
+    fun updateThumbnailQuality(quality: Int) {
+        _thumbnailSettings.value = _thumbnailSettings.value.copy(quality = quality)
+        prefs.edit().putInt(KEY_THUMB_QUALITY, quality).apply()
+    }
+
+    /**
+     * Update thumbnail format
+     */
+    fun updateThumbnailFormat(format: ThumbnailFormat) {
+        _thumbnailSettings.value = _thumbnailSettings.value.copy(format = format)
+        prefs.edit().putString(KEY_THUMB_FORMAT, format.name).apply()
+    }
+
+    /**
+     * Update thumbnail dimension preset
+     */
+    fun updateThumbnailDimension(preset: DimensionPreset) {
+        _thumbnailSettings.value = _thumbnailSettings.value.copy(dimensionPreset = preset)
+        prefs.edit().putString(KEY_THUMB_DIMENSION, preset.name).apply()
+    }
+
+    /**
      * Reset all settings to defaults
      */
     fun resetToDefaults() {
         viewModelScope.launch {
             val defaults = ExportSettings()
+            val thumbDefaults = ThumbnailSettings()
             _settings.value = defaults
+            _thumbnailSettings.value = thumbDefaults
 
             prefs.edit().apply {
                 putString(KEY_CODEC, defaults.codec.name)
@@ -109,6 +150,10 @@ class SettingsViewModel(
                 putString(KEY_RESOLUTION, defaults.resolutionPreset.name)
                 putInt(KEY_KEYFRAME_INTERVAL, defaults.keyFrameInterval)
                 putBoolean(KEY_FAST_PATH, defaults.useFastPath)
+                putInt(KEY_THUMB_PER_SECOND, thumbDefaults.thumbsPerSecond)
+                putInt(KEY_THUMB_QUALITY, thumbDefaults.quality)
+                putString(KEY_THUMB_FORMAT, thumbDefaults.format.name)
+                putString(KEY_THUMB_DIMENSION, thumbDefaults.dimensionPreset.name)
             }.apply()
         }
     }
@@ -319,6 +364,32 @@ class SettingsViewModel(
         )
     }
 
+    /**
+     * Load thumbnail settings from SharedPreferences
+     */
+    private fun loadThumbnailSettings(): ThumbnailSettings {
+        return ThumbnailSettings(
+            thumbsPerSecond = prefs.getInt(KEY_THUMB_PER_SECOND, 1),
+            quality = prefs.getInt(KEY_THUMB_QUALITY, 85),
+            format = try {
+                ThumbnailFormat.valueOf(
+                    prefs.getString(KEY_THUMB_FORMAT, ThumbnailFormat.JPEG.name)
+                        ?: ThumbnailFormat.JPEG.name
+                )
+            } catch (e: IllegalArgumentException) {
+                ThumbnailFormat.JPEG
+            },
+            dimensionPreset = try {
+                DimensionPreset.valueOf(
+                    prefs.getString(KEY_THUMB_DIMENSION, DimensionPreset.MEDIUM.name)
+                        ?: DimensionPreset.MEDIUM.name
+                )
+            } catch (e: IllegalArgumentException) {
+                DimensionPreset.MEDIUM
+            }
+        )
+    }
+
     companion object {
         private const val PREFS_NAME = "chopcut_settings"
         private const val KEY_CODEC = "codec"
@@ -328,6 +399,10 @@ class SettingsViewModel(
         private const val KEY_RESOLUTION = "resolution_preset"
         private const val KEY_KEYFRAME_INTERVAL = "keyframe_interval"
         private const val KEY_FAST_PATH = "use_fast_path"
+        private const val KEY_THUMB_PER_SECOND = "thumb_per_second"
+        private const val KEY_THUMB_QUALITY = "thumb_quality"
+        private const val KEY_THUMB_FORMAT = "thumb_format"
+        private const val KEY_THUMB_DIMENSION = "thumb_dimension"
     }
 }
 

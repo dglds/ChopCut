@@ -5,9 +5,17 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import com.chopcut.data.model.ThumbnailExtractionProgress
+import com.chopcut.data.model.ThumbnailFormat
+import com.chopcut.data.model.ThumbnailSettings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.yield
 
 /**
  * Extracts thumbnails from video for timeline preview
@@ -102,6 +110,225 @@ class ThumbnailExtractor(
             }
         } else {
             false
+        }
+    }
+
+    /**
+     * Extract all thumbnails from video with progress updates
+     * @param uri Video URI
+     * @param durationMs Video duration in milliseconds
+     * @param settings Thumbnail extraction settings
+     * @return Flow emitting progress updates
+     */
+    suspend fun extractAllWithProgress(
+        uri: Uri,
+        durationMs: Long,
+        settings: ThumbnailSettings
+    ): Flow<ThumbnailExtractionProgress> = withContext(Dispatchers.IO) {
+        callbackFlow {
+            val retriever = MediaMetadataRetriever()
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    retriever.setDataSource(context, uri)
+                } else {
+                    @Suppress("DEPRECATION")
+                    retriever.setDataSource(uri.toString())
+                }
+
+                // Calculate interval between thumbnails
+                val intervalMs = 1000L / settings.thumbsPerSecond
+                val totalThumbnails = (durationMs / intervalMs).toInt()
+
+                Timber.d("Extracting $totalThumbnails thumbnails from ${durationMs}ms video")
+
+                // Emit initial progress
+                trySend(
+                    ThumbnailExtractionProgress(
+                        currentIndex = 0,
+                        total = totalThumbnails,
+                        currentPositionMs = 0
+                    )
+                )
+
+                var bitmap: Bitmap? = null
+
+                // Extract thumbnails at regular intervals
+                for (i in 0 until totalThumbnails) {
+                    val positionMs = (i * intervalMs).toLong()
+
+                    try {
+                        bitmap = retriever.getScaledFrameAtTime(
+                            positionMs * 1000, // Convert to microseconds
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                            settings.dimensionPreset.width,
+                            settings.dimensionPreset.height
+                        )
+
+                        // Recycle previous bitmap if exists
+                        bitmap?.let {
+                            // Yield to avoid blocking
+                            yield()
+
+                            trySend(
+                                ThumbnailExtractionProgress(
+                                    currentIndex = i + 1,
+                                    total = totalThumbnails,
+                                    currentPositionMs = positionMs
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to extract thumbnail at index $i (${positionMs}ms)")
+                    }
+
+                    // Recycle bitmap after use to free memory
+                    bitmap?.recycle()
+                    bitmap = null
+                }
+
+                // Emit completion
+                trySend(
+                    ThumbnailExtractionProgress(
+                        currentIndex = totalThumbnails,
+                        total = totalThumbnails,
+                        currentPositionMs = durationMs,
+                        isComplete = true
+                    )
+                )
+
+                Timber.d("Extracted $totalThumbnails thumbnails")
+
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to extract thumbnails with progress")
+            } finally {
+                try {
+                    retriever.release()
+                } catch (e: Exception) {
+                    Timber.e(e, "Error releasing MediaMetadataRetriever")
+                }
+            }
+
+            awaitClose {}
+        }
+    }
+
+    /**
+     * Extract all thumbnails from video to directory with progress updates
+     * @param uri Video URI
+     * @param durationMs Video duration in milliseconds
+     * @param outputDir Output directory for thumbnails
+     * @param settings Thumbnail extraction settings
+     * @return Flow emitting progress updates
+     */
+    suspend fun extractAllToDirectory(
+        uri: Uri,
+        durationMs: Long,
+        outputDir: File,
+        settings: ThumbnailSettings
+    ): Flow<ThumbnailExtractionProgress> = withContext(Dispatchers.IO) {
+        callbackFlow {
+            val retriever = MediaMetadataRetriever()
+            try {
+                // Create output directory if it doesn't exist
+                if (!outputDir.exists()) {
+                    outputDir.mkdirs()
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    retriever.setDataSource(context, uri)
+                } else {
+                    @Suppress("DEPRECATION")
+                    retriever.setDataSource(uri.toString())
+                }
+
+                // Calculate interval between thumbnails
+                val intervalMs = 1000L / settings.thumbsPerSecond
+                val totalThumbnails = (durationMs / intervalMs).toInt()
+
+                Timber.d("Extracting $totalThumbnails thumbnails to ${outputDir.absolutePath}")
+
+                // Emit initial progress
+                trySend(
+                    ThumbnailExtractionProgress(
+                        currentIndex = 0,
+                        total = totalThumbnails,
+                        currentPositionMs = 0
+                    )
+                )
+
+                // Determine file extension and compress format
+                val (extension, compressFormat) = when (settings.format) {
+                    ThumbnailFormat.JPEG -> ".jpg" to Bitmap.CompressFormat.JPEG
+                    ThumbnailFormat.PNG -> ".png" to Bitmap.CompressFormat.PNG
+                    ThumbnailFormat.WEBP -> ".webp" to Bitmap.CompressFormat.WEBP
+                }
+
+                var bitmap: Bitmap? = null
+
+                // Extract thumbnails at regular intervals
+                for (i in 0 until totalThumbnails) {
+                    val positionMs = (i * intervalMs).toLong()
+                    val outputFile = File(outputDir, "thumb_${String.format("%05d", i)}$extension")
+
+                    try {
+                        bitmap = retriever.getScaledFrameAtTime(
+                            positionMs * 1000, // Convert to microseconds
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                            settings.dimensionPreset.width,
+                            settings.dimensionPreset.height
+                        )
+
+                        // Save bitmap to file
+                        bitmap?.let {
+                            java.io.FileOutputStream(outputFile).use { out ->
+                                it.compress(compressFormat, settings.quality, out)
+                            }
+
+                            Timber.d("Saved thumbnail ${i + 1}/$totalThumbnails to ${outputFile.name}")
+
+                            // Yield to avoid blocking
+                            yield()
+
+                            trySend(
+                                ThumbnailExtractionProgress(
+                                    currentIndex = i + 1,
+                                    total = totalThumbnails,
+                                    currentPositionMs = positionMs
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to extract/save thumbnail at index $i (${positionMs}ms)")
+                    }
+
+                    // Recycle bitmap after use to free memory
+                    bitmap?.recycle()
+                    bitmap = null
+                }
+
+                // Emit completion
+                trySend(
+                    ThumbnailExtractionProgress(
+                        currentIndex = totalThumbnails,
+                        total = totalThumbnails,
+                        currentPositionMs = durationMs,
+                        isComplete = true
+                    )
+                )
+
+                Timber.d("Extracted $totalThumbnails thumbnails to ${outputDir.absolutePath}")
+
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to extract thumbnails to directory")
+            } finally {
+                try {
+                    retriever.release()
+                } catch (e: Exception) {
+                    Timber.e(e, "Error releasing MediaMetadataRetriever")
+                }
+            }
+
+            awaitClose {}
         }
     }
 
@@ -202,20 +429,54 @@ class ThumbnailExtractor(
             }
 
             val thumbnails = positionsMs.map { positionMs ->
-                val frame = retriever.getScaledFrameAtTime(
+                // Extract frame at larger size to allow proper center crop
+                val sourceBitmap = retriever.getScaledFrameAtTime(
                     positionMs * 1000,
                     MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                    width,
-                    height
+                    width * 2,  // Extract larger to ensure we have enough pixels
+                    height * 2
                 )
 
-                if (frame != null) {
-                    Timber.d("Extracted thumbnail at ${positionMs}ms")
+                val croppedBitmap = sourceBitmap?.let { src ->
+                    // Create cropped thumbnail at exact dimensions (center crop)
+                    val croppedThumb = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(croppedThumb)
+
+                    // Calculate center crop
+                    val srcWidth = src.width
+                    val srcHeight = src.height
+                    val srcAspect = srcWidth.toFloat() / srcHeight
+                    val dstAspect = width.toFloat() / height
+
+                    val (cropWidth, cropHeight) = if (srcAspect > dstAspect) {
+                        // Source is wider: crop sides
+                        ((srcHeight * dstAspect).toInt()) to srcHeight
+                    } else {
+                        // Source is taller: crop top/bottom
+                        srcWidth to ((srcWidth / dstAspect).toInt())
+                    }
+
+                    val cropX = (srcWidth - cropWidth) / 2
+                    val cropY = (srcHeight - cropHeight) / 2
+
+                    val srcRect = android.graphics.Rect(cropX, cropY, cropX + cropWidth, cropY + cropHeight)
+                    val dstRect = android.graphics.Rect(0, 0, width, height)
+
+                    canvas.drawBitmap(src, srcRect, dstRect, null)
+
+                    // Recycle source bitmap after cropping
+                    src.recycle()
+
+                    croppedThumb
+                }
+
+                if (croppedBitmap != null) {
+                    Timber.d("Extracted and cropped thumbnail at ${positionMs}ms: ${width}x${height}")
                 } else {
                     Timber.w("Failed to extract thumbnail at ${positionMs}ms")
                 }
 
-                frame
+                croppedBitmap
             }
 
             thumbnails
@@ -306,6 +567,210 @@ class ThumbnailExtractor(
         }
     }
 
+    /**
+     * Extract all thumbnails and stitch them into a single horizontal strip (filmstrip)
+     * All thumbnails are placed side by side without any gaps
+     * @param uri Video URI
+     * @param durationMs Video duration in milliseconds
+     * @param settings Thumbnail extraction settings
+     * @param maxStripWidth Maximum width of the final strip (in pixels), 0 for unlimited
+     * @return Flow emitting progress updates, completing with the final stitched Bitmap
+     */
+    suspend fun extractFilmstrip(
+        uri: Uri,
+        durationMs: Long,
+        settings: ThumbnailSettings,
+        maxStripWidth: Int = 0
+    ): Flow<Pair<ThumbnailExtractionProgress, Bitmap?>> = withContext(Dispatchers.IO) {
+        callbackFlow {
+            val retriever = MediaMetadataRetriever()
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    retriever.setDataSource(context, uri)
+                } else {
+                    @Suppress("DEPRECATION")
+                    retriever.setDataSource(uri.toString())
+                }
+
+                val thumbWidth = settings.dimensionPreset.width
+                val thumbHeight = settings.dimensionPreset.height
+
+                // Calculate interval between thumbnails
+                val intervalMs = 1000L / settings.thumbsPerSecond
+                val totalThumbnails = (durationMs / intervalMs).toInt()
+
+                Timber.d("Extracting filmstrip: $totalThumbnails thumbs from ${durationMs}ms video")
+
+                // Emit initial progress
+                trySend(
+                    ThumbnailExtractionProgress(0, totalThumbnails, 0) to null
+                )
+
+                val bitmaps = mutableListOf<Bitmap>()
+
+                // Extract all thumbnails with fixed size (cropped, not aspect-ratio preserved)
+                for (i in 0 until totalThumbnails) {
+                    val positionMs = (i * intervalMs).toLong()
+
+                    try {
+                        // Extract frame at a larger size to ensure we have enough pixels
+                        val sourceBitmap = retriever.getScaledFrameAtTime(
+                            positionMs * 1000,
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                            thumbWidth * 2,  // Extract larger to allow proper cropping
+                            thumbHeight * 2
+                        )
+
+                        sourceBitmap?.let { src ->
+                            // Create cropped thumbnail at exact dimensions
+                            val croppedThumb = Bitmap.createBitmap(thumbWidth, thumbHeight, Bitmap.Config.ARGB_8888)
+                            val canvas = android.graphics.Canvas(croppedThumb)
+
+                            // Calculate center crop
+                            val srcWidth = src.width
+                            val srcHeight = src.height
+                            val srcAspect = srcWidth.toFloat() / srcHeight
+                            val dstAspect = thumbWidth.toFloat() / thumbHeight
+
+                            val (cropWidth, cropHeight) = if (srcAspect > dstAspect) {
+                                // Source is wider: crop sides
+                                ((srcHeight * dstAspect).toInt()) to srcHeight
+                            } else {
+                                // Source is taller: crop top/bottom
+                                srcWidth to ((srcWidth / dstAspect).toInt())
+                            }
+
+                            val cropX = (srcWidth - cropWidth) / 2
+                            val cropY = (srcHeight - cropHeight) / 2
+
+                            val srcRect = android.graphics.Rect(cropX, cropY, cropX + cropWidth, cropY + cropHeight)
+                            val dstRect = android.graphics.Rect(0, 0, thumbWidth, thumbHeight)
+
+                            canvas.drawBitmap(src, srcRect, dstRect, null)
+
+                            bitmaps.add(croppedThumb)
+                            src.recycle()
+
+                            // Emit progress
+                            trySend(
+                                ThumbnailExtractionProgress(i + 1, totalThumbnails, positionMs) to null
+                            )
+
+                            // Yield to avoid blocking
+                            yield()
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to extract thumbnail at index $i")
+                    }
+                }
+
+                // Stitch all bitmaps into single horizontal strip
+                if (bitmaps.isNotEmpty()) {
+                    val actualWidth = thumbWidth * bitmaps.size
+
+                    // Check if we need to limit strip width
+                    val finalWidth = if (maxStripWidth > 0 && actualWidth > maxStripWidth) {
+                        maxStripWidth
+                    } else {
+                        actualWidth
+                    }
+
+                    // Create the filmstrip bitmap
+                    val filmstrip = Bitmap.createBitmap(finalWidth, thumbHeight, Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(filmstrip)
+
+                    // Draw each bitmap side by side (bitmaps are already exact size)
+                    var xOffset = 0
+                    bitmaps.forEach { thumb ->
+                        canvas.drawBitmap(thumb, xOffset.toFloat(), 0f, null)
+                        xOffset += thumbWidth
+
+                        // Recycle bitmap after drawing
+                        thumb.recycle()
+                    }
+
+                    Timber.d("Created filmstrip: ${finalWidth}x$thumbHeight from ${bitmaps.size} thumbs")
+
+                    // Emit final result
+                    trySend(
+                        ThumbnailExtractionProgress(
+                            totalThumbnails,
+                            totalThumbnails,
+                            durationMs,
+                            isComplete = true
+                        ) to filmstrip
+                    )
+                }
+
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to extract filmstrip")
+            } finally {
+                try {
+                    retriever.release()
+                } catch (e: Exception) {
+                    Timber.e(e, "Error releasing MediaMetadataRetriever")
+                }
+            }
+
+            awaitClose {}
+        }
+    }
+
+    /**
+     * Extract all thumbnails and stitch them into a single horizontal strip, saving to file
+     * @param uri Video URI
+     * @param durationMs Video duration in milliseconds
+     * @param outputFile Output file for the filmstrip image
+     * @param settings Thumbnail extraction settings
+     * @param maxStripWidth Maximum width of the final strip, 0 for unlimited
+     * @return Flow emitting progress updates, completing with success boolean
+     */
+    suspend fun extractFilmstripToFile(
+        uri: Uri,
+        durationMs: Long,
+        outputFile: File,
+        settings: ThumbnailSettings,
+        maxStripWidth: Int = 0
+    ): Flow<ThumbnailExtractionProgress> = withContext(Dispatchers.IO) {
+        callbackFlow {
+            extractFilmstrip(uri, durationMs, settings, maxStripWidth).collect { (progress, filmstrip) ->
+
+                // Send progress updates
+                trySend(progress)
+
+                // When complete, save to file
+                if (progress.isComplete && filmstrip != null) {
+                    try {
+                        val (extension, compressFormat) = when (settings.format) {
+                            ThumbnailFormat.JPEG -> ".jpg" to Bitmap.CompressFormat.JPEG
+                            ThumbnailFormat.PNG -> ".png" to Bitmap.CompressFormat.PNG
+                            ThumbnailFormat.WEBP -> ".webp" to Bitmap.CompressFormat.WEBP
+                        }
+
+                        // Ensure file has correct extension
+                        val finalFile = if (!outputFile.name.endsWith(extension)) {
+                            File(outputFile.parent, outputFile.nameWithoutExtension + extension)
+                        } else {
+                            outputFile
+                        }
+
+                        java.io.FileOutputStream(finalFile).use { out ->
+                            filmstrip.compress(compressFormat, settings.quality, out)
+                        }
+
+                        Timber.d("Saved filmstrip to ${finalFile.absolutePath}")
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to save filmstrip to file")
+                    } finally {
+                        filmstrip.recycle()
+                    }
+                }
+            }
+
+            awaitClose {}
+        }
+    }
+
     companion object {
         /**
          * Default thumbnail size for timeline
@@ -317,5 +782,14 @@ class ThumbnailExtractor(
          * Recommended number of thumbnails for timeline
          */
         const val RECOMMENDED_THUMB_COUNT = 10
+    }
+
+    /**
+     * Size presets for timeline thumbnails
+     */
+    enum class ThumbnailSize(val width: Int, val height: Int) {
+        COMPACT(40, 40),
+        NORMAL(50, 50),
+        DETAILED(80, 80)
     }
 }

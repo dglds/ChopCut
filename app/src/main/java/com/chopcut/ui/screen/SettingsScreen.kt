@@ -1,6 +1,9 @@
 package com.chopcut.ui.screen
 
 import android.content.Context
+import com.chopcut.data.model.DimensionPreset
+import com.chopcut.data.model.ThumbnailFormat
+import com.chopcut.data.model.ThumbnailSettings
 import com.chopcut.data.model.VideoCodec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,6 +67,8 @@ fun SettingsScreen(
     }
 
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
+    val thumbnailSettings by (settingsViewModel as? SettingsViewModel)?.thumbnailSettings?.collectAsStateWithLifecycle()
+        ?: remember { mutableStateOf(ThumbnailSettings()) }
     val cleanupResult by (settingsViewModel as? SettingsViewModel)?.cleanupResult?.collectAsStateWithLifecycle()
         ?: remember { mutableStateOf(null) }
 
@@ -107,6 +112,15 @@ fun SettingsScreen(
                 settings = settings,
                 onKeyFrameIntervalChange = { settingsViewModel.updateKeyFrameInterval(it) },
                 onUseFastPathChange = { settingsViewModel.updateUseFastPath(it) }
+            )
+
+            // Thumbnail Settings
+            ThumbnailSettingsCard(
+                thumbnailSettings = thumbnailSettings,
+                onThumbsPerSecondChange = { (settingsViewModel as? SettingsViewModel)?.updateThumbsPerSecond(it) },
+                onQualityChange = { (settingsViewModel as? SettingsViewModel)?.updateThumbnailQuality(it) },
+                onFormatChange = { (settingsViewModel as? SettingsViewModel)?.updateThumbnailFormat(it) },
+                onDimensionChange = { (settingsViewModel as? SettingsViewModel)?.updateThumbnailDimension(it) }
             )
 
             // Info Card
@@ -516,6 +530,212 @@ fun StorageSettingsCard(
 }
 
 /**
+ * Thumbnail settings card - extraction configuration
+ */
+@Composable
+fun ThumbnailSettingsCard(
+    thumbnailSettings: ThumbnailSettings,
+    onThumbsPerSecondChange: (Int) -> Unit,
+    onQualityChange: (Int) -> Unit,
+    onFormatChange: (ThumbnailFormat) -> Unit,
+    onDimensionChange: (DimensionPreset) -> Unit
+) {
+    var showFormatDialog by remember { mutableStateOf(false) }
+    var showDimensionDialog by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "Configurações de Thumbnails",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            // Thumbs Per Second Slider
+            Text(
+                text = "Thumbnails por Segundo: ${thumbnailSettings.thumbsPerSecond}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                fontWeight = FontWeight.Medium
+            )
+            Slider(
+                value = thumbnailSettings.thumbsPerSecond.toFloat(),
+                onValueChange = { onThumbsPerSecondChange(it.toInt()) },
+                valueRange = 1f..10f,
+                steps = 9,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = thumbsPerSecondDescription(thumbnailSettings.thumbsPerSecond),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // Quality Slider
+            Text(
+                text = "Qualidade: ${thumbnailSettings.quality}%",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                fontWeight = FontWeight.Medium
+            )
+            Slider(
+                value = thumbnailSettings.quality.toFloat(),
+                onValueChange = { onQualityChange(it.toInt()) },
+                valueRange = 50f..100f,
+                steps = 50,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = qualityDescription(thumbnailSettings.quality),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // Format Selection
+            SettingRow(
+                label = "Formato",
+                value = thumbnailSettings.format.displayName,
+                onClick = { showFormatDialog = true }
+            )
+
+            // Dimension Selection
+            SettingRow(
+                label = "Dimensão",
+                value = thumbnailSettings.dimensionPreset.displayName,
+                onClick = { showDimensionDialog = true }
+            )
+        }
+    }
+
+    // Format Selection Dialog
+    if (showFormatDialog) {
+        ThumbnailFormatSelectionDialog(
+            currentFormat = thumbnailSettings.format,
+            onFormatSelected = {
+                onFormatChange(it)
+                showFormatDialog = false
+            },
+            onDismiss = { showFormatDialog = false }
+        )
+    }
+
+    // Dimension Selection Dialog
+    if (showDimensionDialog) {
+        ThumbnailDimensionSelectionDialog(
+            currentPreset = thumbnailSettings.dimensionPreset,
+            onPresetSelected = {
+                onDimensionChange(it)
+                showDimensionDialog = false
+            },
+            onDismiss = { showDimensionDialog = false }
+        )
+    }
+}
+
+/**
+ * Thumbnail format selection dialog
+ */
+@Composable
+fun ThumbnailFormatSelectionDialog(
+    currentFormat: ThumbnailFormat,
+    onFormatSelected: (ThumbnailFormat) -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Formato da Thumbnail") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ThumbnailFormat.entries.forEach { format ->
+                    val isSelected = format == currentFormat
+                    androidx.compose.material3.FilterChip(
+                        selected = isSelected,
+                        onClick = { onFormatSelected(format) },
+                        label = {
+                            Column {
+                                Text(
+                                    text = format.displayName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                                Text(
+                                    text = format.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Fechar")
+            }
+        }
+    )
+}
+
+/**
+ * Thumbnail dimension preset selection dialog
+ */
+@Composable
+fun ThumbnailDimensionSelectionDialog(
+    currentPreset: DimensionPreset,
+    onPresetSelected: (DimensionPreset) -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Dimensão da Thumbnail") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DimensionPreset.entries.forEach { preset ->
+                    val isSelected = preset == currentPreset
+                    androidx.compose.material3.FilterChip(
+                        selected = isSelected,
+                        onClick = { onPresetSelected(preset) },
+                        label = {
+                            Text(
+                                text = preset.displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Fechar")
+            }
+        }
+    )
+}
+
+/**
  * Reusable setting row component
  */
 @Composable
@@ -764,6 +984,24 @@ private fun codecDescription(codec: VideoCodec): String {
         VideoCodec.VP9 -> "Sucessor do VP8, melhor compressão"
         VideoCodec.AV1 -> "Nova geração, melhor compressão"
         VideoCodec.MPEG4 -> "Legado, compatível com dispositivos antigos"
+    }
+}
+
+private fun thumbsPerSecondDescription(thumbsPerSecond: Int): String {
+    val perMinute = thumbsPerSecond * 60
+    return when {
+        thumbsPerSecond <= 2 -> "Baixo (~$perMinute thumbs/min)"
+        thumbsPerSecond <= 5 -> "Médio (~$perMinute thumbs/min)"
+        else -> "Alto (~$perMinute thumbs/min)"
+    }
+}
+
+private fun qualityDescription(quality: Int): String {
+    return when {
+        quality < 70 -> "Baixo (arquivos menores)"
+        quality < 85 -> "Bom (balanceamento)"
+        quality < 95 -> "Alta (boa qualidade)"
+        else -> "Máxima (arquivos maiores)"
     }
 }
 

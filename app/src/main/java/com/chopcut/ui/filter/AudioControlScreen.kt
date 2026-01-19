@@ -165,11 +165,6 @@ fun VolumeControl(
     getDisplayColor: @Composable () -> Color
 ) {
     Column {
-        // Preview
-        VolumePreview(audioState = audioState, getDisplayColor = getDisplayColor)
-
-        Spacer(Modifier.height(24.dp))
-
         // Slider
         VolumeSlider(audioState = audioState, getDisplayColor = getDisplayColor)
 

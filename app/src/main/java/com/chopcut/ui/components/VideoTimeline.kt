@@ -53,6 +53,7 @@ data class TrimRange(
  * @param uri Video URI
  * @param durationMs Video duration in milliseconds
  * @param thumbnailExtractor ThumbnailExtractor instance
+ * @param thumbnailSize Size preset for thumbnails (default: NORMAL)
  * @param trimRange Current trim range (null if no trim)
  * @param onTrimRangeChange Callback when trim range changes
  * @param onPositionClick Callback when user clicks on a position
@@ -63,6 +64,7 @@ fun VideoTimeline(
     uri: android.net.Uri,
     durationMs: Long,
     thumbnailExtractor: ThumbnailExtractor,
+    thumbnailSize: ThumbnailExtractor.ThumbnailSize = ThumbnailExtractor.ThumbnailSize.NORMAL,
     trimRange: TrimRange? = null,
     onTrimRangeChange: (TrimRange?) -> Unit = {},
     onPositionClick: (Long) -> Unit = {},
@@ -81,7 +83,7 @@ fun VideoTimeline(
     Timber.d("VideoTimeline: durationMs=$durationMs, thumbnailCount=$thumbnailCount")
 
     // Extract thumbnails when URI or duration changes
-    LaunchedEffect(uri, durationMs) {
+    LaunchedEffect(uri, durationMs, thumbnailSize) {
         if (durationMs > 0) {
             isLoading = true
             errorMessage = null
@@ -90,13 +92,13 @@ fun VideoTimeline(
                     val interval = durationMs / (thumbnailCount + 1)
                     val positions = (1..thumbnailCount).map { i -> i * interval }
 
-                    Timber.d("Extracting ${positions.size} thumbnails at positions: $positions")
+                    Timber.d("Extracting ${positions.size} thumbnails at positions: $positions (size: ${thumbnailSize.width}x${thumbnailSize.height})")
 
                     val bitmaps = thumbnailExtractor.extractAtPositions(
                         uri = uri,
                         positionsMs = positions,
-                        width = ThumbnailExtractor.DEFAULT_THUMB_WIDTH,
-                        height = ThumbnailExtractor.DEFAULT_THUMB_HEIGHT
+                        width = thumbnailSize.width,
+                        height = thumbnailSize.height
                     )
 
                     thumbnails = positions.mapIndexed { index, positionMs ->
@@ -120,7 +122,7 @@ fun VideoTimeline(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp)
+            .height(thumbnailSize.height.dp)
             .background(MaterialTheme.colorScheme.surface)
     ) {
         when {
@@ -160,6 +162,7 @@ fun VideoTimeline(
                             thumbnail = thumbnail,
                             trimRange = trimRange,
                             durationMs = durationMs,
+                            thumbnailSize = thumbnailSize,
                             onClick = { onPositionClick(thumbnail.positionMs) }
                         )
                     }
@@ -171,7 +174,8 @@ fun VideoTimeline(
         if (trimRange != null && durationMs > 0) {
             TrimRangeOverlay(
                 trimRange = trimRange,
-                durationMs = durationMs
+                durationMs = durationMs,
+                height = thumbnailSize.height.dp
             )
         }
     }
@@ -185,6 +189,7 @@ fun TimelineThumbnailItem(
     thumbnail: TimelineThumbnail,
     trimRange: TrimRange?,
     durationMs: Long,
+    thumbnailSize: ThumbnailExtractor.ThumbnailSize,
     onClick: () -> Unit
 ) {
     val isInRange = trimRange?.let { range ->
@@ -193,10 +198,14 @@ fun TimelineThumbnailItem(
 
     Timber.v("TimelineThumbnailItem: positionMs=${thumbnail.positionMs}, hasBitmap=${thumbnail.bitmap != null}, width=${thumbnail.bitmap?.width}, height=${thumbnail.bitmap?.height}")
 
+    // Use the actual bitmap dimensions or the expected size from preset
+    val bitmapWidth = thumbnail.bitmap?.width ?: thumbnailSize.width
+    val bitmapHeight = thumbnail.bitmap?.height ?: thumbnailSize.height
+
     Box(
         modifier = Modifier
-            .width(100.dp) // Largura fixa para cada thumbnail
-            .height(50.dp) // Altura fixa também para garantir visibilidade
+            .width(bitmapWidth.dp)  // Largura exata da thumb (sem gap)
+            .height(bitmapHeight.dp) // Altura dinâmica baseada no bitmap
             .clickable(onClick = onClick)
             .then(
                 if (!isInRange) {
@@ -233,7 +242,8 @@ fun TimelineThumbnailItem(
 @Composable
 fun TrimRangeOverlay(
     trimRange: TrimRange,
-    durationMs: Long
+    durationMs: Long,
+    height: androidx.compose.ui.unit.Dp
 ) {
     val startFraction = trimRange.startMs.toFloat() / durationMs.toFloat()
     val endFraction = trimRange.endMs.toFloat() / durationMs.toFloat()
@@ -241,14 +251,14 @@ fun TrimRangeOverlay(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(50.dp)
+            .height(height)
     ) {
         // Trimmed area overlay (left)
         if (startFraction > 0) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(startFraction)
-                    .height(50.dp)
+                    .height(height)
                     .background(Color.Black.copy(alpha = 0.5f))
                     .align(Alignment.CenterStart)
             )
@@ -259,7 +269,7 @@ fun TrimRangeOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .height(height)
                     .background(Color.Black.copy(alpha = 0.5f))
                     .align(Alignment.CenterEnd)
             )
@@ -293,4 +303,143 @@ fun VideoTimelineWithTrims(
         },
         modifier = modifier
     )
+}
+
+/**
+ * Timeline mode enum
+ */
+enum class TimelineMode {
+    /** Individual thumbnails (LazyRow) */
+    INDIVIDUAL,
+    /** Single filmstrip image (no gaps) */
+    FILMSTRIP
+}
+
+/**
+ * Filmstrip timeline component using extractFilmstrip for seamless thumbnails
+ *
+ * @param uri Video URI
+ * @param durationMs Video duration in milliseconds
+ * @param thumbnailExtractor ThumbnailExtractor instance
+ * @param trimRange Current trim range (null if no trim)
+ * @param onTrimRangeChange Callback when trim range changes
+ * @param onPositionClick Callback when user clicks on a position
+ * @param thumbsPerSecond Number of thumbnails per second to extract
+ * @param modifier Modifier for the container
+ */
+@Composable
+fun TimelineFilmstrip(
+    uri: android.net.Uri,
+    durationMs: Long,
+    thumbnailExtractor: ThumbnailExtractor,
+    trimRange: TrimRange? = null,
+    onTrimRangeChange: (TrimRange?) -> Unit = {},
+    onPositionClick: (Long) -> Unit = {},
+    thumbsPerSecond: Int = 2,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+
+    var filmstripBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var clickPosition by remember { mutableStateOf(0f) }
+
+    Timber.d("TimelineFilmstrip: durationMs=$durationMs, thumbsPerSecond=$thumbsPerSecond")
+
+    // Extract filmstrip when URI or duration changes
+    LaunchedEffect(uri, durationMs, thumbsPerSecond) {
+        if (durationMs > 0) {
+            isLoading = true
+            errorMessage = null
+            coroutineScope.launch {
+                try {
+                    val settings = com.chopcut.data.model.ThumbnailSettings(
+                        thumbsPerSecond = thumbsPerSecond,
+                        dimensionPreset = com.chopcut.data.model.DimensionPreset.SMALL  // 240x135
+                    )
+
+                    thumbnailExtractor.extractFilmstrip(
+                        uri = uri,
+                        durationMs = durationMs,
+                        settings = settings
+                    ).collect { (progress, bitmap) ->
+                        if (bitmap != null) {
+                            filmstripBitmap = bitmap
+                            Timber.d("Filmstrip loaded: ${bitmap.width}x${bitmap.height}")
+                        }
+                        if (progress.isComplete) {
+                            isLoading = false
+                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to load filmstrip")
+                    errorMessage = "Error: ${e.message}"
+                    isLoading = false
+                }
+            }
+        } else {
+            Timber.w("TimelineFilmstrip: durationMs is 0, skipping extraction")
+            isLoading = false
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(50.dp)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(
+                onClick = {
+                    if (filmstripBitmap != null) {
+                        // Calculate position in video based on click (simplified to center for now)
+                        val positionMs = durationMs / 2
+                        onPositionClick(positionMs)
+                    }
+                }
+            )
+    ) {
+        when {
+            isLoading -> {
+                Text(
+                    text = "Loading filmstrip...",
+                    modifier = Modifier.align(Alignment.Center),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            errorMessage != null -> {
+                Text(
+                    text = errorMessage ?: "Unknown error",
+                    modifier = Modifier.align(Alignment.Center),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            filmstripBitmap != null -> {
+                androidx.compose.foundation.Image(
+                    bitmap = filmstripBitmap!!.asImageBitmap(),
+                    contentDescription = "Video filmstrip",
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            else -> {
+                Text(
+                    text = "No filmstrip available",
+                    modifier = Modifier.align(Alignment.Center),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Trim range overlay
+        if (trimRange != null && durationMs > 0) {
+            TrimRangeOverlay(
+                trimRange = trimRange,
+                durationMs = durationMs,
+                height = 50.dp  // Altura fixa para TimelineFilmstrip
+            )
+        }
+    }
 }
