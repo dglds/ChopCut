@@ -46,12 +46,13 @@ tasks.register<Exec>("openLogMonitor") {
 
     val url = "http://localhost:3000"
 
+    val os = System.getProperty("os.name").lowercase()
     commandLine = when {
-        org.gradle.internal.os.OperatingSystem.current().isLinux ->
+        os.contains("linux") ->
             listOf("xdg-open", url)
-        org.gradle.internal.os.OperatingSystem.current().isMacOsX ->
+        os.contains("mac") ->
             listOf("open", url)
-        org.gradle.internal.os.OperatingSystem.current().isWindows ->
+        os.contains("win") ->
             listOf("cmd", "/c", "start", url)
         else -> listOf("echo", "Sistema operacional não suportado")
     }
@@ -124,12 +125,22 @@ tasks.register("installDebugWithMonitor") {
 // Play sound after installDebug (configurar após avaliação do projeto)
 afterEvaluate {
     tasks.findByName("installDebug")?.doLast {
-        val soundFile = file("${project.rootDir}/media/star_trek_communicator.wav")
-        if (soundFile.exists()) {
-            exec {
-                // Try to use paplay (PulseAudio) or aplay (ALSA) or afplay (OSX)
-                commandLine = listOf("bash", "-c", "paplay '${soundFile.absolutePath}' || aplay '${soundFile.absolutePath}' || afplay '${soundFile.absolutePath}' || true")
-                isIgnoreExitValue = true
+        val mediaDir = file("${project.rootDir}/media")
+        if (mediaDir.exists() && mediaDir.isDirectory) {
+            val soundFiles = mediaDir.listFiles { file ->
+                val name = file.name.lowercase()
+                name.endsWith(".wav") || name.endsWith(".mp3")
+            }
+
+            if (!soundFiles.isNullOrEmpty()) {
+                val randomSound = soundFiles.random()
+                println("🎶 Reproduzindo som aleatório: ${randomSound.name}")
+                exec {
+                    commandLine = listOf("bash", "-c", "paplay '${randomSound.absolutePath}' || aplay '${randomSound.absolutePath}' || afplay '${randomSound.absolutePath}' || true")
+                    isIgnoreExitValue = true
+                }
+            } else {
+                 println("⚠️ Nenhum arquivo de som encontrado em media/")
             }
         }
     }
