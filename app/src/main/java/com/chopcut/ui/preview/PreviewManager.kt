@@ -6,6 +6,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.SeekParameters
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -241,6 +242,7 @@ class PreviewManager(private val context: Context) {
         val player = exoPlayer ?: throw IllegalStateException("PreviewManager not initialized")
 
         Timber.v("PreviewManager: Seeking to ${positionMs}ms (isPlaying=${player.isPlaying})")
+        player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
         player.seekTo(positionMs)
         _currentPosition.value = positionMs
     }
