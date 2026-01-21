@@ -13,6 +13,8 @@ class TimelineScrollController(
     private val frameRate: Int = 30,
     private val onSeek: (Long) -> Unit
 ) {
+    private var lastEmittedTime: Long? = null
+
     /**
      * Atualiza o tempo baseado na posição do scroll.
      * Deve ser chamado sempre que o scroll mudar durante uma interação do usuário.
@@ -44,6 +46,11 @@ class TimelineScrollController(
 
         // Garante que o tempo esteja dentro dos limites e notifica
         val clampedTime = snappedTimeMs.coerceIn(0, durationMs)
-        onSeek(clampedTime)
+        
+        // Notify only if time changed (Optimization)
+        if (clampedTime != lastEmittedTime) {
+            lastEmittedTime = clampedTime
+            onSeek(clampedTime)
+        }
     }
 }
