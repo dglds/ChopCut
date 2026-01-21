@@ -256,8 +256,12 @@ class PreviewManager(private val context: Context) {
     fun seekTo(positionMs: Long) {
         val player = exoPlayer ?: throw IllegalStateException("PreviewManager not initialized")
 
-        Timber.v("PreviewManager: Seeking to ${positionMs}ms (isPlaying=${player.isPlaying}, scrubbing=$isScrubbing)")
+        Timber.v("PreviewManager: Seeking to ${positionMs}ms (state=${player.playbackState}, isPlaying=${player.isPlaying}, scrubbing=$isScrubbing)")
         
+        if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
+             player.prepare() // Ensure player is ready to seek
+        }
+
         // Use CLOSEST_SYNC for smoother scrubbing feedback
         player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
         player.seekTo(positionMs)
