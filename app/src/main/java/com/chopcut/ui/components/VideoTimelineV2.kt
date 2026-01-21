@@ -217,9 +217,13 @@ fun VideoTimelineV2(
             .collectLatest { timeMs ->
                 if (timeMs != null) {
                     Timber.v("TimelineScrub: seeking to ${timeMs}ms")
+                    // Bypass throttler for debugging
+                    onSeek(timeMs)
+                    /*
                     seekThrottler.throttle(timeMs) { pos ->
                         onSeek(pos)
                     }
+                    */
                 }
             }
     }
