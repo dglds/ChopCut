@@ -256,6 +256,11 @@ class PreviewManager(private val context: Context) {
     fun seekTo(positionMs: Long) {
         val player = exoPlayer ?: throw IllegalStateException("PreviewManager not initialized")
 
+        if (!player.isCurrentMediaItemSeekable) {
+            Timber.w("PreviewManager: Media item is NOT seekable!")
+            return
+        }
+
         Timber.v("PreviewManager: Seeking to ${positionMs}ms (state=${player.playbackState}, isPlaying=${player.isPlaying}, scrubbing=$isScrubbing)")
         
         if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
@@ -264,7 +269,8 @@ class PreviewManager(private val context: Context) {
 
         // Use CLOSEST_SYNC for smoother scrubbing feedback
         player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
-        player.seekTo(positionMs)
+        // Explicitly seek to current item index
+        player.seekTo(player.currentMediaItemIndex, positionMs)
         
         // Update state flow immediately for UI responsiveness
         _currentPosition.value = positionMs
