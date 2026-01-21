@@ -23,6 +23,15 @@ import com.chopcut.data.model.EditOperation
 import com.chopcut.data.player.EffectFactory
 
 /**
+ * Player playback state
+ */
+enum class PlayerState {
+    STOPPED,
+    PAUSED,
+    PLAYING
+}
+
+/**
  * Manages ExoPlayer for video preview playback
  */
 @UnstableApi
@@ -130,6 +139,10 @@ class PreviewManager(private val context: Context) {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
+    // Player state (stopped, paused, playing)
+    private val _playerState = MutableStateFlow(PlayerState.STOPPED)
+    val playerState: StateFlow<PlayerState> = _playerState.asStateFlow()
+
     private val _duration = MutableStateFlow(0L)
     val duration: StateFlow<Long> = _duration.asStateFlow()
 
@@ -196,6 +209,7 @@ class PreviewManager(private val context: Context) {
 
         player.play()
         _isPlaying.value = true
+        _playerState.value = PlayerState.PLAYING
         startPositionUpdates()
         Timber.d("Player started")
     }
@@ -208,8 +222,24 @@ class PreviewManager(private val context: Context) {
 
         player.pause()
         _isPlaying.value = false
+        _playerState.value = PlayerState.PAUSED
         stopPositionUpdates()
         Timber.d("Player paused")
+    }
+
+    /**
+     * Stop video and reset to beginning
+     */
+    fun stop() {
+        val player = exoPlayer ?: throw IllegalStateException("PreviewManager not initialized")
+
+        player.pause()
+        player.seekTo(0)
+        _isPlaying.value = false
+        _playerState.value = PlayerState.STOPPED
+        _currentPosition.value = 0L
+        stopPositionUpdates()
+        Timber.d("Player stopped")
     }
 
     /**
@@ -298,6 +328,7 @@ class PreviewManager(private val context: Context) {
     fun release() {
         exoPlayer?.let { player ->
             _isPlaying.value = false
+            _playerState.value = PlayerState.STOPPED
             _isReady.value = false
             player.release()
             exoPlayer = null

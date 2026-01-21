@@ -48,7 +48,6 @@ import androidx.media3.common.util.UnstableApi
 import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
-import com.chopcut.data.thumbnail.ThumbnailExtractor
 import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.components.VideoPreview
 import com.chopcut.ui.components.VideoTimelineV2
@@ -57,7 +56,9 @@ import com.chopcut.ui.filter.CropContent
 import com.chopcut.ui.components.EditorSplitLayout
 import com.chopcut.ui.components.ToolPanelContainer
 import com.chopcut.ui.preview.PreviewManager
+import com.chopcut.ui.preview.PlayerState
 import com.chopcut.ui.filter.FilterContent
+import com.chopcut.ui.filter.RotationContent
 import com.chopcut.ui.filter.SpeedContent
 import com.chopcut.ui.filter.rememberFilterState
 import com.chopcut.ui.filter.rememberSpeedState
@@ -75,7 +76,6 @@ fun EditorScreen(
     val context = LocalContext.current
 
     val previewManager = remember { PreviewManager(context) }
-    val thumbnailExtractor = remember { ThumbnailExtractor(context) }
 
     var trimRange by remember { mutableStateOf<TrimRange?>(null) }
     var currentVideoUri by remember { mutableStateOf(videoUri) }
@@ -102,6 +102,9 @@ fun EditorScreen(
 
     // Active Tool State from ViewModel
     val activeTool by editorViewModel.activeTool.collectAsStateWithLifecycle()
+
+    // Player state
+    val playerState by previewManager.playerState.collectAsStateWithLifecycle()
 
     // Estado da tela de exportação unificada
     var exportScreenState by remember { mutableStateOf(ExportScreenState.SELECTING_PRESET) }
@@ -260,10 +263,47 @@ fun EditorScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            VideoInfoBadge(icon = Icons.Default.PlayArrow, text = formatTime(info.durationMs))
-                            VideoInfoBadge(icon = Icons.Default.Edit, text = "${info.width}x${info.height}")
-                            VideoInfoBadge(icon = Icons.Default.Notifications, text = "${info.frameRate} fps")
-                            VideoInfoBadge(icon = Icons.Default.Share, text = "${info.bitrate / 1_000_000}M")
+                            VideoInfoBadge(
+                                icon = Icons.Default.PlayArrow,
+                                text = formatTime(info.durationMs),
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            VideoInfoBadge(
+                                icon = Icons.Default.Edit,
+                                text = "${info.width}x${info.height}",
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            VideoInfoBadge(
+                                icon = Icons.Default.Notifications,
+                                text = "${info.frameRate} fps",
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            VideoInfoBadge(
+                                icon = Icons.Default.Share,
+                                text = "${info.bitrate / 1_000_000}M",
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            // Player state badge
+                            val (playerStateIcon, playerStateColor) = when (playerState) {
+                                PlayerState.PLAYING -> Icons.Default.PlayArrow to Color(0xFF4CAF50) // Green
+                                PlayerState.PAUSED -> Icons.Default.Close to Color(0xFFFFEB3B) // Yellow
+                                PlayerState.STOPPED -> Icons.Default.Close to Color(0xFFF44336) // Red
+                            }
+                            val playerStateText = when (playerState) {
+                                PlayerState.PLAYING -> "Playing"
+                                PlayerState.PAUSED -> "Paused"
+                                PlayerState.STOPPED -> "Stopped"
+                            }
+                            VideoInfoBadge(
+                                icon = playerStateIcon,
+                                text = playerStateText,
+                                iconTint = playerStateColor,
+                                textTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         Spacer(Modifier.height(8.dp))
                     }
@@ -295,24 +335,18 @@ fun EditorScreen(
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                                 .padding(8.dp)
                         ) {
-                            // Timeline com Playhead Fixo (V2 - LazyRow + CropSnap-style)
+                            // Timeline com Playhead Fixo (V2 - Visualização Apenas)
                             if (videoDurationMs > 0) {
                                 VideoTimelineV2(
-                                    uri = currentVideoUri,
                                     durationMs = videoDurationMs,
-                                    videoWidth = videoInfo?.width ?: 0,
-                                    videoHeight = videoInfo?.height ?: 0,
                                     currentPositionMs = previewManager.currentPosition.collectAsState().value,
-                                    isPlaying = previewManager.isPlaying.collectAsState().value,
-                                    thumbnailExtractor = thumbnailExtractor,
-                                    trimRange = trimRange,
                                     onSeek = { positionMs ->
                                         previewManager.seekTo(positionMs)
                                     },
-                                    onDragStart = {
+                                    onScrubStart = {
                                         previewManager.setScrubbing(true)
                                     },
-                                    onDragEnd = {
+                                    onScrubEnd = {
                                         previewManager.setScrubbing(false)
                                     },
                                     modifier = Modifier.fillMaxWidth()
@@ -320,69 +354,23 @@ fun EditorScreen(
                             }
                         }
 
-                        val range = trimRange
-                        if (range != null) {
-                            Spacer(Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = formatTime(range.startMs),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = formatTime(range.endMs - range.startMs),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = formatTime(range.endMs),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            // Botões de trim por playhead
-                            Spacer(Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                Button(
-                                    onClick = { onSetTrimStart() },
-                                    modifier = Modifier.height(36.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Set Start", style = MaterialTheme.typography.labelSmall)
-                                        Text(formatTime(previewManager.currentPosition.collectAsState().value), style = MaterialTheme.typography.labelSmall)
-                                    }
-                                }
-
-                                Button(
-                                    onClick = { onResetTrim() },
-                                    modifier = Modifier.height(36.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.error
-                                    ),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text("Reset", style = MaterialTheme.typography.labelSmall)
-                                }
-
-                                Button(
-                                    onClick = { onSetTrimEnd() },
-                                    modifier = Modifier.height(36.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Set End", style = MaterialTheme.typography.labelSmall)
-                                        Text(formatTime(previewManager.currentPosition.collectAsState().value), style = MaterialTheme.typography.labelSmall)
-                                    }
-                                }
-                            }
+                        // Timer Centralizado
+                        Spacer(Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val currentPos = previewManager.currentPosition.collectAsState().value
+                            val seconds = currentPos / 1000
+                            val decis = (currentPos % 1000) / 100
+                            val timerText = String.format(java.util.Locale.US, "%02d,%d", seconds, decis)
+                            
+                            Text(
+                                text = timerText,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     } else {
                         Box(
@@ -436,6 +424,18 @@ fun EditorScreen(
                                                 if (op != null) {
                                                     editorViewModel.addOperation(op)
                                                 }
+                                            },
+                                            onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) }
+                                        )
+                                    }
+                                    EditorTool.ROTATE -> {
+                                        val currentRotations = edits.filterIsInstance<EditOperation.Rotation>()
+                                        val totalRotation = currentRotations.sumOf { it.degrees }
+
+                                        RotationContent(
+                                            initialRotation = totalRotation,
+                                            onConfirm = { op ->
+                                                editorViewModel.addOperation(op)
                                             },
                                             onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) }
                                         )
@@ -522,8 +522,7 @@ fun EditorScreen(
                     },
                     onTrimClick = { range ->
                         if (range != null) editorViewModel.applyTrim(range)
-                    },
-                    onRotateClick = { editorViewModel.testOperation("rotate") }
+                    }
                 )
             }
         )
@@ -625,8 +624,7 @@ private fun EditorControlsPanel(
     trimRange: TrimRange?,
     edits: List<EditOperation>,
     onApplyEdit: (EditOperation) -> Unit,
-    onTrimClick: (TrimRange?) -> Unit,
-    onRotateClick: () -> Unit
+    onTrimClick: (TrimRange?) -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -669,10 +667,10 @@ private fun EditorControlsPanel(
                 FeatureButton(
                     icon = Icons.Default.Refresh,
                     label = "Girar",
-                    isActive = false,
-                    isToolActive = false,
+                    isActive = edits.any { it is EditOperation.Rotation },
+                    isToolActive = activeTool == EditorTool.ROTATE,
                     enabled = !isExporting,
-                    onClick = onRotateClick
+                    onClick = { onToolChange(EditorTool.ROTATE) }
                 )
 
                 // Filter
@@ -779,7 +777,9 @@ fun FeatureButton(
 @Composable
 fun VideoInfoBadge(
     icon: ImageVector,
-    text: String
+    text: String,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    textTint: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
     Row(
         horizontalArrangement = Arrangement.Center,
@@ -790,13 +790,13 @@ fun VideoInfoBadge(
             icon,
             contentDescription = null,
             modifier = Modifier.size(12.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = iconTint
         )
         Spacer(Modifier.width(3.dp))
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = textTint
         )
     }
 }

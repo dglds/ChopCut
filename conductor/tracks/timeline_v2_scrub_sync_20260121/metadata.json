@@ -1,0 +1,8 @@
+{
+  "track_id": "timeline_v2_scrub_sync_20260121",
+  "type": "bug",
+  "status": "new",
+  "created_at": "2026-01-21T15:30:00Z",
+  "updated_at": "2026-01-21T15:30:00Z",
+  "description": "Ajustar a sincronia da timeline v2 para reposder corretamente os eventos de scrub"
+}

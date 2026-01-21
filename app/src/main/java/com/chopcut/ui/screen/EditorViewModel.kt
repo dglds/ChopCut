@@ -38,6 +38,7 @@ enum class EditorTool {
     NONE,
     TRIM,
     CROP,
+    ROTATE,
     FILTER,
     SPEED,
     VOLUME

@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import com.chopcut.data.model.EditOperation
 
 /**
@@ -61,173 +60,164 @@ fun CropContent(
 
     var selectedRatio by remember { mutableStateOf("Original") }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
+    // Componente inline sem Dialog
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Cortar Vídeo",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Botão Reset
+                IconButton(
+                    onClick = {
+                        cropRect = RectF(0f, 0f, 1f, 1f)
+                        selectedRatio = "Original"
+                    },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Reset",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                // Botão Confirmar
+                IconButton(
+                    onClick = {
+                        // Verificar se o crop é diferente de 100%
+                        val isFullCrop = cropRect.left == 0f &&
+                                cropRect.top == 0f &&
+                                cropRect.right == 1f &&
+                                cropRect.bottom == 1f
+
+                        if (isFullCrop) {
+                            // Remove o crop (null)
+                            onConfirm(null)
+                        } else {
+                            // Converte de coordenadas normalizadas para pixels
+                            val left = (cropRect.left * videoWidth).toInt()
+                            val top = (cropRect.top * videoHeight).toInt()
+                            val right = (cropRect.right * videoWidth).toInt()
+                            val bottom = (cropRect.bottom * videoHeight).toInt()
+
+                            onConfirm(EditOperation.Crop(left, top, right, bottom))
+                        }
+                        onDismiss()
+                    },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Confirmar",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Preview do crop (visualização simplificada)
+        CropPreview(
+            cropRect = cropRect,
+            aspectRatio = aspectRatio,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(16.dp),
-            tonalElevation = 6.dp
+                .height(150.dp)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = RoundedCornerShape(8.dp)
+                )
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // Info do Crop
+        CropInfoDisplay(
+            cropRect = cropRect,
+            videoWidth = videoWidth,
+            videoHeight = videoHeight
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // Aspect Ratio Presets
+        Text(
+            text = "Proporção",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Cortar Vídeo",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+            aspectRatios.forEach { (label, ratio) ->
+                FilterChip(
+                    selected = selectedRatio == label,
+                    onClick = {
+                        selectedRatio = label
+                        cropRect = calculateCropForAspectRatio(ratio, aspectRatio)
+                    },
+                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Botões de ajuste fino
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = {
+                    // Expande crop em 5%
+                    val expandAmount = 0.05f
+                    cropRect = RectF(
+                        (cropRect.left - expandAmount).coerceAtLeast(0f),
+                        (cropRect.top - expandAmount).coerceAtLeast(0f),
+                        (cropRect.right + expandAmount).coerceAtMost(1f),
+                        (cropRect.bottom + expandAmount).coerceAtMost(1f)
                     )
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Expandir", style = MaterialTheme.typography.labelSmall)
+            }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Botão Reset
-                        IconButton(
-                            onClick = {
-                                cropRect = RectF(0f, 0f, 1f, 1f)
-                                selectedRatio = "Original"
-                            },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Reset",
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
-
-                        // Botão Confirmar
-                        IconButton(
-                            onClick = {
-                                // Verificar se o crop é diferente de 100%
-                                val isFullCrop = cropRect.left == 0f &&
-                                        cropRect.top == 0f &&
-                                        cropRect.right == 1f &&
-                                        cropRect.bottom == 1f
-
-                                if (isFullCrop) {
-                                    // Remove o crop (null)
-                                    onConfirm(null)
-                                } else {
-                                    // Converte de coordenadas normalizadas para pixels
-                                    val left = (cropRect.left * videoWidth).toInt()
-                                    val top = (cropRect.top * videoHeight).toInt()
-                                    val right = (cropRect.right * videoWidth).toInt()
-                                    val bottom = (cropRect.bottom * videoHeight).toInt()
-
-                                    onConfirm(EditOperation.Crop(left, top, right, bottom))
-                                }
-                                onDismiss()
-                            },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Confirmar",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                // Preview do crop (visualização simplificada)
-                CropPreview(
-                    cropRect = cropRect,
-                    aspectRatio = aspectRatio,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outline,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                // Info do Crop
-                CropInfoDisplay(
-                    cropRect = cropRect,
-                    videoWidth = videoWidth,
-                    videoHeight = videoHeight
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                // Aspect Ratio Presets
-                Text(
-                    text = "Proporção",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    aspectRatios.forEach { (label, ratio) ->
-                        FilterChip(
-                            selected = selectedRatio == label,
-                            onClick = {
-                                selectedRatio = label
-                                cropRect = calculateCropForAspectRatio(ratio, aspectRatio)
-                            },
-                            label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                // Botões de ajuste fino
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            // Expande crop em 5%
-                            val expandAmount = 0.05f
-                            cropRect = RectF(
-                                (cropRect.left - expandAmount).coerceAtLeast(0f),
-                                (cropRect.top - expandAmount).coerceAtLeast(0f),
-                                (cropRect.right + expandAmount).coerceAtMost(1f),
-                                (cropRect.bottom + expandAmount).coerceAtMost(1f)
-                            )
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Expandir", style = MaterialTheme.typography.labelSmall)
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            // Recolhe crop em 5%
-                            val shrinkAmount = 0.05f
-                            cropRect = RectF(
-                                (cropRect.left + shrinkAmount).coerceAtMost(0.45f),
-                                (cropRect.top + shrinkAmount).coerceAtMost(0.45f),
-                                (cropRect.right - shrinkAmount).coerceAtLeast(0.55f),
-                                (cropRect.bottom - shrinkAmount).coerceAtLeast(0.55f)
-                            )
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Recolher", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
+            OutlinedButton(
+                onClick = {
+                    // Recolhe crop em 5%
+                    val shrinkAmount = 0.05f
+                    cropRect = RectF(
+                        (cropRect.left + shrinkAmount).coerceAtMost(0.45f),
+                        (cropRect.top + shrinkAmount).coerceAtMost(0.45f),
+                        (cropRect.right - shrinkAmount).coerceAtLeast(0.55f),
+                        (cropRect.bottom - shrinkAmount).coerceAtLeast(0.55f)
+                    )
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Recolher", style = MaterialTheme.typography.labelSmall)
             }
         }
     }
