@@ -310,9 +310,11 @@ fun EditorScreen(
                                         previewManager.seekTo(positionMs)
                                     },
                                     onDragStart = {
-                                        previewManager.pause()
+                                        previewManager.setScrubbing(true)
                                     },
-                                    onDragEnd = {},
+                                    onDragEnd = {
+                                        previewManager.setScrubbing(false)
+                                    },
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }

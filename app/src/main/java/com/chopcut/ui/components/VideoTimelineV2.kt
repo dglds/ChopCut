@@ -206,9 +206,9 @@ fun VideoTimelineV2(
                         thumbSizePx,
                         TimelineConfigV2.THUMB_DURATION_MS,
                         spacerWidthPx
-                    )
+                    ).coerceIn(0, durationMs)
 
-                    timeMs.coerceIn(0, durationMs)
+                    timeMs
                 } else {
                     null
                 }

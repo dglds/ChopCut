@@ -31,7 +31,21 @@ class PreviewManager(private val context: Context) {
     var exoPlayer: ExoPlayer? = null
         private set
 
-    // ... (existing code)
+    private var isScrubbing = false
+
+    /**
+     * Set scrubbing state to avoid position update conflicts
+     */
+    fun setScrubbing(scrubbing: Boolean) {
+        this.isScrubbing = scrubbing
+        if (scrubbing) {
+            exoPlayer?.pause()
+            _isPlaying.value = false
+            stopPositionUpdates()
+        } else if (_isPlaying.value) {
+            startPositionUpdates()
+        }
+    }
 
     /**
      * Apply edit operations as video effects
@@ -213,6 +227,7 @@ class PreviewManager(private val context: Context) {
      * Start periodic position updates
      */
     private fun startPositionUpdates() {
+        if (isScrubbing) return
         stopPositionUpdates()
         updateJob = updateScope.launch {
             while (true) {
@@ -241,9 +256,13 @@ class PreviewManager(private val context: Context) {
     fun seekTo(positionMs: Long) {
         val player = exoPlayer ?: throw IllegalStateException("PreviewManager not initialized")
 
-        Timber.v("PreviewManager: Seeking to ${positionMs}ms (isPlaying=${player.isPlaying})")
-        player.setSeekParameters(SeekParameters.EXACT)
+        Timber.v("PreviewManager: Seeking to ${positionMs}ms (isPlaying=${player.isPlaying}, scrubbing=$isScrubbing)")
+        
+        // Use CLOSEST_SYNC for smoother scrubbing feedback
+        player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
         player.seekTo(positionMs)
+        
+        // Update state flow immediately for UI responsiveness
         _currentPosition.value = positionMs
     }
 
