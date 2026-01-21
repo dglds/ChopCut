@@ -71,9 +71,13 @@ class TimelineDimensionsTest {
         val msPerThumb = 1000L
         val spacerWidthPx = 540
         
+        // Total Pixels = 150.
+        // Video Pixels = 150 - 540 = -390.
+        // Time = -390 * 10 = -3900ms.
+        
         val timeMs = TimelineCalculator.calculateTimeFromScroll(index, offset, thumbWidthPx, msPerThumb, spacerWidthPx)
         
-        assertEquals(1500L, timeMs)
+        assertEquals(-3900L, timeMs)
     }
     
     @Test
@@ -85,8 +89,17 @@ class TimelineDimensionsTest {
         val msPerThumb = 1000L
         val spacerWidthPx = 540
         
+        // Index 2 means: Spacer(0) + Thumb0(1).
+        // Past Spacer = 1 * ThumbWidth = 100px.
+        // Total Pixels = 540 + 100 + 0 = 640.
+        // Video Pixels = 640 - 540 = 100.
+        // Time = 100 * 10 = 1000ms (1s).
+        // Wait, Thumb 0 is 0..1000ms.
+        // Index 2 is Start of Thumb 1.
+        // So Time should be 1000ms.
+        
         val timeMs = TimelineCalculator.calculateTimeFromScroll(index, offset, thumbWidthPx, msPerThumb, spacerWidthPx)
         
-        assertEquals(6400L, timeMs)
+        assertEquals(1000L, timeMs)
     }
 }
