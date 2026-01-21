@@ -1,0 +1,57 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="https://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+<title>TrekCore.com :: Error</title>
+<style type="text/css">
+<!--
+body {
+	background-color: #807c6c;
+	background-image: url("404-bg.jpg");
+	margin-top: 10px;
+}
+.style1 {
+	font-family: Arial;
+	font-size: 24px;
+	font-weight: bold;
+	color: #FFFFFF;
+}
+.style2 {
+	font-family: Arial;
+	font-size: 16px;
+	color: #FFFFFF;
+}
+.style3 {
+	font-family: Arial;
+	color: #FFFFFF;
+	font-size:13px;
+}
+a:link {
+	color: #F3E113;
+	text-decoration: none;
+}
+a:visited {
+	text-decoration: none;
+	color: #F3E113;
+}
+a:hover {
+	text-decoration: none;
+	color: #FD9D33;
+}
+a:active {
+	text-decoration: none;
+	color: #F3E113;
+}
+-->
+</style></head>
+
+<body>
+<div align="center">
+  <p><a href="https://www.trekcore.com"><img src="https://www.trekcore.com/images/logo_trekcore.png" border="0" /></a></p>
+  <p class="style1">We can't find that page!</p>
+  <p class="style2">(Either there's something wrong with you, or there's something wrong with the universe!)</p>
+  <p class="style3"><b><a href="javascript: history.go(-1)">Click here</a></b> to return to the previous page, or <a href="https://blog.trekcore.com/contact/"><b>let us know about a broken link.</b></a>
+  <p><img src="div_spacer.png" border="0" /></p>
+  <p class="style3">Some of our galleries have recently changed! Follow these new links for our <a href="https://tos.trekcore.com/gallery/"><b><em>Original Series</em></b></a> or <a href="https://tng.trekcore.com/gallery/"><b><em>Next Generation</b></a></em> Blu-ray screencaps.</p>
+</body>
+</html>

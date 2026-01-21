@@ -14,6 +14,7 @@ class PreferencesManager(context: Context) {
         private const val PREFS_NAME = "chopcut_prefs"
         private const val KEY_IS_FIRST_RUN = "is_first_run"
         private const val KEY_THEME_MODE = "theme_mode" // 0=System, 1=Light, 2=Dark
+        private const val KEY_THUMBNAIL_CACHE_ENABLED = "thumbnail_cache_enabled" // Cache de thumbnails
     }
 
     /**
@@ -29,4 +30,11 @@ class PreferencesManager(context: Context) {
     var themeMode: Int
         get() = prefs.getInt(KEY_THEME_MODE, 0)
         set(value) = prefs.edit().putInt(KEY_THEME_MODE, value).apply()
+
+    /**
+     * Cache de thumbnails habilitado (INATIVO por padrão)
+     */
+    var thumbnailCacheEnabled: Boolean
+        get() = prefs.getBoolean(KEY_THUMBNAIL_CACHE_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_THUMBNAIL_CACHE_ENABLED, value).apply()
 }

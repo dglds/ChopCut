@@ -121,6 +121,20 @@ tasks.register("installDebugWithMonitor") {
     }
 }
 
+// Play sound after installDebug (configurar após avaliação do projeto)
+afterEvaluate {
+    tasks.findByName("installDebug")?.doLast {
+        val soundFile = file("${project.rootDir}/media/star_trek_communicator.wav")
+        if (soundFile.exists()) {
+            exec {
+                // Try to use paplay (PulseAudio) or aplay (ALSA) or afplay (OSX)
+                commandLine = listOf("bash", "-c", "paplay '${soundFile.absolutePath}' || aplay '${soundFile.absolutePath}' || afplay '${soundFile.absolutePath}' || true")
+                isIgnoreExitValue = true
+            }
+        }
+    }
+}
+
 // ==================== End Log Monitor Tasks ====================
 
 
@@ -134,9 +148,7 @@ plugins {
 
 android {
     namespace = "com.chopcut"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.chopcut"
@@ -184,7 +196,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
     // ProcessLifecycleOwner
-    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+    implementation(libs.androidx.lifecycle.process)
 
     // Navigation
     implementation(libs.androidx.navigation.compose)
@@ -215,7 +227,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    androidTestImplementation(libs.kotlinx.coroutines.test)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

@@ -37,6 +37,7 @@ import timber.log.Timber
 enum class EditorTool {
     NONE,
     TRIM,
+    CROP,
     FILTER,
     SPEED,
     VOLUME

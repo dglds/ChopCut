@@ -220,7 +220,7 @@ class PreviewManager(private val context: Context) {
                     // Update audio fade in real-time
                     updateAudioFade(player.currentPosition)
                 }
-                delay(100) // Update 10 times per second
+                delay(16) // Update ~60 times per second for smooth timeline
             }
         }
     }

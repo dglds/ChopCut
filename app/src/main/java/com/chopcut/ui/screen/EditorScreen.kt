@@ -49,22 +49,18 @@ import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
 import com.chopcut.data.thumbnail.ThumbnailExtractor
-import com.chopcut.ui.components.TimelineMode
 import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.components.VideoPreview
-import com.chopcut.ui.components.VideoTimeline
-import com.chopcut.ui.components.TimelineFilmstrip
-import com.chopcut.ui.components.WaveForm
+import com.chopcut.ui.components.VideoTimelineV2
 import com.chopcut.ui.filter.TrimContent
+import com.chopcut.ui.filter.CropContent
 import com.chopcut.ui.components.EditorSplitLayout
 import com.chopcut.ui.components.ToolPanelContainer
 import com.chopcut.ui.preview.PreviewManager
 import com.chopcut.ui.filter.FilterContent
 import com.chopcut.ui.filter.SpeedContent
-import com.chopcut.ui.filter.AudioControlContent
 import com.chopcut.ui.filter.rememberFilterState
 import com.chopcut.ui.filter.rememberSpeedState
-import com.chopcut.ui.filter.rememberAudioState
 import timber.log.Timber
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -81,7 +77,6 @@ fun EditorScreen(
     val previewManager = remember { PreviewManager(context) }
     val thumbnailExtractor = remember { ThumbnailExtractor(context) }
 
-    var timelineMode by remember { mutableStateOf(TimelineMode.INDIVIDUAL) }
     var trimRange by remember { mutableStateOf<TrimRange?>(null) }
     var currentVideoUri by remember { mutableStateOf(videoUri) }
     var videoDurationMs by remember { mutableLongStateOf(0L) }
@@ -96,7 +91,6 @@ fun EditorScreen(
 
     val project by editorViewModel.project.collectAsStateWithLifecycle()
     val videoInfo by editorViewModel.videoInfo.collectAsStateWithLifecycle()
-    val waveformData by editorViewModel.waveformData.collectAsStateWithLifecycle()
     val exportResult by editorViewModel.exportResult.collectAsStateWithLifecycle()
     val isExporting by editorViewModel.isExporting.collectAsStateWithLifecycle()
     val exportProgress by editorViewModel.exportProgress.collectAsStateWithLifecycle()
@@ -144,6 +138,27 @@ fun EditorScreen(
         }
     }
 
+    // Handlers de trim por playhead
+    fun onSetTrimStart() {
+        val currentPos = previewManager.currentPosition.value
+        val endMs = trimRange?.endMs ?: videoDurationMs
+        trimRange = TrimRange(currentPos, endMs.coerceAtLeast(currentPos))
+    }
+
+    fun onSetTrimEnd() {
+        val currentPos = previewManager.currentPosition.value
+        val startMs = trimRange?.startMs ?: 0L
+        trimRange = TrimRange(startMs.coerceAtMost(currentPos), currentPos)
+    }
+
+    fun onResetTrim() {
+        trimRange = if (videoDurationMs > 0) {
+            TrimRange(0L, videoDurationMs)
+        } else {
+            null
+        }
+    }
+
     // Gerenciar estado de exportação baseado no resultado
     LaunchedEffect(exportResult) {
         val result = exportResult
@@ -169,14 +184,12 @@ fun EditorScreen(
 
     // Estados ativos das features
     val hasTrim by remember { derivedStateOf { edits.any { it is EditOperation.Trim } } }
-    val hasFilter by remember { derivedStateOf { 
+    val hasCrop by remember { derivedStateOf { edits.any { it is EditOperation.Crop } } }
+    val hasFilter by remember { derivedStateOf {
         val last = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()
         last != null && last.filterType != FilterType.NONE
     } }
     val hasSpeed by remember { derivedStateOf { edits.any { it is EditOperation.Speed && it.speed != 1.0f } } }
-    val hasVolume by remember { derivedStateOf {
-        edits.any { it is EditOperation.Volume && it.volume != 1.0f } }
-    }
 
     Scaffold(
         topBar = {
@@ -282,128 +295,29 @@ fun EditorScreen(
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                                 .padding(8.dp)
                         ) {
-                            // Timeline Mode Selector
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Timeline: ",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.width(8.dp))
-
-                                // Use regular buttons instead of SegmentedButton
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Button(
-                                        onClick = { timelineMode = TimelineMode.INDIVIDUAL },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (timelineMode == TimelineMode.INDIVIDUAL) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.secondary
-                                            }
-                                        ),
-                                        modifier = Modifier.height(32.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text("Individual", style = MaterialTheme.typography.labelSmall)
-                                    }
-                                    Button(
-                                        onClick = { timelineMode = TimelineMode.FILMSTRIP },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (timelineMode == TimelineMode.FILMSTRIP) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.secondary
-                                            }
-                                        ),
-                                        modifier = Modifier.height(32.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text("Filmstrip", style = MaterialTheme.typography.labelSmall)
-                                    }
-                                }
-                            }
-
-                            Spacer(Modifier.height(8.dp))
-
+                            // Timeline com Playhead Fixo (V2 - LazyRow + CropSnap-style)
                             if (videoDurationMs > 0) {
-                                when (timelineMode) {
-                                    TimelineMode.INDIVIDUAL -> {
-                                        VideoTimeline(
-                                            uri = currentVideoUri,
-                                            durationMs = videoDurationMs,
-                                            thumbnailExtractor = thumbnailExtractor,
-                                            trimRange = trimRange,
-                                            onTrimRangeChange = { newRange ->
-                                                trimRange = newRange
-                                            },
-                                            onPositionClick = { positionMs ->
-                                                previewManager.pause()
-                                                previewManager.seekTo(positionMs)
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                    TimelineMode.FILMSTRIP -> {
-                                        TimelineFilmstrip(
-                                            uri = currentVideoUri,
-                                            durationMs = videoDurationMs,
-                                            thumbnailExtractor = thumbnailExtractor,
-                                            trimRange = trimRange,
-                                            onTrimRangeChange = { newRange ->
-                                                trimRange = newRange
-                                            },
-                                            onPositionClick = { positionMs ->
-                                                previewManager.pause()
-                                                previewManager.seekTo(positionMs)
-                                            },
-                                            thumbsPerSecond = 2,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Waveform Integrated below Timeline
-                            if (waveformData.amplitudes.isNotEmpty()) {
-                                Spacer(Modifier.height(4.dp))
-                                // Extract fade settings
-                                val fadeOp = edits.filterIsInstance<EditOperation.Fade>().lastOrNull()
-                                val fadeInMs = fadeOp?.fadeInMs ?: 0L
-                                val fadeOutMs = fadeOp?.fadeOutMs ?: 0L
-                                val duration = videoInfo?.durationMs ?: 0L
-
-                                WaveForm(
-                                    amplitudes = waveformData.amplitudes,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(40.dp),
-                                    fadeInMs = fadeInMs,
-                                    fadeOutMs = fadeOutMs,
-                                    durationMs = duration
+                                VideoTimelineV2(
+                                    uri = currentVideoUri,
+                                    durationMs = videoDurationMs,
+                                    videoWidth = videoInfo?.width ?: 0,
+                                    videoHeight = videoInfo?.height ?: 0,
+                                    currentPositionMs = previewManager.currentPosition.collectAsState().value,
+                                    isPlaying = previewManager.isPlaying.collectAsState().value,
+                                    thumbnailExtractor = thumbnailExtractor,
+                                    trimRange = trimRange,
+                                    onSeek = { positionMs ->
+                                        previewManager.seekTo(positionMs)
+                                    },
+                                    onDragStart = {
+                                        previewManager.pause()
+                                    },
+                                    onDragEnd = {},
+                                    modifier = Modifier.fillMaxWidth()
                                 )
-                            } else {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = "Gerando forma de onda...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    LinearProgressIndicator(modifier = Modifier.width(120.dp))
-                                }
                             }
                         }
-                        
+
                         val range = trimRange
                         if (range != null) {
                             Spacer(Modifier.height(4.dp))
@@ -427,31 +341,47 @@ fun EditorScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                        }
 
-                        // Timeline Filmstrip (para comparação visual)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = "Filmstrip (sem gaps):",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        TimelineFilmstrip(
-                            uri = currentVideoUri,
-                            durationMs = videoDurationMs,
-                            thumbnailExtractor = thumbnailExtractor,
-                            trimRange = trimRange,
-                            onTrimRangeChange = { newRange ->
-                                trimRange = newRange
-                            },
-                            onPositionClick = { positionMs ->
-                                previewManager.pause()
-                                previewManager.seekTo(positionMs)
-                            },
-                            thumbsPerSecond = 2,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                            // Botões de trim por playhead
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                Button(
+                                    onClick = { onSetTrimStart() },
+                                    modifier = Modifier.height(36.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("Set Start", style = MaterialTheme.typography.labelSmall)
+                                        Text(formatTime(previewManager.currentPosition.collectAsState().value), style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+
+                                Button(
+                                    onClick = { onResetTrim() },
+                                    modifier = Modifier.height(36.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Reset", style = MaterialTheme.typography.labelSmall)
+                                }
+
+                                Button(
+                                    onClick = { onSetTrimEnd() },
+                                    modifier = Modifier.height(36.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("Set End", style = MaterialTheme.typography.labelSmall)
+                                        Text(formatTime(previewManager.currentPosition.collectAsState().value), style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         Box(
                             modifier = Modifier
@@ -485,6 +415,29 @@ fun EditorScreen(
                                             }
                                         )
                                     }
+                                    EditorTool.CROP -> {
+                                        val currentCrop = edits.filterIsInstance<EditOperation.Crop>().lastOrNull()
+                                        val initialCropRect = currentCrop?.let {
+                                            android.graphics.RectF(
+                                                it.left / (videoInfo?.width ?: 1).toFloat(),
+                                                it.top / (videoInfo?.height ?: 1).toFloat(),
+                                                it.right / (videoInfo?.width ?: 1).toFloat(),
+                                                it.bottom / (videoInfo?.height ?: 1).toFloat()
+                                            )
+                                        }
+
+                                        CropContent(
+                                            initialCrop = initialCropRect,
+                                            videoWidth = videoInfo?.width ?: 0,
+                                            videoHeight = videoInfo?.height ?: 0,
+                                            onConfirm = { op ->
+                                                if (op != null) {
+                                                    editorViewModel.addOperation(op)
+                                                }
+                                            },
+                                            onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) }
+                                        )
+                                    }
                                     EditorTool.FILTER -> {
                                         val currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()
                                         val state = rememberFilterState(currentFilter)
@@ -514,18 +467,6 @@ fun EditorScreen(
                                                 else if (state.selectedValue > 1.0f) Color(0xFFFF9800)
                                                 else MaterialTheme.colorScheme.primary
                                             }
-                                        )
-                                    }
-                                    EditorTool.VOLUME -> {
-                                        val currentVolume = edits.filterIsInstance<EditOperation.Volume>().lastOrNull()
-                                        val currentFade = edits.filterIsInstance<EditOperation.Fade>().lastOrNull()
-                                        val state = rememberAudioState(currentVolume, currentFade)
-                                        AudioControlContent(
-                                            audioState = state,
-                                            onConfirm = { ops ->
-                                                ops.forEach { op -> editorViewModel.addOperation(op) }
-                                            },
-                                            onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) }
                                         )
                                     }
                                     else -> { /* No content */ }
@@ -568,21 +509,14 @@ fun EditorScreen(
                     duration = videoInfo?.durationMs ?: 0L,
                     isExporting = isExporting,
                     hasTrim = hasTrim,
+                    hasCrop = hasCrop,
                     hasFilter = hasFilter,
                     hasSpeed = hasSpeed,
-                    hasVolume = hasVolume,
                     videoInfo = videoInfo,
                     trimRange = trimRange,
                     edits = edits,
                     onApplyEdit = { op ->
                         editorViewModel.addOperation(op)
-                        // Do not close the tool panel automatically on Apply, as per request for "Quick Switching" and "Refining"
-                        // Or should we? Spec: "O painel de controles possui ação para Aplicar mudanças."
-                        // It doesn't explicitly say "Close on Apply". But typically "Apply" means "Commit and Close".
-                        // However, spec also says: "A navegação entre ferramentas é possível sem fechar o painel atual (troca rápida)."
-                        // If I apply, I probably want to see the result and maybe adjust.
-                        // I'll keep it open for now.
-                        // editorViewModel.setActiveTool(EditorTool.NONE) // Removed auto-close
                     },
                     onTrimClick = { range ->
                         if (range != null) editorViewModel.applyTrim(range)
@@ -682,9 +616,9 @@ private fun EditorControlsPanel(
     duration: Long,
     isExporting: Boolean,
     hasTrim: Boolean,
+    hasCrop: Boolean,
     hasFilter: Boolean,
     hasSpeed: Boolean,
-    hasVolume: Boolean,
     videoInfo: com.chopcut.data.model.VideoInfo?,
     trimRange: TrimRange?,
     edits: List<EditOperation>,
@@ -720,6 +654,15 @@ private fun EditorControlsPanel(
                     enabled = !isExporting,
                     onClick = { onToolChange(EditorTool.TRIM) }
                 )
+                // Crop
+                FeatureButton(
+                    icon = Icons.Default.Create,
+                    label = "Crop",
+                    isActive = hasCrop,
+                    isToolActive = activeTool == EditorTool.CROP,
+                    enabled = !isExporting,
+                    onClick = { onToolChange(EditorTool.CROP) }
+                )
                 // Rotate
                 FeatureButton(
                     icon = Icons.Default.Refresh,
@@ -748,16 +691,6 @@ private fun EditorControlsPanel(
                     isToolActive = activeTool == EditorTool.SPEED,
                     enabled = !isExporting,
                     onClick = { onToolChange(EditorTool.SPEED) }
-                )
-
-                // Volume
-                FeatureButton(
-                    icon = Icons.Default.Notifications,
-                    label = "Volume",
-                    isActive = hasVolume,
-                    isToolActive = activeTool == EditorTool.VOLUME,
-                    enabled = !isExporting,
-                    onClick = { onToolChange(EditorTool.VOLUME) }
                 )
             }
         }
