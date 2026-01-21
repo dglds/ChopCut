@@ -129,6 +129,8 @@ fun VideoTimelineV2(
     var timelineState by remember { mutableStateOf<TimelineState>(TimelineState.Idle) }
     var scrubbingState by remember { mutableStateOf<ScrubbingState>(ScrubbingState.Idle) }
 
+    val currentPosState = androidx.compose.runtime.rememberUpdatedState(currentPositionMs)
+
     // Seek Throttler para performance (~30fps)
     val seekThrottler = rememberSeekThrottler(delayMs = 33L)
 
@@ -174,7 +176,7 @@ fun VideoTimelineV2(
     // Sync completo: Player ↔ Timeline (SIMPLIFICADO)
     LaunchedEffect(Unit) {
         // Monitorar posição do player e atualizar timeline
-        snapshotFlow { currentPositionMs }
+        snapshotFlow { currentPosState.value }
             .collect { posMs ->
                 if (!isUserInteracting && thumbSizePx > 0 && screenWidthPx > 0 && durationMs > 0) {
                     val spacerWidthPx = screenWidthPx / 2
