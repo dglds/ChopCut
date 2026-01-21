@@ -47,7 +47,7 @@ object TimelineCalculator {
         }
         
         // Convert to Time
-        val videoPixels = totalPixels - spacerWidthPx
+        val videoPixels = totalPixels
         return (videoPixels * msPerThumb / thumbWidthPx)
     }
 }

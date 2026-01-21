@@ -33,8 +33,8 @@ class TimelineScrubbingTest {
         // 40ms = 4px past spacer.
         // Index 0 (Spacer item).
         // Scroll Offset = 504.
-        // Total Pixels = 504.
-        // Video Pixels = 504 - 500 = 4px.
+        // Total Pixels = 4.
+        // Video Pixels = 4.
         // Raw Time = 40ms.
         
         // Target: 30fps => 33.33ms frames.
@@ -42,7 +42,7 @@ class TimelineScrubbingTest {
         // Expected: 33ms.
         
         val index = 0
-        val offset = 504
+        val offset = 4
         
         controller.onScrollChanged(index, offset, thumbSizePx, screenWidthPx)
         
