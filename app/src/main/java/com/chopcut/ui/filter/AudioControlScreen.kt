@@ -69,8 +69,6 @@ class AudioState(
     var fadeInMs by mutableStateOf(fadeInMs)
     var fadeOutMs by mutableStateOf(fadeOutMs)
 
-    var selectedTab by mutableStateOf(0) // 0 = Volume, 1 = Fade
-
     val currentVolumePreset: VolumePreset
         get() = VOLUME_PRESETS.minByOrNull { kotlin.math.abs(it.value - volume) }
             ?: VOLUME_PRESETS[4]
@@ -95,7 +93,7 @@ class AudioState(
 }
 
 /**
- * Content for Audio Control (Volume + Fade).
+ * Content for Audio Control (Volume).
  */
 @Composable
 fun AudioControlContent(
@@ -118,34 +116,18 @@ fun AudioControlContent(
             .fillMaxWidth()
             .padding(16.dp)
     ) {
-        // Tabs
-        TabRow(
-            selectedTabIndex = audioState.selectedTab,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clip(RoundedCornerShape(12.dp))
-        ) {
-            Tab(
-                selected = audioState.selectedTab == 0,
-                onClick = { audioState.selectedTab = 0 },
-                text = { Text("Volume") }
-            )
-            Tab(
-                selected = audioState.selectedTab == 1,
-                onClick = { audioState.selectedTab = 1 },
-                text = { Text("Fade") }
-            )
-        }
+        Text(
+            text = "Configurações de Áudio",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
 
-        Spacer(Modifier.height(16.dp))
-
-        if (audioState.selectedTab == 0) {
-            // Volume Tab
-            VolumeControl(audioState, { getDisplayColor() })
-        } else {
-            // Fade Tab
-            FadeControl(audioState)
-        }
+        Text(
+            text = "Nenhum ajuste disponível no momento.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
         Spacer(Modifier.height(24.dp))
 
@@ -154,69 +136,8 @@ fun AudioControlContent(
             onClick = { onConfirm(audioState.toEditOperations()) },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Aplicar")
+            Text("Voltar")
         }
-    }
-}
-
-@Composable
-fun VolumeControl(
-    audioState: AudioState,
-    getDisplayColor: @Composable () -> Color
-) {
-    Column {
-        // Slider
-        VolumeSlider(audioState = audioState, getDisplayColor = getDisplayColor)
-
-        Spacer(Modifier.height(24.dp))
-
-        Text(
-            text = "Presets",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(12.dp))
-        VolumePresetGrid(
-            selectedValue = audioState.volume,
-            onPresetSelected = { audioState.applyVolumePreset(it) }
-        )
-    }
-}
-
-@Composable
-fun FadeControl(
-    audioState: AudioState
-) {
-    Column {
-        // Fade In
-        Text(
-            text = "Fade In: ${(audioState.fadeInMs / 1000f)}s",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Slider(
-            value = audioState.fadeInMs.toFloat(),
-            onValueChange = { audioState.fadeInMs = it.toLong() },
-            valueRange = 0f..5000f, // Max 5s
-            steps = 49, // 0.1s steps approx
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        // Fade Out
-        Text(
-            text = "Fade Out: ${(audioState.fadeOutMs / 1000f)}s",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Slider(
-            value = audioState.fadeOutMs.toFloat(),
-            onValueChange = { audioState.fadeOutMs = it.toLong() },
-            valueRange = 0f..5000f, // Max 5s
-            steps = 49,
-            modifier = Modifier.fillMaxWidth()
-        )
     }
 }
 
