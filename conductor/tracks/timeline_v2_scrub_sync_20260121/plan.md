@@ -3,12 +3,12 @@
 This plan focuses on achieving frame-accurate, real-time scrubbing synchronization between the timeline and the video player.
 
 ## Phase 1: Frame-Accurate Logic (TDD)
-- [~] Task: Create `TimelineScrubbingTest.kt` to define expected behavior for frame-snapping and precise time mapping.
-    - [ ] Test that scroll offset translates to the correct video time.
-    - [ ] Test that the calculated time snaps to the nearest frame (e.g., multiples of 33.33ms for 30fps).
-- [~] Task: Refactor `TimelineScrollController` and `TimelineCalculator` to satisfy the frame-snapping tests.
-    - [ ] Ensure the controller is aware of the video's frame rate.
-- [ ] Task: Conductor - User Manual Verification 'Frame-Accurate Logic' (Protocol in workflow.md)
+- [x] Task: Create `TimelineScrubbingTest.kt` to define expected behavior for frame-snapping and precise time mapping. [db0cfa0]
+    - [x] Test that scroll offset translates to the correct video time. [db0cfa0]
+    - [x] Test that the calculated time snaps to the nearest frame (e.g., multiples of 33.33ms for 30fps). [db0cfa0]
+- [x] Task: Refactor `TimelineScrollController` and `TimelineCalculator` to satisfy the frame-snapping tests. [db0cfa0]
+    - [x] Ensure the controller is aware of the video's frame rate. [db0cfa0]
+- [x] Task: Conductor - User Manual Verification 'Frame-Accurate Logic' (Protocol in workflow.md) [checkpoint: 7ae6cfc]
 
 ## Phase 2: Integration and Performance
 - [ ] Task: Optimize `VideoTimelineV2` interaction loop.
