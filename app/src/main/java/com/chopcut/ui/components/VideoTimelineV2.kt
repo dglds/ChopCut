@@ -216,6 +216,7 @@ fun VideoTimelineV2(
             .distinctUntilChanged()
             .collectLatest { timeMs ->
                 if (timeMs != null) {
+                    Timber.v("TimelineScrub: seeking to ${timeMs}ms")
                     seekThrottler.throttle(timeMs) { pos ->
                         onSeek(pos)
                     }
