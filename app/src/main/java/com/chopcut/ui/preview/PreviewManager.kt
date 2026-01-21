@@ -240,9 +240,9 @@ class PreviewManager(private val context: Context) {
     fun seekTo(positionMs: Long) {
         val player = exoPlayer ?: throw IllegalStateException("PreviewManager not initialized")
 
+        Timber.v("PreviewManager: Seeking to ${positionMs}ms (isPlaying=${player.isPlaying})")
         player.seekTo(positionMs)
         _currentPosition.value = positionMs
-        Timber.d("Seeked to ${positionMs}ms")
     }
 
     /**
