@@ -177,24 +177,17 @@ fun VideoTimelineV2(
         snapshotFlow { currentPositionMs }
             .collect { posMs ->
                 if (!isUserInteracting && thumbSizePx > 0 && screenWidthPx > 0 && durationMs > 0) {
-                    // Lógica simplificada:
-                    // Cada thumb tem thumbSizePx de largura e representa 1000ms
-                    // thumb[0] está na posição (screenWidthPx / 2)
-                    // thumb[N] está na posição (screenWidthPx / 2) + N * thumbSizePx
+                    val spacerWidthPx = screenWidthPx / 2
+                    val (lazyIndex, offset) = TimelineCalculator.calculateLazyListScroll(
+                        posMs,
+                        thumbSizePx,
+                        TimelineConfigV2.THUMB_DURATION_MS,
+                        spacerWidthPx
+                    )
 
-                    // Calcular qual thumb corresponde à posição atual
-                    val thumbIndex = (posMs / 1000L).toInt()  // Qual thumb (0, 1, 2...)
-                    val msInsideThumb = (posMs % 1000L).toInt()  // Ms dentro da thumb (0-999)
+                    Timber.v("TimelineSync: ${posMs}ms → lazyIndex=$lazyIndex, offset=${offset}px")
 
-                    // Converter para pixels
-                    val pixelsInsideThumb = (msInsideThumb * TimelineConfigV2.PIXELS_PER_MS).toInt()
-
-                    // Índice na LazyRow (item 0 = Spacer inicial)
-                    val lazyIndex = thumbIndex + 1
-
-                    Timber.v("TimelineSync: ${posMs}ms → thumb[$thumbIndex] + ${pixelsInsideThumb}px → lazyIndex=$lazyIndex")
-
-                    listState.scrollToItem(lazyIndex, pixelsInsideThumb)
+                    listState.scrollToItem(lazyIndex, offset)
                 }
             }
     }
@@ -203,14 +196,17 @@ fun VideoTimelineV2(
     LaunchedEffect(Unit) {
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
             .map { (index, offset) ->
-                if (isUserInteracting && thumbSizePx > 0) {
-                    // Converter da posição da LazyRow para tempo do vídeo
-                    // Item 0 = Spacer inicial, então thumb[N] está no item N+1
-                    val thumbIndex = (index - 1).coerceAtLeast(0)
-                    val msFromThumbs = thumbIndex * 1000L
-                    val msFromOffset = ((offset.toFloat() / thumbSizePx) * 1000L).toLong()
+                if (isUserInteracting && thumbSizePx > 0 && screenWidthPx > 0) {
+                    val spacerWidthPx = screenWidthPx / 2
+                    val timeMs = TimelineCalculator.calculateTimeFromScroll(
+                        index,
+                        offset,
+                        thumbSizePx,
+                        TimelineConfigV2.THUMB_DURATION_MS,
+                        spacerWidthPx
+                    )
 
-                    (msFromThumbs + msFromOffset).coerceIn(0, durationMs)
+                    timeMs.coerceIn(0, durationMs)
                 } else {
                     null
                 }
