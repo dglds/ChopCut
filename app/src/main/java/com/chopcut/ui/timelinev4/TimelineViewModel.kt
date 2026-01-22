@@ -26,8 +26,14 @@ class TimelineViewModel : ViewModel() {
                 _state.update { it.copy(zoomLevel = event.newZoomLevel) }
             }
             is TimelineEvent.Scroll -> {
-                // To be implemented based on pixels to time conversion
+                // To be implemented
             }
+        }
+    }
+
+    fun updateExternalPosition(positionMs: Long) {
+        if (!_state.value.isScrubbing) {
+            _state.update { it.copy(currentTimeMs = positionMs) }
         }
     }
 }

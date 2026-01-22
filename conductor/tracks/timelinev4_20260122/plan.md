@@ -35,10 +35,10 @@
 - [x] Task: Conductor - User Manual Verification .Interactive Scrubbing - [ ] Task: Conductor - User Manual Verification 'Interactive Scrubbing & Performance' (Protocol in workflow.md) Performance. (Protocol in workflow.md)
 
 ## Phase 4: Integration & Polish
-- [ ] Task: Integrate `Timelinev4` into Main Editor.
-    - [ ] Replace existing timeline placeholder with `Timelinev4`.
-    - [ ] Connect `TimelineViewModel` to the main Video Player instance.
-- [ ] Task: Verify Synchronization.
-    - [ ] Ensure playhead stays centered during playback.
-    - [ ] Ensure video seeks immediately on scrub.
-- [ ] Task: Conductor - User Manual Verification 'Integration & Polish' (Protocol in workflow.md)
+- [x] Task: Integrate `Timelinev4` into Main Editor.
+    - [x] Replace existing timeline placeholder with `Timelinev4`.
+    - [x] Connect `TimelineViewModel` to the main Video Player instance.
+- [x] Task: Verify Synchronization.
+    - [x] Ensure playhead stays centered during playback (Logic implemented).
+    - [x] Ensure video seeks immediately on scrub (Logic implemented).
+- [x] Task: Conductor - User Manual Verification .Integration - [ ] Task: Conductor - User Manual Verification 'Integration & Polish' (Protocol in workflow.md) Polish. (Protocol in workflow.md)

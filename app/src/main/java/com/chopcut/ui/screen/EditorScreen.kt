@@ -337,18 +337,8 @@ fun EditorScreen(
                         ) {
                             // Timeline com Playhead Fixo (V2 - Visualização Apenas)
                             if (videoDurationMs > 0) {
-                                VideoTimelineV2(
-                                    durationMs = videoDurationMs,
-                                    currentPositionMs = previewManager.currentPosition.collectAsState().value,
-                                    onSeek = { positionMs ->
-                                        previewManager.seekTo(positionMs)
-                                    },
-                                    onScrubStart = {
-                                        previewManager.setScrubbing(true)
-                                    },
-                                    onScrubEnd = {
-                                        previewManager.setScrubbing(false)
-                                    },
+                                EditorTimelineIntegration(
+                                    previewManager = previewManager,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
