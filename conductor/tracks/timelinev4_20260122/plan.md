@@ -34,7 +34,7 @@
     - [ ] optimize: Trigger "Precision Mode" on Idle/Stop.
 - [x] Task: Conductor - User Manual Verification .Interactive Scrubbing - [ ] Task: Conductor - User Manual Verification 'Interactive Scrubbing & Performance' (Protocol in workflow.md) Performance. (Protocol in workflow.md)
 
-## Phase 4: Integration & Polish
+## Phase 4: Integration ## Phase 4: Integration & Polish Polish [checkpoint: 1d9ec61]
 - [x] Task: Integrate `Timelinev4` into Main Editor.
     - [x] Replace existing timeline placeholder with `Timelinev4`.
     - [x] Connect `TimelineViewModel` to the main Video Player instance.
