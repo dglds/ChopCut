@@ -13,13 +13,13 @@
 ## Phase 2: Visual Components (Core UI)
 - [~] Task: Implement `TimecodeView`.
     - [ ] TDD: Write tests for timestamp formatting (ms to 00:00:00.00).
-    - [ ] Create Composable/View for displaying the timecode.
+    - [x] Create Composable/View for displaying the timecode.
 - [ ] Task: Implement `FilmstripView` (Background Thumbnails).
     - [ ] TDD: Write tests for thumbnail slot calculation based on zoom level.
-    - [ ] Implement thumbnail loader logic (placeholder vs actual image).
-    - [ ] Create `FilmstripView` component to render the sequence of images.
+    - [~] Implement thumbnail loader logic (placeholder vs actual image).
+    - [x] Create `FilmstripView` component to render the sequence of images.
 - [ ] Task: Implement `TimelineContainer` Layout.
-    - [ ] Assemble the basic layout structure (Playhead centered, Filmstrip background).
+    - [x] Assemble the basic layout structure (Playhead centered, Filmstrip background).
 - [ ] Task: Conductor - User Manual Verification 'Visual Components (Core UI)' (Protocol in workflow.md)
 
 ## Phase 3: Interactive Scrubbing & Performance
