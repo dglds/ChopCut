@@ -11,7 +11,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 
 
-- [~] **Track: Implementação do componente Timelinev4 focado em scrubbing de alta performance e feedback em tempo real.**
+- [x] **Track: Implementação do componente Timelinev4 focado em scrubbing de alta performance e feedback em tempo real.**
 
 *Link: [./tracks/timelinev4_20260122/](./tracks/timelinev4_20260122/)*
 
