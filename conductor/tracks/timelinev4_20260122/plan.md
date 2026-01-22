@@ -10,7 +10,7 @@
     - [x] Implement `updatePosition(long)` and `onScrubStart/End` logic.
 - [x] Task: Conductor - User Manual Verification 'Foundation & State Management' (Protocol in workflow.md)
 
-## Phase 2: Visual Components (Core UI)
+## Phase 2: Visual Components (Core UI) [checkpoint: 6c97625]
 - [~] Task: Implement `TimecodeView`.
     - [ ] TDD: Write tests for timestamp formatting (ms to 00:00:00.00).
     - [x] Create Composable/View for displaying the timecode.
@@ -20,7 +20,7 @@
     - [x] Create `FilmstripView` component to render the sequence of images.
 - [ ] Task: Implement `TimelineContainer` Layout.
     - [x] Assemble the basic layout structure (Playhead centered, Filmstrip background).
-- [ ] Task: Conductor - User Manual Verification 'Visual Components (Core UI)' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification .Visual Components (Core UI). (Protocol in workflow.md)
 
 ## Phase 3: Interactive Scrubbing & Performance
 - [ ] Task: Implement Touch Gestures & Scrubbing Logic.
