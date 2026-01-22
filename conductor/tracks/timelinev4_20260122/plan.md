@@ -11,7 +11,7 @@
 - [x] Task: Conductor - User Manual Verification 'Foundation & State Management' (Protocol in workflow.md)
 
 ## Phase 2: Visual Components (Core UI)
-- [ ] Task: Implement `TimecodeView`.
+- [~] Task: Implement `TimecodeView`.
     - [ ] TDD: Write tests for timestamp formatting (ms to 00:00:00.00).
     - [ ] Create Composable/View for displaying the timecode.
 - [ ] Task: Implement `FilmstripView` (Background Thumbnails).
