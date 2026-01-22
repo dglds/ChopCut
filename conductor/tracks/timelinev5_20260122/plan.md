@@ -9,8 +9,8 @@ Implement a robust, Material 3 Expressive video timeline component for range sel
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: Foundation & State Management' (Protocol in workflow.md)
 
 ## Phase 2: Thumbnail Extraction Engine
-- [~] Task: Create a `ThumbnailProvider` using Media3 `MediaMetadataRetriever` to extract frames at specific intervals.
-- [ ] Task: Implement an LRU cache for extracted thumbnails to ensure smooth scrolling.
+- [x] Task: Create a `ThumbnailProvider` using Media3 `MediaMetadataRetriever` to extract frames at specific intervals. [6a857de]
+- [~] Task: Implement an LRU cache for extracted thumbnails to ensure smooth scrolling.
 - [ ] Task: Write unit tests for the `ThumbnailProvider` to ensure correct timestamps are requested and handled.
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Thumbnail Extraction Engine' (Protocol in workflow.md)
 
