@@ -16,12 +16,13 @@ import timber.log.Timber
  * Utiliza o ThumbnailExtractor existente do projeto.
  */
 class ThumbnailProvider(
-    private val context: Context
+    private val context: Context,
+    private val cache: com.chopcut.data.thumbnail.ThumbnailCache = com.chopcut.data.thumbnail.ThumbnailCache(100)
 ) {
     private val extractor = ThumbnailExtractor(context)
 
     /**
-     * Extrai thumbnails em intervalos regulares.
+     * Extrai thumbnails em intervalos regulares, utilizando cache se disponível.
      *
      * @param uri URI do vídeo.
      * @param durationMs Duração total do vídeo.
@@ -37,19 +38,21 @@ class ThumbnailProvider(
         height: Int
     ): Flow<List<Thumbnail>> = flow {
         try {
-            // Calcula os tempos de extração
+            val uriString = uri.toString()
             val interval = durationMs / count.coerceAtLeast(1)
             val times = (0 until count).map { it * interval }
 
-            val bitmaps = extractor.extractAtPositions(
-                uri = uri,
-                positionsMs = times,
-                width = width,
-                height = height
-            )
-
-            val thumbnails = times.zip(bitmaps).map { (time, bitmap) ->
-                Thumbnail(timeMs = time, bitmap = bitmap)
+            val thumbnails = times.map { timeMs ->
+                val cachedBitmap = cache.get(uriString, timeMs)
+                if (cachedBitmap != null) {
+                    Thumbnail(timeMs, cachedBitmap)
+                } else {
+                    val bitmap = extractor.extractAt(uri, timeMs, width, height)
+                    if (bitmap != null) {
+                        cache.put(uriString, timeMs, bitmap)
+                    }
+                    Thumbnail(timeMs, bitmap)
+                }
             }
 
             emit(thumbnails)
