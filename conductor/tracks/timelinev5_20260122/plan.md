@@ -4,12 +4,12 @@ Implement a robust, Material 3 Expressive video timeline component for range sel
 
 ## Phase 1: Foundation & State Management
 - [x] Task: Define `TimelineState` and `Thumbnail` data models to handle range (start/end) and playhead positions. [09bd213]
-- [~] Task: Implement a ViewModel or State Holder to manage the interaction logic (e.g., preventing start handle from crossing end handle).
+- [x] Task: Implement a ViewModel or State Holder to manage the interaction logic (e.g., preventing start handle from crossing end handle). [fa9e443]
 - [ ] Task: Write unit tests for `TimelineState` boundary logic and time-to-pixel coordinate conversions.
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: Foundation & State Management' (Protocol in workflow.md)
 
 ## Phase 2: Thumbnail Extraction Engine
-- [ ] Task: Create a `ThumbnailProvider` using Media3 `MediaMetadataRetriever` to extract frames at specific intervals.
+- [~] Task: Create a `ThumbnailProvider` using Media3 `MediaMetadataRetriever` to extract frames at specific intervals.
 - [ ] Task: Implement an LRU cache for extracted thumbnails to ensure smooth scrolling.
 - [ ] Task: Write unit tests for the `ThumbnailProvider` to ensure correct timestamps are requested and handled.
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Thumbnail Extraction Engine' (Protocol in workflow.md)
