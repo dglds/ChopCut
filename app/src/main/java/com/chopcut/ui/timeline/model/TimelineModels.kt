@@ -1,4 +1,4 @@
-package com.chopcut.ui.timelinev5.model
+package com.chopcut.ui.timeline.model
 
 import android.graphics.Bitmap
 import java.util.UUID

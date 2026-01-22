@@ -1,4 +1,4 @@
-package com.chopcut.ui.timelinev5
+package com.chopcut.ui.timeline
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,15 +21,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import com.chopcut.ui.timelinev5.model.Thumbnail
+import com.chopcut.ui.timeline.model.Thumbnail
 
 /**
- * Componente principal da TimelineV5 com playhead fixo no centro.
+ * Componente principal da Timeline com playhead fixo no centro.
  * As thumbnails rolam horizontalmente sob o playhead.
  */
 @Composable
-fun TimelineV5(
-    viewModel: TimelineV5ViewModel,
+fun Timeline(
+    viewModel: TimelineViewModel,
     thumbnails: List<Thumbnail>,
     modifier: Modifier = Modifier,
     showControls: Boolean = true,

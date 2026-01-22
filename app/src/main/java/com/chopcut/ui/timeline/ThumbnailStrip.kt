@@ -1,4 +1,4 @@
-package com.chopcut.ui.timelinev5
+package com.chopcut.ui.timeline
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,7 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.chopcut.ui.timelinev5.model.Thumbnail
+import com.chopcut.ui.timeline.model.Thumbnail
 
 /**
  * Renderiza uma faixa contínua de thumbnails do vídeo com scroll horizontal.

@@ -50,7 +50,6 @@ import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
 import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.components.VideoPreview
-import com.chopcut.ui.components.VideoTimelineV2
 import com.chopcut.ui.filter.TrimContent
 import com.chopcut.ui.filter.CropContent
 import com.chopcut.ui.components.EditorSplitLayout
@@ -335,7 +334,7 @@ fun EditorScreen(
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                                 .padding(8.dp)
                         ) {
-                            // Timeline com Playhead Fixo (V2 - Visualização Apenas)
+                            // Timeline com múltiplos ranges e playhead fixo no centro
                             if (videoDurationMs > 0) {
                                 EditorTimelineIntegration(
                                     previewManager = previewManager,

@@ -1,10 +1,10 @@
-package com.chopcut.ui.timelinev5
+package com.chopcut.ui.timeline
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import com.chopcut.data.thumbnail.ThumbnailExtractor
-import com.chopcut.ui.timelinev5.model.Thumbnail
+import com.chopcut.ui.timeline.model.Thumbnail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.flowOn
 import timber.log.Timber
 
 /**
- * Provider responsável por extrair thumbnails para a TimelineV5.
+ * Provider responsável por extrair thumbnails para a Timeline.
  * Utiliza o ThumbnailExtractor existente do projeto.
  */
 class ThumbnailProvider(
@@ -57,7 +57,7 @@ class ThumbnailProvider(
 
             emit(thumbnails)
         } catch (e: Exception) {
-            Timber.e(e, "Erro ao extrair thumbnails para TimelineV5")
+            Timber.e(e, "Erro ao extrair thumbnails para Timeline")
             emit(emptyList())
         }
     }.flowOn(Dispatchers.IO)

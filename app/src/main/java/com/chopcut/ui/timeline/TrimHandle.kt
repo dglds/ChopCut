@@ -1,15 +1,19 @@
-package com.chopcut.ui.timelinev5
+package com.chopcut.ui.timeline
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -17,22 +21,28 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
 /**
- * Componente de Playhead (Scrubber) que pode ser arrastado.
+ * Handle customizável para seleção de intervalo (Trim).
  */
 @Composable
-fun Playhead(
+fun TrimHandle(
     positionPx: Float,
     onPositionChanged: (Float) -> Unit,
     onDragStart: () -> Unit = {},
     onDragEnd: () -> Unit = {},
-    color: Color = Color.Red,
-    width: Dp = 2.dp
+    isStart: Boolean,
+    color: Color = MaterialTheme.colorScheme.primary,
+    width: Dp = 16.dp
 ) {
-    Canvas(
+    Box(
         modifier = Modifier
             .offset { IntOffset(positionPx.roundToInt(), 0) }
             .width(width)
             .fillMaxHeight()
+            .clip(
+                if (isStart) RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp)
+                else RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp)
+            )
+            .background(color)
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = { onDragStart() },
@@ -43,25 +53,21 @@ fun Playhead(
                         onPositionChanged(positionPx + dragAmount.x)
                     }
                 )
-            }
+            },
+        contentAlignment = Alignment.Center
     ) {
-        // Linha vertical
-        drawLine(
-            color = color,
-            start = Offset(size.width / 2, 0f),
-            end = Offset(size.width / 2, size.height),
-            strokeWidth = width.toPx()
+        // Detalhe visual (dois tracinhos brancos)
+        Box(
+            modifier = Modifier
+                .size(2.dp, 20.dp)
+                .offset(x = (-2).dp)
+                .background(Color.White.copy(alpha = 0.5f))
         )
-
-        // Triângulo no topo
-        val triangleWidth = 10.dp.toPx()
-        val triangleHeight = 10.dp.toPx()
-        val path = Path().apply {
-            moveTo(size.width / 2 - triangleWidth / 2, 0f)
-            lineTo(size.width / 2 + triangleWidth / 2, 0f)
-            lineTo(size.width / 2, triangleHeight)
-            close()
-        }
-        drawPath(path, color)
+        Box(
+            modifier = Modifier
+                .size(2.dp, 20.dp)
+                .offset(x = 2.dp)
+                .background(Color.White.copy(alpha = 0.5f))
+        )
     }
 }

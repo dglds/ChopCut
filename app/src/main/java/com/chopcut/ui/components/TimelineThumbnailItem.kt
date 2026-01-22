@@ -16,7 +16,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
 /**
- * Componente de thumbnail individual para a VideoTimeline V2
+ * Componente de thumbnail individual para a Timeline
  *
  * Renderiza um único thumbnail de vídeo na timeline com suporte a:
  * - Bitmap já carregado

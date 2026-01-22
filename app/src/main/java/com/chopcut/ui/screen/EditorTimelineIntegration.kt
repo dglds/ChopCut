@@ -11,10 +11,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.chopcut.ui.preview.PreviewManager
-import com.chopcut.ui.timelinev5.ThumbnailProvider
-import com.chopcut.ui.timelinev5.TimelineV5
-import com.chopcut.ui.timelinev5.TimelineV5ViewModel
-import com.chopcut.ui.timelinev5.model.Thumbnail
+import com.chopcut.ui.timeline.ThumbnailProvider
+import com.chopcut.ui.timeline.Timeline
+import com.chopcut.ui.timeline.TimelineViewModel
+import com.chopcut.ui.timeline.model.Thumbnail
 
 @Composable
 fun EditorTimelineIntegration(
@@ -26,9 +26,9 @@ fun EditorTimelineIntegration(
     val duration by previewManager.duration.collectAsState()
     val playerPosition by previewManager.currentPosition.collectAsState()
     
-    // 1. ViewModel para gerenciar o estado da TimelineV5
-    val timelineViewModel = remember { 
-        TimelineV5ViewModel(initialDurationMs = duration) 
+    // 1. ViewModel para gerenciar o estado da Timeline
+    val timelineViewModel = remember {
+        TimelineViewModel(initialDurationMs = duration)
     }
     
     // Atualizar duração quando o player estiver pronto
@@ -62,8 +62,8 @@ fun EditorTimelineIntegration(
         timelineViewModel.updatePlayheadPosition(playerPosition)
     }
 
-    // 5. Renderizar TimelineV5
-    TimelineV5(
+    // 5. Renderizar Timeline
+    Timeline(
         viewModel = timelineViewModel,
         thumbnails = thumbnails,
         modifier = modifier,
