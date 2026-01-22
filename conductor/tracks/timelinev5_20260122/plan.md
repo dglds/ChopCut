@@ -15,8 +15,8 @@ Implement a robust, Material 3 Expressive video timeline component for range sel
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Thumbnail Extraction Engine' (Protocol in workflow.md)
 
 ## Phase 3: UI - Scrubber & Thumbnail Strip
-- [~] Task: Build the `ThumbnailStrip` Compose component to display the sequence of extracted frames.
-- [ ] Task: Implement the `Playhead` (Scrubber) component with horizontal drag interaction.
+- [x] Task: Build the `ThumbnailStrip` Compose component to display the sequence of extracted frames. [ff79018]
+- [~] Task: Implement the `Playhead` (Scrubber) component with horizontal drag interaction.
 - [ ] Task: Write integration tests (Compose Tests) to verify playhead movement updates the state.
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: UI - Scrubber & Thumbnail Strip' (Protocol in workflow.md)
 
