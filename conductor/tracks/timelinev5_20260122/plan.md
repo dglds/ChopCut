@@ -10,12 +10,12 @@ Implement a robust, Material 3 Expressive video timeline component for range sel
 
 ## Phase 2: Thumbnail Extraction Engine
 - [x] Task: Create a `ThumbnailProvider` using Media3 `MediaMetadataRetriever` to extract frames at specific intervals. [6a857de]
-- [~] Task: Implement an LRU cache for extracted thumbnails to ensure smooth scrolling.
+- [x] Task: Implement an LRU cache for extracted thumbnails to ensure smooth scrolling. [1b35944]
 - [ ] Task: Write unit tests for the `ThumbnailProvider` to ensure correct timestamps are requested and handled.
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Thumbnail Extraction Engine' (Protocol in workflow.md)
 
 ## Phase 3: UI - Scrubber & Thumbnail Strip
-- [ ] Task: Build the `ThumbnailStrip` Compose component to display the sequence of extracted frames.
+- [~] Task: Build the `ThumbnailStrip` Compose component to display the sequence of extracted frames.
 - [ ] Task: Implement the `Playhead` (Scrubber) component with horizontal drag interaction.
 - [ ] Task: Write integration tests (Compose Tests) to verify playhead movement updates the state.
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: UI - Scrubber & Thumbnail Strip' (Protocol in workflow.md)
