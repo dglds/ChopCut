@@ -1,26 +1,26 @@
-package com.chopcut.ui.timelinev5
+package com.chopcut.ui.timeline
 
 import androidx.lifecycle.ViewModel
-import com.chopcut.ui.timelinev5.model.VideoRange
+import com.chopcut.ui.timeline.model.VideoRange
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * ViewModel para gerenciar o estado e interações da TimelineV5.
+ * ViewModel para gerenciar o estado e interações da Timeline.
  * Suporta múltiplos ranges de seleção.
  */
-class TimelineV5ViewModel(
+class TimelineViewModel(
     initialDurationMs: Long
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
-        com.chopcut.ui.timelinev5.model.TimelineState(
+        com.chopcut.ui.timeline.model.TimelineState(
             totalDurationMs = initialDurationMs
         )
     )
-    val state: StateFlow<com.chopcut.ui.timelinev5.model.TimelineState> = _state.asStateFlow()
+    val state: StateFlow<com.chopcut.ui.timeline.model.TimelineState> = _state.asStateFlow()
 
     /**
      * Adiciona um novo range com 25% da duração total, centralizado.

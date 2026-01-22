@@ -1,4 +1,4 @@
-package com.chopcut.ui.timelinev5
+package com.chopcut.ui.timeline
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box

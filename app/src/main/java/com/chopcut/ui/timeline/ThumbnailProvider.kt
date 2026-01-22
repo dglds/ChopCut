@@ -1,10 +1,10 @@
-package com.chopcut.ui.timelinev5
+package com.chopcut.ui.timeline
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import com.chopcut.data.thumbnail.ThumbnailExtractor
-import com.chopcut.ui.timelinev5.model.Thumbnail
+import com.chopcut.ui.timeline.model.Thumbnail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow

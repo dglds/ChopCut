@@ -50,7 +50,6 @@ import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
 import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.components.VideoPreview
-import com.chopcut.ui.components.VideoTimelineV2
 import com.chopcut.ui.filter.TrimContent
 import com.chopcut.ui.filter.CropContent
 import com.chopcut.ui.components.EditorSplitLayout

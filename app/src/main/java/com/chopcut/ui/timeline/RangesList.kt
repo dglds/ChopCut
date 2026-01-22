@@ -1,4 +1,4 @@
-package com.chopcut.ui.timelinev5
+package com.chopcut.ui.timeline
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,7 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.chopcut.ui.timelinev5.model.VideoRange
+import com.chopcut.ui.timeline.model.VideoRange
 
 /**
  * Componente para exibir a lista de ranges adicionados.
