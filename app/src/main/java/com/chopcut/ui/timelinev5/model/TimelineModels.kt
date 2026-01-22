@@ -1,6 +1,7 @@
 package com.chopcut.ui.timelinev5.model
 
 import android.graphics.Bitmap
+import java.util.UUID
 
 /**
  * Representa uma miniatura de frame do vídeo na timeline.
@@ -11,17 +12,37 @@ data class Thumbnail(
 )
 
 /**
- * Estado que define o intervalo de corte (trim) e a posição do playhead.
+ * Representa um intervalo de corte (range) com ID único.
+ */
+data class VideoRange(
+    val id: String = UUID.randomUUID().toString(),
+    val startMs: Long,
+    val endMs: Long,
+    val isSelected: Boolean = false
+) {
+    /**
+     * Duração deste range.
+     */
+    val durationMs: Long
+        get() = endMs - startMs
+
+    /**
+     * Retorna uma cópia deste range com a seleção alterada.
+     */
+    fun withSelected(selected: Boolean): VideoRange = copy(isSelected = selected)
+}
+
+/**
+ * Estado que define a posição do playhead e lista de ranges.
  */
 data class TimelineState(
     val totalDurationMs: Long,
-    val selectedStartMs: Long = 0L,
-    val selectedEndMs: Long = totalDurationMs,
-    val playheadPositionMs: Long = 0L
+    val playheadPositionMs: Long = 0L,
+    val ranges: List<VideoRange> = emptyList()
 ) {
     /**
-     * Duração total do trecho selecionado.
+     * Range atualmente selecionado, se houver.
      */
-    val selectedDurationMs: Long
-        get() = selectedEndMs - selectedStartMs
+    val selectedRange: VideoRange?
+        get() = ranges.firstOrNull { it.isSelected }
 }

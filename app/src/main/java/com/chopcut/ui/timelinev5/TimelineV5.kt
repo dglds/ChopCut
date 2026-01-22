@@ -1,11 +1,16 @@
 package com.chopcut.ui.timelinev5
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -19,108 +24,153 @@ import androidx.compose.ui.unit.dp
 import com.chopcut.ui.timelinev5.model.Thumbnail
 
 /**
- * Componente principal da TimelineV5 que integra a faixa de thumbnails,
- * seletores de intervalo (trim) e o playhead.
+ * Componente principal da TimelineV5 com playhead fixo no centro.
+ * As thumbnails rolam horizontalmente sob o playhead.
  */
 @Composable
 fun TimelineV5(
     viewModel: TimelineV5ViewModel,
     thumbnails: List<Thumbnail>,
     modifier: Modifier = Modifier,
+    showControls: Boolean = true,
     onScrubStart: () -> Unit = {},
     onScrubEnd: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
     val density = LocalDensity.current
-    
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(80.dp)
-            .background(Color.Black.copy(alpha = 0.1f))
-    ) {
-        val widthPx = constraints.maxWidth.toFloat()
-        val durationMs = remember(state.totalDurationMs) { state.totalDurationMs.coerceAtLeast(1L) }
-        
-        // Helpers memoizados para conversão
-        val timeToPx: (Long) -> Float = remember(widthPx, durationMs) {
-            { timeMs -> (timeMs.toFloat() / durationMs) * widthPx }
-        }
-        val pxToTime: (Float) -> Long = remember(widthPx, durationMs) {
-            { px -> ((px / widthPx) * durationMs).toLong().coerceIn(0, durationMs) }
-        }
 
-        val handleWidthPx = remember(density) { with(density) { 16.dp.toPx() } }
+    Column(modifier = modifier) {
+        // Timeline com playhead fixo no centro
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp)
+                .background(Color.Black.copy(alpha = 0.1f))
+        ) {
+            val centerX = constraints.maxWidth.toFloat() / 2
+            val durationMs = remember(state.totalDurationMs) { state.totalDurationMs.coerceAtLeast(1L) }
+            val handleWidthPx = remember(density) { with(density) { 16.dp.toPx() } }
 
-        // 1. Thumbnail Strip
-        ThumbnailStrip(
-            thumbnails = thumbnails,
-            modifier = Modifier.fillMaxWidth(),
-            thumbnailWidth = remember(maxWidth, thumbnails.size) { 
-                (maxWidth / thumbnails.size.coerceAtLeast(1)).coerceAtLeast(1.dp)
+            // 1. Thumbnail Strip com scroll automático baseado no playhead
+            ThumbnailStrip(
+                thumbnails = thumbnails,
+                modifier = Modifier.fillMaxSize(),
+                thumbnailWidth = 80.dp,
+                playheadPositionMs = state.playheadPositionMs,
+                totalDurationMs = durationMs,
+                onThumbnailClick = { timeMs ->
+                    viewModel.updatePlayheadPosition(timeMs)
+                    onScrubStart()
+                    onScrubEnd()
+                }
+            )
+
+            // 2. Playhead FIXO no centro
+            Playhead(
+                positionPx = centerX,
+                onPositionChanged = { newPx ->
+                    // O playhead não se move mais, apenas atualizamos a posição
+                    // baseado em onde o usuário toca na timeline
+                    val widthPx = constraints.maxWidth.toFloat()
+                    val clickProgress = (newPx / widthPx).coerceIn(0f, 1f)
+                    val newTimeMs = (clickProgress * durationMs).toLong()
+                    viewModel.updatePlayheadPosition(newTimeMs)
+                },
+                onDragStart = onScrubStart,
+                onDragEnd = onScrubEnd
+            )
+
+            // 3. Indicadores visuais dos ranges (sobreposição no centro)
+            state.ranges.forEach { range ->
+                val startProgress = range.startMs.toFloat() / durationMs
+                val endProgress = range.endMs.toFloat() / durationMs
+                val rangeWidth = ((endProgress - startProgress) * constraints.maxWidth).coerceAtLeast(handleWidthPx)
+
+                // Offset baseado na posição do range em relação ao playhead
+                val playheadProgress = state.playheadPositionMs.toFloat() / durationMs
+                val centerProgress = 0.5f  // Playhead está sempre no centro (50%)
+                val rangeCenterProgress = (startProgress + endProgress) / 2
+                val offsetFromCenter = (rangeCenterProgress - playheadProgress) * constraints.maxWidth
+
+                // Desenhar range apenas se estiver visível
+                if (offsetFromCenter > -constraints.maxWidth && offsetFromCenter < constraints.maxWidth) {
+                    Box(
+                        modifier = Modifier
+                            .height(80.dp)
+                            .width(with(density) { rangeWidth.toDp() })
+                            .align(Alignment.CenterStart)
+                            .then(
+                                Modifier.offset(x = with(density) {
+                                    (centerX + offsetFromCenter - rangeWidth / 2).toDp()
+                                })
+                            )
+                            .background(
+                                if (range.isSelected)
+                                    Color(0xFF2196F3).copy(alpha = 0.3f)
+                                else
+                                    Color(0xFF4CAF50).copy(alpha = 0.3f)
+                            )
+                    )
+                }
+
+                // Handles apenas do range selecionado
+                if (range.isSelected) {
+                    val startOffsetFromCenter = (startProgress - playheadProgress) * constraints.maxWidth
+                    val endOffsetFromCenter = (endProgress - playheadProgress) * constraints.maxWidth
+
+                    // Handle de início
+                    Box(
+                        modifier = Modifier
+                            .width(with(density) { handleWidthPx.toDp() })
+                            .height(80.dp)
+                            .align(Alignment.CenterStart)
+                            .offset(x = with(density) {
+                                (centerX + startOffsetFromCenter).toDp()
+                            })
+                            .border(
+                                width = if (range.isSelected) 2.dp else 1.dp,
+                                color = if (range.isSelected) Color(0xFF2196F3) else Color.White
+                            )
+                    )
+
+                    // Handle de fim
+                    Box(
+                        modifier = Modifier
+                            .width(with(density) { handleWidthPx.toDp() })
+                            .height(80.dp)
+                            .align(Alignment.CenterStart)
+                            .offset(x = with(density) {
+                                (centerX + endOffsetFromCenter - handleWidthPx).toDp()
+                            })
+                            .border(
+                                width = if (range.isSelected) 2.dp else 1.dp,
+                                color = if (range.isSelected) Color(0xFF2196F3) else Color.White
+                            )
+                    )
+                }
             }
-        )
-
-        // 2. Overlay de sombreamento fora do intervalo selecionado
-        val startWeight = remember(state.selectedStartMs, durationMs) {
-            state.selectedStartMs.toFloat() / durationMs
-        }
-        val endWeight = remember(state.selectedEndMs, durationMs) {
-            1f - (state.selectedEndMs.toFloat() / durationMs)
         }
 
-        Box(
-            modifier = Modifier
-                .height(80.dp)
-                .fillMaxWidth(startWeight.coerceIn(0f, 1f))
-                .background(Color.Black.copy(alpha = 0.5f))
-                .align(Alignment.CenterStart)
-        )
-        
-        Box(
-            modifier = Modifier
-                .height(80.dp)
-                .fillMaxWidth(endWeight.coerceIn(0f, 1f))
-                .background(Color.Black.copy(alpha = 0.5f))
-                .align(Alignment.CenterEnd)
-        )
+        // Controles e lista de ranges
+        if (showControls) {
+            RangeControls(
+                onAddRange = { viewModel.addRange() },
+                onRemoveRange = { viewModel.removeSelectedRange() },
+                hasSelectedRange = state.selectedRange != null,
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        // 3. Trim Handles
-        val startPx = remember(state.selectedStartMs, timeToPx) { timeToPx(state.selectedStartMs) }
-        val endPx = remember(state.selectedEndMs, timeToPx) { timeToPx(state.selectedEndMs) }
-
-        TrimHandle(
-            positionPx = startPx,
-            onPositionChanged = { newPx ->
-                viewModel.updateSelectedStart(pxToTime(newPx))
-            },
-            isStart = true,
-            onDragStart = onScrubStart,
-            onDragEnd = onScrubEnd
-        )
-
-        TrimHandle(
-            positionPx = endPx - handleWidthPx,
-            onPositionChanged = { newPx ->
-                viewModel.updateSelectedEnd(pxToTime(newPx + handleWidthPx))
-            },
-            isStart = false,
-            onDragStart = onScrubStart,
-            onDragEnd = onScrubEnd
-        )
-
-        // 4. Playhead
-        val playheadPx = remember(state.playheadPositionMs, timeToPx) { 
-            timeToPx(state.playheadPositionMs) 
+            // Lista de ranges
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+            ) {
+                RangesList(
+                    ranges = state.ranges,
+                    onRangeClick = { rangeId -> viewModel.selectRange(rangeId) }
+                )
+            }
         }
-        
-        Playhead(
-            positionPx = playheadPx,
-            onPositionChanged = { newPx ->
-                viewModel.updatePlayheadPosition(pxToTime(newPx))
-            },
-            onDragStart = onScrubStart,
-            onDragEnd = onScrubEnd
-        )
     }
 }
