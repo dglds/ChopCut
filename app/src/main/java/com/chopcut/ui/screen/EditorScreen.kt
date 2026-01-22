@@ -334,7 +334,7 @@ fun EditorScreen(
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                                 .padding(8.dp)
                         ) {
-                            // Timeline com Playhead Fixo (V2 - Visualização Apenas)
+                            // Timeline com múltiplos ranges e playhead fixo no centro
                             if (videoDurationMs > 0) {
                                 EditorTimelineIntegration(
                                     previewManager = previewManager,

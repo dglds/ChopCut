@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.flowOn
 import timber.log.Timber
 
 /**
- * Provider responsável por extrair thumbnails para a TimelineV5.
+ * Provider responsável por extrair thumbnails para a Timeline.
  * Utiliza o ThumbnailExtractor existente do projeto.
  */
 class ThumbnailProvider(
@@ -57,7 +57,7 @@ class ThumbnailProvider(
 
             emit(thumbnails)
         } catch (e: Exception) {
-            Timber.e(e, "Erro ao extrair thumbnails para TimelineV5")
+            Timber.e(e, "Erro ao extrair thumbnails para Timeline")
             emit(emptyList())
         }
     }.flowOn(Dispatchers.IO)
