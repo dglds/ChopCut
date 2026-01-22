@@ -2,6 +2,7 @@ package com.chopcut.ui.timelinev4
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -27,8 +29,24 @@ fun TimelineContainer(
             .fillMaxWidth()
             .height(120.dp)
             .background(Color.DarkGray)
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { onEvent(TimelineEvent.ScrubStart) },
+                    onDragEnd = { onEvent(TimelineEvent.ScrubEnd) },
+                    onDragCancel = { onEvent(TimelineEvent.ScrubEnd) },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        val deltaMillis = TimelineConverter.pixelsToMillis(
+                            pixels = -dragAmount, // Invert drag to move content
+                            zoomLevel = state.zoomLevel
+                        )
+                        val newTime = (state.currentTimeMs + deltaMillis).coerceAtLeast(0)
+                        onEvent(TimelineEvent.Seek(newTime))
+                    }
+                )
+            }
     ) {
-        // TODO: Add Scrollable Container for Filmstrip
+        // TODO: Calculate correct startIndex based on scroll
         FilmstripView(
             thumbnails = thumbnails,
             startIndex = 0, // Placeholder

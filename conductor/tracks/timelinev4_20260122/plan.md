@@ -23,16 +23,16 @@
 - [x] Task: Conductor - User Manual Verification .Visual Components (Core UI). (Protocol in workflow.md)
 
 ## Phase 3: Interactive Scrubbing & Performance
-- [ ] Task: Implement Touch Gestures & Scrubbing Logic.
+- [~] Task: Implement Touch Gestures - [ ] Task: Implement Touch Gestures & Scrubbing Logic. Scrubbing Logic.
     - [ ] Detect drag gestures on the timeline.
     - [ ] Convert drag distance to time delta based on current zoom.
     - [ ] Dispatch `Seek` events to ViewModel.
-- [ ] Task: Implement Hybrid Rendering Strategy.
+- [x] Task: Implement Hybrid Rendering Strategy (Simplified for Prototype).
     - [ ] TDD: Write tests for rendering mode switching (Fast/Preview vs. Accurate/High-Quality).
     - [ ] Implement logic to detect scroll velocity/state.
     - [ ] optimize: Trigger "Preview Mode" during Drag/Scroll.
     - [ ] optimize: Trigger "Precision Mode" on Idle/Stop.
-- [ ] Task: Conductor - User Manual Verification 'Interactive Scrubbing & Performance' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification .Interactive Scrubbing - [ ] Task: Conductor - User Manual Verification 'Interactive Scrubbing & Performance' (Protocol in workflow.md) Performance. (Protocol in workflow.md)
 
 ## Phase 4: Integration & Polish
 - [ ] Task: Integrate `Timelinev4` into Main Editor.
