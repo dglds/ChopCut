@@ -1,9 +1,9 @@
-package com.chopcut.ui.timelinev5
+package com.chopcut.ui.timeline
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class TimelineV5ViewModelTest {
+class TimelineViewModelTest {
 
     @Test
     fun `initial state should have correct duration`() {
