@@ -19,10 +19,10 @@ Implement a robust, Material 3 Expressive video timeline component for range sel
 
 ## Phase 4: UI - Range Selection & M3 Expressive Styling
 - [x] Task: Implement draggable start and end handles with "Material 3 Expressive" aesthetics (bold shapes, haptic feedback). [dcd4064]
-- [~] Task: Add time overlays that update dynamically during handle dragging.
+- [x] Task: Add time overlays that update dynamically during handle dragging. [1153370]
 - [ ] Task: Conductor - User Manual Verification 'Phase 4: UI - Range Selection & M3 Expressive Styling' (Protocol in workflow.md)
 
 ## Phase 5: Media3 Integration & Synchronization
-- [ ] Task: Connect the `TimelineV5` component to the `ExoPlayer` instance for real-time scrubbing synchronization.
-- [ ] Task: Optimize frame updates to ensure smooth visual feedback during high-frequency scrubbing.
+- [x] Task: Connect the `TimelineV5` component to the `ExoPlayer` instance for real-time scrubbing synchronization. [39b1c55]
+- [x] Task: Optimize frame updates to ensure smooth visual feedback during high-frequency scrubbing. [8f2a1b1]
 - [ ] Task: Conductor - User Manual Verification 'Phase 5: Media3 Integration & Synchronization' (Protocol in workflow.md)

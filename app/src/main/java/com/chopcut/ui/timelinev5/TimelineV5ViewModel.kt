@@ -53,4 +53,16 @@ class TimelineV5ViewModel(
             )
         }
     }
+
+    /**
+     * Atualiza a duração total do vídeo.
+     */
+    fun updateTotalDuration(durationMs: Long) {
+        _state.update { current ->
+            current.copy(
+                totalDurationMs = durationMs,
+                selectedEndMs = if (current.selectedEndMs == current.totalDurationMs) durationMs else current.selectedEndMs.coerceAtMost(durationMs)
+            )
+        }
+    }
 }

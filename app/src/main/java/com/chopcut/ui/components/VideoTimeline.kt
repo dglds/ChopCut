@@ -47,13 +47,7 @@ data class TimelineThumbnail(
     val bitmap: Bitmap?
 )
 
-/**
- * Trim range data
- */
-data class TrimRange(
-    val startMs: Long,
-    val endMs: Long
-)
+
 
 /**
  * Configurações da timeline com playhead fixo

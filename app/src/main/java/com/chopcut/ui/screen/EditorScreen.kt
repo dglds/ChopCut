@@ -339,6 +339,7 @@ fun EditorScreen(
                             if (videoDurationMs > 0) {
                                 EditorTimelineIntegration(
                                     previewManager = previewManager,
+                                    videoUri = currentVideoUri,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
