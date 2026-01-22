@@ -3,8 +3,8 @@
 Implement a robust, Material 3 Expressive video timeline component for range selection and scrubbing, utilizing Media3 for frame extraction.
 
 ## Phase 1: Foundation & State Management
-- [ ] Task: Define `TimelineState` and `Thumbnail` data models to handle range (start/end) and playhead positions.
-- [ ] Task: Implement a ViewModel or State Holder to manage the interaction logic (e.g., preventing start handle from crossing end handle).
+- [x] Task: Define `TimelineState` and `Thumbnail` data models to handle range (start/end) and playhead positions. [09bd213]
+- [~] Task: Implement a ViewModel or State Holder to manage the interaction logic (e.g., preventing start handle from crossing end handle).
 - [ ] Task: Write unit tests for `TimelineState` boundary logic and time-to-pixel coordinate conversions.
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: Foundation & State Management' (Protocol in workflow.md)
 
