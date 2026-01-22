@@ -1,6 +1,6 @@
 # Implementation Plan - Timelinev4
 
-## Phase 1: Foundation & State Management
+## Phase 1: Foundation & State Management [checkpoint: abe86a9]
 - [x] Task: Define `TimelineState` and `TimelineEvent` sealed classes.
     - [x] Create `TimelineState.kt` (position, zoomLevel, isScrubbing, clips).
     - [x] Create `TimelineEvent.kt` (Seek, Zoom, Scroll).
@@ -8,7 +8,7 @@
     - [x] TDD: Write unit tests for ViewModel state updates (seek, play/pause sync).
     - [x] Implement `TimelineViewModel` to manage the shared state between Player and Timeline.
     - [x] Implement `updatePosition(long)` and `onScrubStart/End` logic.
-- [ ] Task: Conductor - User Manual Verification 'Foundation & State Management' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Foundation & State Management' (Protocol in workflow.md)
 
 ## Phase 2: Visual Components (Core UI)
 - [ ] Task: Implement `TimecodeView`.
