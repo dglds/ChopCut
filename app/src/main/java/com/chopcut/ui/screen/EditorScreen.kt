@@ -49,7 +49,7 @@ import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
 import com.chopcut.ui.components.TrimRange
-import com.chopcut.ui.components.VideoTimeline
+import com.chopcut.ui.timeline.Timeline
 import com.chopcut.ui.filter.TrimContent
 import com.chopcut.ui.filter.CropContent
 import com.chopcut.ui.components.EditorSplitLayout
@@ -278,23 +278,19 @@ fun EditorScreen(
                         Spacer(Modifier.height(8.dp))
                     }
 
-                    // VideoTimeline unificado (Player + Timeline)
-                    val currentVideoInfo = videoInfo
-                    if (currentVideoInfo != null) {
-                        VideoTimeline(
+                    // Timeline unificada (Player + Timeline)
+                    if (videoUri != null) {
+                        Timeline(
                             uri = videoUri,
                             previewManager = previewManager,
                             modifier = Modifier.fillMaxWidth(),
-                            rotationDegrees = totalRotation,
                             onVideoClick = {
                                 if (previewManager.isPlaying.value) {
                                     previewManager.pause()
                                 } else {
                                     previewManager.play()
                                 }
-                            },
-                            videoWidth = currentVideoInfo.width,
-                            videoHeight = currentVideoInfo.height
+                            }
                         )
 
                         // Timer Centralizado
