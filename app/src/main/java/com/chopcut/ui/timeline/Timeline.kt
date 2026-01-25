@@ -26,6 +26,14 @@ import com.chopcut.ui.timeline.model.Thumbnail
 /**
  * Componente principal da Timeline com playhead fixo no centro.
  * As thumbnails rolam horizontalmente sob o playhead.
+ *
+ * @param viewModel ViewModel da Timeline
+ * @param thumbnails Lista de thumbnails do vídeo
+ * @param modifier Modifier
+ * @param showControls Se deve mostrar controles de range
+ * @param thumbnailWidth Largura de cada thumbnail (calculada baseado no aspect ratio)
+ * @param onScrubStart Callback quando scrubbing inicia
+ * @param onScrubEnd Callback quando scrubbing termina
  */
 @Composable
 fun Timeline(
@@ -33,6 +41,7 @@ fun Timeline(
     thumbnails: List<Thumbnail>,
     modifier: Modifier = Modifier,
     showControls: Boolean = true,
+    thumbnailWidth: androidx.compose.ui.unit.Dp = 80.dp,
     onScrubStart: () -> Unit = {},
     onScrubEnd: () -> Unit = {}
 ) {
@@ -55,7 +64,7 @@ fun Timeline(
             ThumbnailStrip(
                 thumbnails = thumbnails,
                 modifier = Modifier.fillMaxSize(),
-                thumbnailWidth = 80.dp,
+                thumbnailWidth = thumbnailWidth,
                 playheadPositionMs = state.playheadPositionMs,
                 totalDurationMs = durationMs,
                 onThumbnailClick = { timeMs ->

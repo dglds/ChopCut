@@ -49,7 +49,7 @@ import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
 import com.chopcut.ui.components.TrimRange
-import com.chopcut.ui.components.VideoPreview
+import com.chopcut.ui.components.VideoTimeline
 import com.chopcut.ui.filter.TrimContent
 import com.chopcut.ui.filter.CropContent
 import com.chopcut.ui.components.EditorSplitLayout
@@ -77,8 +77,6 @@ fun EditorScreen(
     val previewManager = remember { PreviewManager(context) }
 
     var trimRange by remember { mutableStateOf<TrimRange?>(null) }
-    var currentVideoUri by remember { mutableStateOf(videoUri) }
-    var videoDurationMs by remember { mutableLongStateOf(0L) }
 
     val editorViewModel: EditorViewModel = viewModel(
         factory = EditorViewModelFactory(
@@ -124,40 +122,13 @@ fun EditorScreen(
         }
     }
 
-    LaunchedEffect(project) {
-        project?.let {
-            currentVideoUri = Uri.parse(it.sourceVideoUri)
-        }
-    }
-
     LaunchedEffect(videoInfo) {
         val info = videoInfo
         if (info != null) {
-            videoDurationMs = info.durationMs
+            val videoDurationMs = info.durationMs
             if (videoDurationMs > 0 && trimRange == null) {
                 trimRange = TrimRange(0L, videoDurationMs)
             }
-        }
-    }
-
-    // Handlers de trim por playhead
-    fun onSetTrimStart() {
-        val currentPos = previewManager.currentPosition.value
-        val endMs = trimRange?.endMs ?: videoDurationMs
-        trimRange = TrimRange(currentPos, endMs.coerceAtLeast(currentPos))
-    }
-
-    fun onSetTrimEnd() {
-        val currentPos = previewManager.currentPosition.value
-        val startMs = trimRange?.startMs ?: 0L
-        trimRange = TrimRange(startMs.coerceAtMost(currentPos), currentPos)
-    }
-
-    fun onResetTrim() {
-        trimRange = if (videoDurationMs > 0) {
-            TrimRange(0L, videoDurationMs)
-        } else {
-            null
         }
     }
 
@@ -307,42 +278,24 @@ fun EditorScreen(
                         Spacer(Modifier.height(8.dp))
                     }
 
-                    VideoPreview(
-                        uri = currentVideoUri,
-                        previewManager = previewManager,
-                        modifier = Modifier.fillMaxWidth(),
-                        rotationDegrees = totalRotation,
-                        onPositionChanged = { positionMs ->
-                            Timber.d("Position: ${positionMs}ms")
-                        },
-                        onVideoClick = {
-                            if (previewManager.isPlaying.value) {
-                                previewManager.pause()
-                            } else {
-                                previewManager.play()
-                            }
-                        }
-                    )
-
-                    Spacer(Modifier.height(16.dp))
-
-                    // Timeline & Waveform Section
-                    if (videoInfo != null) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                                .padding(8.dp)
-                        ) {
-                            // Timeline com múltiplos ranges e playhead fixo no centro
-                            if (videoDurationMs > 0) {
-                                EditorTimelineIntegration(
-                                    previewManager = previewManager,
-                                    videoUri = currentVideoUri,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
+                    // VideoTimeline unificado (Player + Timeline)
+                    val currentVideoInfo = videoInfo
+                    if (currentVideoInfo != null) {
+                        VideoTimeline(
+                            uri = videoUri,
+                            previewManager = previewManager,
+                            modifier = Modifier.fillMaxWidth(),
+                            rotationDegrees = totalRotation,
+                            onVideoClick = {
+                                if (previewManager.isPlaying.value) {
+                                    previewManager.pause()
+                                } else {
+                                    previewManager.play()
+                                }
+                            },
+                            videoWidth = currentVideoInfo.width,
+                            videoHeight = currentVideoInfo.height
+                        )
 
                         // Timer Centralizado
                         Spacer(Modifier.height(8.dp))
@@ -354,7 +307,7 @@ fun EditorScreen(
                             val seconds = currentPos / 1000
                             val decis = (currentPos % 1000) / 100
                             val timerText = String.format(java.util.Locale.US, "%02d,%d", seconds, decis)
-                            
+
                             Text(
                                 text = timerText,
                                 style = MaterialTheme.typography.titleMedium,
@@ -552,39 +505,6 @@ fun EditorScreen(
                 // Tentar novamente com o mesmo preset
                 exportScreenState = ExportScreenState.SELECTING_PRESET
             }
-        )
-    }
-}
-
-@Composable
-fun VideoInfoDisplay(videoInfo: com.chopcut.data.model.VideoInfo) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            text = "Video Information",
-            style = MaterialTheme.typography.titleSmall
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Resolution: ${videoInfo.width}x${videoInfo.height}",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Text(
-            text = "Duration: ${formatTime(videoInfo.durationMs)}",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Text(
-            text = "Frame Rate: ${videoInfo.frameRate} fps",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Text(
-            text = "Bitrate: ${videoInfo.bitrate / 1_000_000} Mbps",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Text(
-            text = "Codec: ${videoInfo.videoCodec ?: "Unknown"}",
-            style = MaterialTheme.typography.bodySmall
         )
     }
 }
