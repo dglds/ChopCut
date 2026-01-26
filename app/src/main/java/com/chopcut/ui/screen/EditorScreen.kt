@@ -279,6 +279,8 @@ fun EditorScreen(
                     }
 
                     // Timeline unificada (Player + Timeline)
+                    val currentVideoUri by editorViewModel.currentVideoUri.collectAsStateWithLifecycle()
+                    val videoUri = currentVideoUri
                     if (videoUri != null) {
                         Timeline(
                             uri = videoUri,

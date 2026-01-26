@@ -95,6 +95,10 @@ class EditorViewModel(
     private val _videoInfo = MutableStateFlow<VideoInfo?>(null)
     val videoInfo: StateFlow<VideoInfo?> = _videoInfo.asStateFlow()
 
+    // Current video URI (may be external or internal)
+    private val _currentVideoUri = MutableStateFlow<Uri?>(null)
+    val currentVideoUri: StateFlow<Uri?> = _currentVideoUri.asStateFlow()
+
     // Waveform state
     private val _waveformData = MutableStateFlow<WaveformData>(WaveformData.empty())
     val waveformData: StateFlow<WaveformData> = _waveformData.asStateFlow()
@@ -122,6 +126,9 @@ class EditorViewModel(
     val activeTool: StateFlow<EditorTool> = _activeTool.asStateFlow()
 
     init {
+        // Initialize with provided URI (will be updated to internal URI after import)
+        _currentVideoUri.value = videoUri
+
         if (projectId != null) {
             loadProject(projectId)
         } else {
@@ -162,14 +169,17 @@ class EditorViewModel(
                 
                 if (internalFile != null) {
                     val internalUri = Uri.fromFile(internalFile)
-                    
+
+                    // Update video URI to internal URI
+                    _currentVideoUri.value = internalUri
+
                     // 3. Update project with internal URI and Thumbnail
                     val updatedProject = initialProject.copy(
                         sourceVideoUri = internalUri.toString(),
                         thumbnail = thumbPath
                     )
                     _project.value = updatedProject
-                    
+
                     // Save update silently
                     projectRepository.saveProject(updatedProject, edits.value)
                     Timber.d("Project video imported successfully: $internalUri, Thumb: $thumbPath")
@@ -187,7 +197,11 @@ class EditorViewModel(
                 val loadedEdits = pair.second
                 _project.value = project
                 undoManager.loadInitialState(loadedEdits)
-                loadVideoMetadata(Uri.parse(project.sourceVideoUri))
+
+                // Update video URI to internal URI from project
+                val projectUri = Uri.parse(project.sourceVideoUri)
+                _currentVideoUri.value = projectUri
+                loadVideoMetadata(projectUri)
             }
         }
     }
