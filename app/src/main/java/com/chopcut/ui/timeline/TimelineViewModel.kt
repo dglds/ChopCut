@@ -23,13 +23,15 @@ class TimelineViewModel(
     val state: StateFlow<com.chopcut.ui.timeline.model.TimelineState> = _state.asStateFlow()
 
     /**
-     * Adiciona um novo range com 25% da duração total, centralizado.
+     * Adiciona um novo range com duração de 1 thumbnail (10% do total), iniciando após o playhead.
      */
     fun addRange() {
         _state.update { current ->
-            val duration25 = (current.totalDurationMs * 0.25f).toLong().coerceAtLeast(1000L)
-            val startMs = ((current.totalDurationMs - duration25) / 2).coerceAtLeast(0)
-            val endMs = (startMs + duration25).coerceAtMost(current.totalDurationMs)
+            // Duração de 1 thumbnail (10% do total, já que temos 10 thumbnails)
+            val oneThumbDuration = (current.totalDurationMs / 10f).toLong().coerceAtLeast(1000L)
+            // Iniciar após o playhead
+            val startMs = current.playheadPositionMs
+            val endMs = (startMs + oneThumbDuration).coerceAtMost(current.totalDurationMs)
 
             val newRange = VideoRange(
                 startMs = startMs,
@@ -118,6 +120,15 @@ class TimelineViewModel(
     fun updateTotalDuration(durationMs: Long) {
         _state.update { current ->
             current.copy(totalDurationMs = durationMs)
+        }
+    }
+
+    /**
+     * Retorna o range que contém a posição do playhead, se houver.
+     */
+    fun getRangeAtPlayhead(): VideoRange? {
+        return state.value.ranges.firstOrNull {
+            state.value.playheadPositionMs in it.startMs..it.endMs
         }
     }
 }

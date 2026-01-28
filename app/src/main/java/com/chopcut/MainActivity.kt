@@ -22,7 +22,6 @@ import com.chopcut.ui.screen.EditorScreen
 import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.ProjectsScreen
 import com.chopcut.ui.screen.SettingsScreen
-import com.chopcut.ui.screen.TestScreen
 import com.chopcut.ui.theme.ChopCutTheme
 
 /**
@@ -142,19 +141,6 @@ class MainActivity : ComponentActivity() {
                             SettingsScreen(
                                 onNavigateBack = {
                                     navController.popBackStack()
-                                }
-                            )
-                        }
-
-                        // ==================== TEST SCREEN ====================
-                        composable("tests") {
-                            TestScreen(
-                                onNavigateBack = {
-                                    navController.popBackStack()
-                                },
-                                onNavigateToEditor = { videoUri ->
-                                    val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
-                                    navController.navigate("editor/$encodedUri")
                                 }
                             )
                         }

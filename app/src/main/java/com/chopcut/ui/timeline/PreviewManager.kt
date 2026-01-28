@@ -1,4 +1,4 @@
-package com.chopcut.ui.preview
+package com.chopcut.ui.timeline
 
 import android.content.Context
 import android.net.Uri

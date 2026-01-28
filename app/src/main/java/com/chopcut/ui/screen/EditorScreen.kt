@@ -49,13 +49,13 @@ import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
 import com.chopcut.ui.components.TrimRange
-import com.chopcut.ui.timeline.Timeline
+import com.chopcut.ui.components.TimelinePlayer
 import com.chopcut.ui.filter.TrimContent
 import com.chopcut.ui.filter.CropContent
 import com.chopcut.ui.components.EditorSplitLayout
 import com.chopcut.ui.components.ToolPanelContainer
-import com.chopcut.ui.preview.PreviewManager
-import com.chopcut.ui.preview.PlayerState
+import com.chopcut.ui.timeline.PreviewManager
+import com.chopcut.ui.timeline.PlayerState
 import com.chopcut.ui.filter.FilterContent
 import com.chopcut.ui.filter.RotationContent
 import com.chopcut.ui.filter.SpeedContent
@@ -97,13 +97,9 @@ fun EditorScreen(
     val saveStatus by editorViewModel.saveStatus.collectAsStateWithLifecycle()
     val presets by editorViewModel.availablePresets.collectAsStateWithLifecycle(initialValue = emptyList())
 
-    // Active Tool State from ViewModel
     val activeTool by editorViewModel.activeTool.collectAsStateWithLifecycle()
-
-    // Player state
     val playerState by previewManager.playerState.collectAsStateWithLifecycle()
 
-    // Estado da tela de exportação unificada
     var exportScreenState by remember { mutableStateOf(ExportScreenState.SELECTING_PRESET) }
     var showExportScreen by remember { mutableStateOf(false) }
     var lastExportUri by remember { mutableStateOf<Uri?>(null) }
@@ -132,7 +128,6 @@ fun EditorScreen(
         }
     }
 
-    // Gerenciar estado de exportação baseado no resultado
     LaunchedEffect(exportResult) {
         val result = exportResult
         if (result != null) {
@@ -148,14 +143,12 @@ fun EditorScreen(
         }
     }
 
-    // Atualizar estado para EXPORTING quando isExporting muda
     LaunchedEffect(isExporting) {
         if (isExporting && showExportScreen) {
             exportScreenState = ExportScreenState.EXPORTING
         }
     }
 
-    // Estados ativos das features
     val hasTrim by remember { derivedStateOf { edits.any { it is EditOperation.Trim } } }
     val hasCrop by remember { derivedStateOf { edits.any { it is EditOperation.Crop } } }
     val hasFilter by remember { derivedStateOf {
@@ -169,7 +162,7 @@ fun EditorScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Video Editor")
+                        Text("ChopCut Editor")
                         Text(
                             text = when(saveStatus) {
                                 EditorViewModel.SaveStatus.SAVED -> "Salvo"
@@ -193,7 +186,6 @@ fun EditorScreen(
                     IconButton(onClick = { editorViewModel.redo() }, enabled = canRedo) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Refazer")
                     }
-                    // Botão Exportar
                     IconButton(
                         onClick = {
                             exportScreenState = ExportScreenState.SELECTING_PRESET
@@ -207,240 +199,131 @@ fun EditorScreen(
             )
         }
     ) { paddingValues ->
-        // Split Layout Refactoring with Weights (85/15)
         EditorSplitLayout(
             modifier = Modifier.padding(paddingValues),
-            topWeight = 0.85f,
-            bottomWeight = 0.15f,
+            topWeight = 0.8f,
+            bottomWeight = 0.2f,
             topContent = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    val totalRotation = edits.filterIsInstance<EditOperation.Rotation>()
-                        .sumOf { it.degrees }
-                        .toFloat() % 360f
-
-                    // Video Info Display (above preview)
-                    val info = videoInfo
-                    if (info != null) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            VideoInfoBadge(
-                                icon = Icons.Default.PlayArrow,
-                                text = formatTime(info.durationMs),
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textTint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            VideoInfoBadge(
-                                icon = Icons.Default.Edit,
-                                text = "${info.width}x${info.height}",
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textTint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            VideoInfoBadge(
-                                icon = Icons.Default.Notifications,
-                                text = "${info.frameRate} fps",
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textTint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            VideoInfoBadge(
-                                icon = Icons.Default.Share,
-                                text = "${info.bitrate / 1_000_000}M",
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textTint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            // Player state badge
-                            val (playerStateIcon, playerStateColor) = when (playerState) {
-                                PlayerState.PLAYING -> Icons.Default.PlayArrow to Color(0xFF4CAF50) // Green
-                                PlayerState.PAUSED -> Icons.Default.Close to Color(0xFFFFEB3B) // Yellow
-                                PlayerState.STOPPED -> Icons.Default.Close to Color(0xFFF44336) // Red
-                            }
-                            val playerStateText = when (playerState) {
-                                PlayerState.PLAYING -> "Playing"
-                                PlayerState.PAUSED -> "Paused"
-                                PlayerState.STOPPED -> "Stopped"
-                            }
-                            VideoInfoBadge(
-                                icon = playerStateIcon,
-                                text = playerStateText,
-                                iconTint = playerStateColor,
-                                textTint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-
-                    // Timeline unificada (Player + Timeline)
+                Column(modifier = Modifier.fillMaxSize()) {
                     val currentVideoUri by editorViewModel.currentVideoUri.collectAsStateWithLifecycle()
                     val videoUri = currentVideoUri
-                    if (videoUri != null) {
-                        Timeline(
-                            uri = videoUri,
-                            previewManager = previewManager,
-                            modifier = Modifier.fillMaxWidth(),
-                            onVideoClick = {
-                                if (previewManager.isPlaying.value) {
-                                    previewManager.pause()
-                                } else {
-                                    previewManager.play()
-                                }
-                            }
-                        )
-
-                        // Timer Centralizado
-                        Spacer(Modifier.height(8.dp))
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val currentPos = previewManager.currentPosition.collectAsState().value
-                            val seconds = currentPos / 1000
-                            val decis = (currentPos % 1000) / 100
-                            val timerText = String.format(java.util.Locale.US, "%02d,%d", seconds, decis)
-
-                            Text(
-                                text = timerText,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                    
+                    // Area do Player e Timeline (Fixo)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .background(Color.Black)
+                    ) {
+                        if (videoUri != null) {
+                            TimelinePlayer(
+                                videoUri = videoUri,
+                                modifier = Modifier.fillMaxSize()
                             )
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
+                        } else {
+                            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                         }
                     }
 
-                    // ===== CONTROLES PRINCIPAIS =====
-                    Spacer(Modifier.height(16.dp))
+                    // Area de Ferramentas e Info (Scrollable)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        val info = videoInfo
+                        if (info != null) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                VideoInfoBadge(Icons.Default.PlayArrow, formatTime(info.durationMs))
+                                VideoInfoBadge(Icons.Default.Edit, "${info.width}x${info.height}")
+                                VideoInfoBadge(Icons.Default.Notifications, "${info.frameRate} fps")
+                            }
+                        }
 
-                    // Tool Panel (quando uma ferramenta está ativa)
-                    if (activeTool != EditorTool.NONE) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            tonalElevation = 2.dp,
-                            shadowElevation = 2.dp
-                        ) {
-                            ToolPanelContainer(currentState = activeTool) { targetTool ->
-                                when (targetTool) {
-                                    EditorTool.TRIM -> {
-                                        TrimContent(
-                                            currentPosition = previewManager.currentPosition.collectAsState().value,
-                                            duration = videoInfo?.durationMs ?: 0L,
-                                            initialTrim = trimRange,
-                                            onConfirm = { range ->
-                                                if (range != null) editorViewModel.applyTrim(range)
-                                            }
-                                        )
-                                    }
-                                    EditorTool.CROP -> {
-                                        val currentCrop = edits.filterIsInstance<EditOperation.Crop>().lastOrNull()
-                                        val initialCropRect = currentCrop?.let {
-                                            android.graphics.RectF(
-                                                it.left / (videoInfo?.width ?: 1).toFloat(),
-                                                it.top / (videoInfo?.height ?: 1).toFloat(),
-                                                it.right / (videoInfo?.width ?: 1).toFloat(),
-                                                it.bottom / (videoInfo?.height ?: 1).toFloat()
+                        if (activeTool != EditorTool.NONE) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                tonalElevation = 2.dp,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                ToolPanelContainer(currentState = activeTool) { targetTool ->
+                                    when (targetTool) {
+                                        EditorTool.TRIM -> {
+                                            TrimContent(
+                                                currentPosition = 0L,
+                                                duration = videoInfo?.durationMs ?: 0L,
+                                                initialTrim = trimRange,
+                                                onConfirm = { range ->
+                                                    if (range != null) editorViewModel.applyTrim(range)
+                                                }
                                             )
                                         }
-
-                                        CropContent(
-                                            initialCrop = initialCropRect,
-                                            videoWidth = videoInfo?.width ?: 0,
-                                            videoHeight = videoInfo?.height ?: 0,
-                                            onConfirm = { op ->
-                                                if (op != null) {
-                                                    editorViewModel.addOperation(op)
-                                                }
-                                            },
-                                            onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) }
-                                        )
-                                    }
-                                    EditorTool.ROTATE -> {
-                                        val currentRotations = edits.filterIsInstance<EditOperation.Rotation>()
-                                        val totalRotation = currentRotations.sumOf { it.degrees }
-
-                                        RotationContent(
-                                            initialRotation = totalRotation,
-                                            onConfirm = { op ->
-                                                editorViewModel.addOperation(op)
-                                            },
-                                            onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) }
-                                        )
-                                    }
-                                    EditorTool.FILTER -> {
-                                        val currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()
-                                        val state = rememberFilterState(currentFilter)
-                                        FilterContent(
-                                            filterState = state,
-                                            onConfirm = { op ->
-                                                if (op != null) {
-                                                    editorViewModel.addOperation(op)
-                                                } else {
-                                                    editorViewModel.addOperation(EditOperation.Filter(FilterType.NONE, 1.0f))
-                                                }
-                                            },
-                                            onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) }
-                                        )
-                                    }
-                                    EditorTool.SPEED -> {
-                                        val currentSpeed = edits.filterIsInstance<EditOperation.Speed>().lastOrNull()
-                                        val state = rememberSpeedState(currentSpeed)
-                                        SpeedContent(
-                                            speedState = state,
-                                            onConfirm = { op ->
-                                                editorViewModel.addOperation(op)
-                                            },
-                                            onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) },
-                                            getDisplayColor = {
-                                                if (state.selectedValue < 1.0f) Color(0xFF4CAF50)
-                                                else if (state.selectedValue > 1.0f) Color(0xFFFF9800)
-                                                else MaterialTheme.colorScheme.primary
+                                        EditorTool.CROP -> {
+                                            val currentCrop = edits.filterIsInstance<EditOperation.Crop>().lastOrNull()
+                                            val initialCropRect = currentCrop?.let {
+                                                android.graphics.RectF(
+                                                    it.left / (videoInfo?.width ?: 1).toFloat(),
+                                                    it.top / (videoInfo?.height ?: 1).toFloat(),
+                                                    it.right / (videoInfo?.width ?: 1).toFloat(),
+                                                    it.bottom / (videoInfo?.height ?: 1).toFloat()
+                                                )
                                             }
-                                        )
+
+                                            CropContent(
+                                                initialCrop = initialCropRect,
+                                                videoWidth = videoInfo?.width ?: 0,
+                                                videoHeight = videoInfo?.height ?: 0,
+                                                onConfirm = { op ->
+                                                    if (op != null) editorViewModel.addOperation(op)
+                                                },
+                                                onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) }
+                                            )
+                                        }
+                                        EditorTool.ROTATE -> {
+                                            val currentRotations = edits.filterIsInstance<EditOperation.Rotation>()
+                                            val totalRotation = currentRotations.sumOf { it.degrees }
+
+                                            RotationContent(
+                                                initialRotation = totalRotation,
+                                                onConfirm = { op -> editorViewModel.addOperation(op) },
+                                                onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) }
+                                            )
+                                        }
+                                        EditorTool.FILTER -> {
+                                            val currentFilter = edits.filterIsInstance<EditOperation.Filter>().lastOrNull()
+                                            val state = rememberFilterState(currentFilter)
+                                            FilterContent(
+                                                filterState = state,
+                                                onConfirm = { op ->
+                                                    if (op != null) editorViewModel.addOperation(op)
+                                                    else editorViewModel.addOperation(EditOperation.Filter(FilterType.NONE, 1.0f))
+                                                },
+                                                onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) }
+                                            )
+                                        }
+                                        EditorTool.SPEED -> {
+                                            val currentSpeed = edits.filterIsInstance<EditOperation.Speed>().lastOrNull()
+                                            val state = rememberSpeedState(currentSpeed)
+                                            SpeedContent(
+                                                speedState = state,
+                                                onConfirm = { op -> editorViewModel.addOperation(op) },
+                                                onDismiss = { editorViewModel.setActiveTool(EditorTool.NONE) },
+                                                getDisplayColor = {
+                                                    if (state.selectedValue < 1.0f) Color(0xFF4CAF50)
+                                                    else if (state.selectedValue > 1.0f) Color(0xFFFF9800)
+                                                    else MaterialTheme.colorScheme.primary
+                                                }
+                                            )
+                                        }
+                                        else -> {}
                                     }
-                                    else -> { /* No content */ }
                                 }
                             }
                         }
-                        Spacer(Modifier.height(12.dp))
-                    }
-
-                    if (edits.isNotEmpty()) {
-                        val opNames = edits.reversed().map { op ->
-                            when (op) {
-                                is EditOperation.Trim -> "Trim"
-                                is EditOperation.Rotation -> "Rotation"
-                                is EditOperation.Resize -> "Resize"
-                                is EditOperation.Crop -> "Crop"
-                                is EditOperation.Filter -> "Filter"
-                                is EditOperation.Speed -> "Speed"
-                                is EditOperation.Volume -> "Volume"
-                                is EditOperation.Fade -> "Fade"
-                                else -> "Op"
-                            }
-                        }
-
-                        Text(
-                            text = "Histórico: ${opNames.joinToString(", ")}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 8.sp
-                        )
-                        Spacer(Modifier.height(8.dp))
                     }
                 }
             },
@@ -448,7 +331,7 @@ fun EditorScreen(
                 EditorControlsPanel(
                     activeTool = activeTool,
                     onToolChange = { tool -> editorViewModel.setActiveTool(tool) },
-                    currentPosition = previewManager.currentPosition.collectAsState().value,
+                    currentPosition = 0L,
                     duration = videoInfo?.durationMs ?: 0L,
                     isExporting = isExporting,
                     hasTrim = hasTrim,
@@ -458,18 +341,13 @@ fun EditorScreen(
                     videoInfo = videoInfo,
                     trimRange = trimRange,
                     edits = edits,
-                    onApplyEdit = { op ->
-                        editorViewModel.addOperation(op)
-                    },
-                    onTrimClick = { range ->
-                        if (range != null) editorViewModel.applyTrim(range)
-                    }
+                    onApplyEdit = { op -> editorViewModel.addOperation(op) },
+                    onTrimClick = { range -> if (range != null) editorViewModel.applyTrim(range) }
                 )
             }
         )
     }
 
-    // Tela unificada de Exportação e Resultado
     if (showExportScreen) {
         ExportResultScreen(
             state = exportScreenState,
@@ -490,19 +368,13 @@ fun EditorScreen(
             },
             onDismiss = {
                 showExportScreen = false
-                // Resetar estado ao fechar
-                if (!isExporting) {
-                    exportScreenState = ExportScreenState.SELECTING_PRESET
-                }
+                if (!isExporting) exportScreenState = ExportScreenState.SELECTING_PRESET
             },
             onBackToEditor = {
                 showExportScreen = false
                 exportScreenState = ExportScreenState.SELECTING_PRESET
             },
-            onRetry = {
-                // Tentar novamente com o mesmo preset
-                exportScreenState = ExportScreenState.SELECTING_PRESET
-            }
+            onRetry = { exportScreenState = ExportScreenState.SELECTING_PRESET }
         )
     }
 }
@@ -514,9 +386,6 @@ private fun formatTime(timeMs: Long): String {
     return String.format("%02d:%02d", minutes, seconds)
 }
 
-/**
- * Painel de controles na parte inferior da tela dividida com botões de seleção de features.
- */
 @Composable
 private fun EditorControlsPanel(
     activeTool: EditorTool,
@@ -539,75 +408,20 @@ private fun EditorControlsPanel(
         tonalElevation = 3.dp,
         shadowElevation = 3.dp
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(WindowInsets.navigationBars.asPaddingValues())
+        Row(
+            modifier = Modifier.fillMaxSize().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Botões de seleção de features
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Trim
-                FeatureButton(
-                    icon = Icons.Default.Check,
-                    label = "Trim",
-                    isActive = hasTrim,
-                    isToolActive = activeTool == EditorTool.TRIM,
-                    enabled = !isExporting,
-                    onClick = { onToolChange(EditorTool.TRIM) }
-                )
-                // Crop
-                FeatureButton(
-                    icon = Icons.Default.Create,
-                    label = "Crop",
-                    isActive = hasCrop,
-                    isToolActive = activeTool == EditorTool.CROP,
-                    enabled = !isExporting,
-                    onClick = { onToolChange(EditorTool.CROP) }
-                )
-                // Rotate
-                FeatureButton(
-                    icon = Icons.Default.Refresh,
-                    label = "Girar",
-                    isActive = edits.any { it is EditOperation.Rotation },
-                    isToolActive = activeTool == EditorTool.ROTATE,
-                    enabled = !isExporting,
-                    onClick = { onToolChange(EditorTool.ROTATE) }
-                )
-
-                // Filter
-                FeatureButton(
-                    icon = Icons.Default.Settings,
-                    label = "Filtro",
-                    isActive = hasFilter,
-                    isToolActive = activeTool == EditorTool.FILTER,
-                    enabled = !isExporting,
-                    onClick = { onToolChange(EditorTool.FILTER) }
-                )
-
-                // Speed
-                FeatureButton(
-                    icon = Icons.Default.PlayArrow,
-                    label = "Veloc",
-                    isActive = hasSpeed,
-                    isToolActive = activeTool == EditorTool.SPEED,
-                    enabled = !isExporting,
-                    onClick = { onToolChange(EditorTool.SPEED) }
-                )
-            }
+            FeatureButton(Icons.Default.Check, "Trim", hasTrim, activeTool == EditorTool.TRIM, !isExporting) { onToolChange(EditorTool.TRIM) }
+            FeatureButton(Icons.Default.Create, "Crop", hasCrop, activeTool == EditorTool.CROP, !isExporting) { onToolChange(EditorTool.CROP) }
+            FeatureButton(Icons.Default.Refresh, "Girar", edits.any { it is EditOperation.Rotation }, activeTool == EditorTool.ROTATE, !isExporting) { onToolChange(EditorTool.ROTATE) }
+            FeatureButton(Icons.Default.Settings, "Filtro", hasFilter, activeTool == EditorTool.FILTER, !isExporting) { onToolChange(EditorTool.FILTER) }
+            FeatureButton(Icons.Default.PlayArrow, "Veloc", hasSpeed, activeTool == EditorTool.SPEED, !isExporting) { onToolChange(EditorTool.SPEED) }
         }
     }
 }
 
-/**
- * Botão de feature para controles principais.
- */
 @Composable
 fun FeatureButton(
     icon: ImageVector,
@@ -622,89 +436,35 @@ fun FeatureButton(
             .clip(CircleShape)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .background(
-                    when {
-                        isToolActive -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                        isActive -> MaterialTheme.colorScheme.primaryContainer
-                        else -> Color.Transparent
-                    },
+                    if (isToolActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    else if (isActive) MaterialTheme.colorScheme.primaryContainer
+                    else Color.Transparent,
                     CircleShape
                 )
-                .then(
-                    if (isToolActive) {
-                        Modifier.border(
-                            width = 2.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = CircleShape
-                        )
-                    } else {
-                        Modifier
-                    }
-                ),
+                .then(if (isToolActive) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape) else Modifier),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                icon,
-                contentDescription = label,
-                modifier = Modifier.size(24.dp),
-                tint = if (enabled) {
-                    when {
-                        isToolActive -> MaterialTheme.colorScheme.primary
-                        isActive -> MaterialTheme.colorScheme.primary
-                        else -> MaterialTheme.colorScheme.onSurface
-                    }
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
+                icon, label, Modifier.size(24.dp),
+                tint = if (enabled) (if (isToolActive || isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (isToolActive) FontWeight.Bold else FontWeight.Normal,
-            color = if (enabled) {
-                if (isToolActive || isActive) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            }
-        )
+        Text(label, style = MaterialTheme.typography.labelSmall)
     }
 }
 
-/**
- * Badge compacto para informações do vídeo.
- */
 @Composable
-fun VideoInfoBadge(
-    icon: ImageVector,
-    text: String,
-    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    textTint: Color = MaterialTheme.colorScheme.onSurfaceVariant
-) {
-    Row(
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(horizontal = 2.dp)
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(12.dp),
-            tint = iconTint
-        )
+fun VideoInfoBadge(icon: ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
+        Icon(icon, null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.width(3.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = textTint
-        )
+        Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

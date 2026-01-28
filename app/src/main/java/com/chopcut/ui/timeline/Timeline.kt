@@ -67,7 +67,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.ui.PlayerView
 import com.chopcut.R
-import com.chopcut.ui.preview.PreviewManager
 import com.chopcut.ui.timeline.model.Thumbnail
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -110,11 +109,6 @@ fun Timeline(
 
     // Estado para thumbnails
     var thumbnails by remember { mutableStateOf<List<Thumbnail>>(emptyList()) }
-
-    // Estado para drag de handles
-    var handleDragType by remember { mutableStateOf(HandleDragType.NONE) }
-    var dragStartX by remember { mutableFloatStateOf(0f) }
-    var dragStartValue by remember { mutableLongStateOf(0L) }
 
     // Estado derivado: progresso (0f a 1f)
     val sliderPosition by remember {
@@ -344,297 +338,85 @@ fun Timeline(
 
         // ===== TIMELINE COM THUMBNAILS =====
         if (duration > 0) {
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(80.dp)
-                    .background(Color.Black.copy(alpha = 0.1f))
-            ) {
-                val containerWidth = constraints.maxWidth.toFloat()
-                val centerX = containerWidth / 2f
-                val handleWidthPx = with(density) { 16.dp.toPx() }
+            val listState = rememberLazyListState()
 
-                // Calcular frames baseado na duração (1 frame por segundo)
-                val frameWidth = with(density) { 80.dp.toPx() }
-                val frameCount by remember(duration) {
-                    derivedStateOf {
-                        if (duration <= 0) 0
-                        else {
-                            val framesPerSecond = duration / 1000
-                            framesPerSecond.coerceAtLeast(10).coerceAtMost(60)
-                        }
-                    }
-                }
-
-                // Estado para controle de scroll manual
-                var isScrolling by remember { mutableStateOf(false) }
-                val listState = rememberLazyListState()
-
-                // 3. UI SCROLL SYNCHRONIZATION
-
-                // User Input: Scroll -> Time (Scrubbing via list)
-                LaunchedEffect(listState) {
-                    androidx.compose.runtime.snapshotFlow { 
-                        listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset 
-                    }
-                    .collect { (index, offset) ->
-                        if (listState.isScrollInProgress && duration > 0 && frameCount > 0) {
-                            val msPerFrame = duration / frameCount.toFloat()
-                            val widthPerFramePx = frameWidth
-                            
-                            val baseTimeMs = index * msPerFrame
-                            val offsetTimeMs = (offset / widthPerFramePx) * msPerFrame
-                            val newTimeMs = (baseTimeMs + offsetTimeMs).toLong().coerceIn(0, duration)
-                            
-                            timelineViewModel.updatePlayheadPosition(newTimeMs)
-                            isScrubbing = true 
-                        } else if (!listState.isScrollInProgress && isScrubbing) {
-                            isScrubbing = false
-                        }
-                    }
-                }
-
-                // System Output: Time -> Scroll (Playback, Stop, External Seeks)
-                // Mantém a lista visualmente sincronizada com o playhead quando o usuário não está interagindo
-                LaunchedEffect(timelineState.playheadPositionMs, frameCount, duration, isScrolling) {
-                    if (!isScrolling && frameCount > 0 && duration > 0) {
-                        val totalScrollableWidth = frameCount * frameWidth
-                        val progress = timelineState.playheadPositionMs.toFloat() / duration
-                        val currentScrollPx = progress * totalScrollableWidth
-
-                        val targetIndex = (currentScrollPx / frameWidth).toInt()
-                        val targetOffset = (currentScrollPx % frameWidth).toInt()
-
-                        listState.scrollToItem(
-                            index = targetIndex,
-                            scrollOffset = targetOffset
-                        )
-                    }
-                }
-
-                // Detectar estado de scroll manual (auxiliar)
-                LaunchedEffect(listState.isScrollInProgress) {
-                    isScrolling = listState.isScrollInProgress
-                }
-
-                LazyRow(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = maxWidth / 2)
-                ) {
-                    items(frameCount.toInt()) { index ->
-                        val frameStartMs = (index * (duration / frameCount.toFloat())).toLong()
-                        val frameEndMs = ((index + 1) * (duration / frameCount.toFloat())).toLong()
-
-                        // Verificar se algum range cobre este frame
-                        val affectedRanges = timelineState.ranges.filter { range ->
-                            frameStartMs < range.endMs && frameEndMs > range.startMs
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .width(80.dp)
-                                .fillMaxHeight()
-                                .background(
-                                    if (index % 2 == 0)
-                                        Color.White
-                                    else
-                                        Color.LightGray.copy(alpha = 0.6f)
-                                )
-                                .border(
-                                    width = 0.5.dp,
-                                    color = Color.Gray.copy(alpha = 0.3f)
-                                )
-                                .clickable {
-                                    // Ao clicar, seek para este frame
-                                    isScrubbing = true
-                                    timelineViewModel.updatePlayheadPosition(frameStartMs)
-                                    previewManager.seekTo(frameStartMs)
-                                }
-                        ) {
-                            // Desenhar ranges sobre este frame
-                            affectedRanges.forEach { range ->
-                                val rangeStartProgress = range.startMs.toFloat() / duration
-                                val rangeEndProgress = range.endMs.toFloat() / duration
-                                val frameStartProgress = frameStartMs.toFloat() / duration
-                                val frameEndProgress = frameEndMs.toFloat() / duration
-
-                                val overlapStart = maxOf(rangeStartProgress, frameStartProgress)
-                                val overlapEnd = minOf(rangeEndProgress, frameEndProgress)
-                                val overlapWidth = (overlapEnd - overlapStart) * frameWidth
-
-                                val isPlayheadInsideRange = timelineState.playheadPositionMs in range.startMs..range.endMs
-
-                                Box(
-                                    modifier = Modifier
-                                        .width(with(density) { overlapWidth.toDp() })
-                                        .fillMaxHeight()
-                                        .background(
-                                            when {
-                                                range.isSelected -> Color(0xFF2196F3).copy(alpha = 0.3f)
-                                                isPlayheadInsideRange -> Color(0xFFF44336).copy(alpha = 0.3f)
-                                                else -> Color(0xFF4CAF50).copy(alpha = 0.3f)
-                                            }
-                                        )
-                                        .border(
-                                            width = if (range.isSelected) 2.dp else 1.dp,
-                                            color = when {
-                                                range.isSelected -> Color(0xFF2196F3)
-                                                isPlayheadInsideRange -> Color(0xFFF44336)
-                                                else -> Color(0xFF4CAF50)
-                                            }
-                                        )
-                                        .clickable {
-                                            timelineViewModel.selectRange(range.id)
-                                            isScrubbing = true
-                                            timelineViewModel.updatePlayheadPosition(range.startMs)
-                                            previewManager.seekTo(range.startMs)
-                                        }
-                                )
-                            }
-
-                            // Número do frame (opcional, para debug)
-                            Text(
-                                text = "${(frameStartMs / 1000).toInt()}s",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.Black.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(4.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Playhead fixo no centro
-                Playhead(
-                    positionPx = centerX,
-                    containerWidth = containerWidth,
-                    durationMs = duration,
-                    onPositionChanged = { newPx ->
-                        val clickProgress = (newPx / containerWidth).coerceIn(0f, 1f)
-                        val newTimeMs = (clickProgress * duration).toLong()
-                        isScrubbing = true
-                        timelineViewModel.updatePlayheadPosition(newTimeMs)
-                    },
-                    onDragStart = { isScrubbing = true },
-                    onDragEnd = {
-                        isScrubbing = false
-                        previewManager.seekTo(timelineState.playheadPositionMs)
-                    }
-                )
-
-                // Ranges
-                timelineState.ranges.forEach { range ->
-                    val startProgress = range.startMs.toFloat() / duration
-                    val endProgress = range.endMs.toFloat() / duration
-                    val rangeWidth = ((endProgress - startProgress) * containerWidth).coerceAtLeast(handleWidthPx)
-
-                    val playheadProgress = timelineState.playheadPositionMs.toFloat() / duration
-                    val rangeCenterProgress = (startProgress + endProgress) / 2
-                    val offsetFromCenter = (rangeCenterProgress - playheadProgress) * containerWidth
-
-                    if (offsetFromCenter > -containerWidth && offsetFromCenter < containerWidth) {
-                        Box(
-                            modifier = Modifier
-                                .height(80.dp)
-                                .width(with(density) { rangeWidth.toDp() })
-                                .align(Alignment.CenterStart)
-                                .offset {
-                                    IntOffset(
-                                        (centerX + offsetFromCenter - rangeWidth / 2).roundToInt(),
-                                        0
-                                    )
-                                }
-                                .background(
-                                    if (range.isSelected)
-                                        Color(0xFF2196F3).copy(alpha = 0.3f)
-                                    else
-                                        Color(0xFF4CAF50).copy(alpha = 0.3f)
-                                )
-                                .border(
-                                    width = if (range.isSelected) 2.dp else 1.dp,
-                                    color = if (range.isSelected) Color(0xFF2196F3) else Color(0xFF4CAF50)
-                                )
-                                .clickable { timelineViewModel.selectRange(range.id) }
-                        )
-
-                        // Handles do range selecionado
-                        if (range.isSelected) {
-                            val startOffsetFromCenter = (startProgress - playheadProgress) * containerWidth
-                            val endOffsetFromCenter = (endProgress - playheadProgress) * containerWidth
-
-                            // Handle esquerdo
-                            Box(
-                                modifier = Modifier
-                                    .width(with(density) { handleWidthPx.toDp() })
-                                    .height(80.dp)
-                                    .align(Alignment.CenterStart)
-                                    .offset {
-                                        IntOffset(
-                                            (centerX + startOffsetFromCenter).roundToInt(),
-                                            0
-                                        )
-                                    }
-                                    .background(Color(0xFF2196F3))
-                                    .pointerInput(range.id) {
-                                        detectDragGestures(
-                                            onDragStart = {
-                                                handleDragType = HandleDragType.LEFT
-                                                dragStartX = it.x
-                                                dragStartValue = range.startMs
-                                            },
-                                            onDragEnd = { handleDragType = HandleDragType.NONE }
-                                        ) { change, dragAmount ->
-                                            change.consume()
-                                            if (handleDragType == HandleDragType.LEFT) {
-                                                val deltaX = dragAmount.x
-                                                val deltaMs = ((deltaX / containerWidth) * duration).toLong()
-                                                val newStart = (dragStartValue + deltaMs)
-                                                    .coerceIn(0, range.endMs - 1)
-                                                timelineViewModel.updateSelectedRangeStart(newStart)
-                                            }
-                                        }
-                                    }
-                            )
-
-                            // Handle direito
-                            Box(
-                                modifier = Modifier
-                                    .width(with(density) { handleWidthPx.toDp() })
-                                    .height(80.dp)
-                                    .align(Alignment.CenterStart)
-                                    .offset {
-                                        IntOffset(
-                                            (centerX + endOffsetFromCenter - handleWidthPx).roundToInt(),
-                                            0
-                                        )
-                                    }
-                                    .background(Color(0xFF2196F3))
-                                    .pointerInput(range.id) {
-                                        detectDragGestures(
-                                            onDragStart = {
-                                                handleDragType = HandleDragType.RIGHT
-                                                dragStartX = it.x
-                                                dragStartValue = range.endMs
-                                            },
-                                            onDragEnd = { handleDragType = HandleDragType.NONE }
-                                        ) { change, dragAmount ->
-                                            change.consume()
-                                            if (handleDragType == HandleDragType.RIGHT) {
-                                                val deltaX = dragAmount.x
-                                                val deltaMs = ((deltaX / containerWidth) * duration).toLong()
-                                                val newEnd = (dragStartValue + deltaMs)
-                                                    .coerceIn(range.startMs + 1, duration)
-                                                timelineViewModel.updateSelectedRangeEnd(newEnd)
-                                            }
-                                        }
-                                    }
-                            )
-                        }
+            // Restaurando estados necessários para a lógica de sync
+            val frameCount by remember(duration) {
+                derivedStateOf {
+                    if (duration <= 0) 0
+                    else {
+                        val framesPerSecond = duration / 1000
+                        framesPerSecond.coerceAtLeast(10).coerceAtMost(60)
                     }
                 }
             }
+            var isScrolling by remember { mutableStateOf(false) }
+
+            // Reset scroll quando a posição volta a 0 (Stop)
+            // System Output: Time -> Scroll (Playback, Stop, External Seeks)
+            LaunchedEffect(timelineState.playheadPositionMs, frameCount, duration, isScrolling) {
+                if (!isScrolling && frameCount > 0 && duration > 0) {
+                    val frameWidthPx = with(density) { 80.dp.toPx() }
+                    val totalScrollableWidth = frameCount * frameWidthPx
+                    val progress = timelineState.playheadPositionMs.toFloat() / duration
+                    val currentScrollPx = progress * totalScrollableWidth
+
+                    val targetIndex = (currentScrollPx / frameWidthPx).toInt()
+                    val targetOffset = (currentScrollPx % frameWidthPx).toInt()
+
+                    listState.scrollToItem(
+                        index = targetIndex,
+                        scrollOffset = targetOffset
+                    )
+                }
+            }
+            
+            // Detectar estado de scroll manual (auxiliar)
+            LaunchedEffect(listState.isScrollInProgress) {
+                isScrolling = listState.isScrollInProgress
+            }
+
+            // User Input: Scroll -> Time (Scrubbing via list)
+            LaunchedEffect(listState) {
+                androidx.compose.runtime.snapshotFlow {
+                    listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+                }
+                .collect { (index, offset) ->
+                    if (listState.isScrollInProgress && duration > 0 && frameCount > 0) {
+                         val frameWidthPx = with(density) { 80.dp.toPx() } // Mesmo valor fixo usado no Strip
+                         val msPerFrame = duration / frameCount.toFloat()
+                        
+                        val baseTimeMs = index * msPerFrame
+                        val offsetTimeMs = (offset / frameWidthPx) * msPerFrame
+                        val newTimeMs = (baseTimeMs + offsetTimeMs).toLong().coerceIn(0, duration)
+                        
+                        timelineViewModel.updatePlayheadPosition(newTimeMs)
+                        isScrubbing = true 
+                    } else if (!listState.isScrollInProgress && isScrubbing) {
+                        isScrubbing = false
+                    }
+                }
+            }
+
+            TimelineStrip(
+                durationMs = duration,
+                playheadPositionMs = timelineState.playheadPositionMs,
+                ranges = timelineState.ranges,
+                listState = listState,
+                onSeek = { ms ->
+                    isScrubbing = true
+                    timelineViewModel.updatePlayheadPosition(ms)
+                },
+                onRangeSelect = { id -> timelineViewModel.selectRange(id) },
+                onRangeStartChange = { ms -> timelineViewModel.updateSelectedRangeStart(ms) },
+                onRangeEndChange = { ms -> timelineViewModel.updateSelectedRangeEnd(ms) },
+                onScrubStart = { isScrubbing = true },
+                onScrubEnd = { 
+                    isScrubbing = false
+                    previewManager.seekTo(timelineState.playheadPositionMs) 
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         // ===== LISTA DE RANGES =====
@@ -699,61 +481,6 @@ private fun RangeControls(
                 Text("Excluir Range")
             }
         }
-    }
-}
-
-// ===== COMPONENTES INTERNOS =====
-
-/**
- * Playhead fixo no centro com suporte a drag.
- */
-@Composable
-private fun Playhead(
-    positionPx: Float,
-    containerWidth: Float,
-    durationMs: Long,
-    onPositionChanged: (Float) -> Unit,
-    onDragStart: () -> Unit,
-    onDragEnd: () -> Unit,
-    color: Color = Color.Red,
-    width: Dp = 2.dp
-) {
-    Canvas(
-        modifier = Modifier
-            .offset { IntOffset(positionPx.roundToInt(), 0) }
-            .width(width)
-            .fillMaxHeight()
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { onDragStart() },
-                    onDragEnd = { onDragEnd() },
-                    onDragCancel = { onDragEnd() },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        val newPx = positionPx + dragAmount.x
-                        onPositionChanged(newPx)
-                    }
-                )
-            }
-    ) {
-        // Linha vertical
-        drawLine(
-            color = color,
-            start = Offset(size.width / 2, 0f),
-            end = Offset(size.width / 2, size.height),
-            strokeWidth = width.toPx()
-        )
-
-        // Triângulo no topo
-        val triangleWidth = 10.dp.toPx()
-        val triangleHeight = 10.dp.toPx()
-        val path = Path().apply {
-            moveTo(size.width / 2 - triangleWidth / 2, 0f)
-            lineTo(size.width / 2 + triangleWidth / 2, 0f)
-            lineTo(size.width / 2, triangleHeight)
-            close()
-        }
-        drawPath(path, color)
     }
 }
 
@@ -830,8 +557,3 @@ private fun formatTime(ms: Long): String {
     val tenths = (ms % 1000) / 100
     return "%02d:%02d:%d".format(minutes, seconds, tenths)
 }
-
-/**
- * Tipo de drag em andamento no handle.
- */
-private enum class HandleDragType { LEFT, RIGHT, NONE }
