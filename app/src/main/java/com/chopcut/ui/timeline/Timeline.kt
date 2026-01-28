@@ -202,19 +202,41 @@ fun Timeline(
                         else -> Color(0xFF388E3C) // Playing - verde
                     }
 
-                    // Glow sutil do LED
+                    // Glow multicamadas para efeito impressionante
+                    // Camada externa mais suave
                     drawCircle(
                         color = ledColor,
-                        radius = ledRadius * 1.5f,
+                        radius = ledRadius * 4f,
+                        center = Offset(centerX, centerY),
+                        alpha = 0.08f
+                    )
+                    // Camada média
+                    drawCircle(
+                        color = ledColor,
+                        radius = ledRadius * 2.5f,
                         center = Offset(centerX, centerY),
                         alpha = 0.15f
                     )
+                    // Camada interna brilhante
+                    drawCircle(
+                        color = ledColor,
+                        radius = ledRadius * 1.3f,
+                        center = Offset(centerX, centerY),
+                        alpha = 0.4f
+                    )
 
-                    // LED principal
+                    // LED principal com center brilhante
                     drawCircle(
                         color = ledColor,
                         radius = ledRadius,
                         center = Offset(centerX, centerY)
+                    )
+                    // Center hotspot (brilho intenso no centro)
+                    drawCircle(
+                        color = Color.White,
+                        radius = ledRadius * 0.4f,
+                        center = Offset(centerX, centerY),
+                        alpha = 0.6f
                     )
                 }
                 .clickable { onVideoClick() },
