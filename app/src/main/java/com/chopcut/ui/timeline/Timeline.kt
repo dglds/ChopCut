@@ -162,12 +162,62 @@ fun Timeline(
     }
 
     Column(modifier = modifier) {
+        // ===== TIMER NO TOPO =====
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${formatTime(currentPosition)} / ${formatTime(duration)}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.sp
+            )
+        }
+
         // ===== PLAYER PREVIEW =====
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(200.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .drawBehind {
+                    // LED indicador de estado
+                    val ledSize = size.height * 0.08f
+                    val ledPadding = size.height * 0.03f
+                    val ledRadius = ledSize / 2
+
+                    // Posição do LED (top-right)
+                    val centerX = size.width - ledPadding - ledRadius
+                    val centerY = ledPadding + ledRadius
+
+                    // Cor do LED baseada no estado
+                    val ledColor = when {
+                        !isReady -> Color.Transparent // Estado inicial - apagado
+                        !isPlaying -> Color(0xFFFF0000) // Pause - vermelho aceso
+                        else -> Color.Transparent // Playing - apagado
+                    }
+
+                    // Glow do LED
+                    if (ledColor != Color.Transparent) {
+                        drawCircle(
+                            color = ledColor,
+                            radius = ledRadius * 2,
+                            center = Offset(centerX, centerY),
+                            alpha = 0.3f
+                        )
+                    }
+
+                    // LED principal
+                    drawCircle(
+                        color = ledColor,
+                        radius = ledRadius,
+                        center = Offset(centerX, centerY)
+                    )
+                }
                 .clickable { onVideoClick() },
             contentAlignment = Alignment.Center
         ) {
@@ -220,24 +270,17 @@ fun Timeline(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Posição atual / Duração total
-            Text(
-                text = formatTime(currentPosition),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
             // Botões de playback
             Row(
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
             ) {
                 Button(
                     onClick = { previewManager.togglePlayPause() },
                     enabled = isReady,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(48.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
                     if (isPlaying) {
@@ -249,7 +292,7 @@ fun Timeline(
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Play",
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
@@ -257,7 +300,7 @@ fun Timeline(
                 Button(
                     onClick = { previewManager.stop() },
                     enabled = isReady,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(48.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
                     Text(
@@ -266,13 +309,6 @@ fun Timeline(
                     )
                 }
             }
-
-            // Duração total
-            Text(
-                text = formatTime(duration),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
         // ===== CONTROLES DE RANGES =====
@@ -297,62 +333,158 @@ fun Timeline(
                 val centerX = containerWidth / 2f
                 val handleWidthPx = with(density) { 16.dp.toPx() }
 
-                // Extrair thumbnails
-                LaunchedEffect(uri, duration) {
-                    if (duration > 0) {
-                        val thumbnailProvider = ThumbnailProvider(context)
-                        val timelineHeightPx = with(density) { 80.dp.toPx().toInt() }
-                        val thumbnailWidthPx = (timelineHeightPx * 1f).toInt() // 1:1 aspect ratio
-
-                        thumbnailProvider.extractThumbnails(
-                            uri = uri,
-                            durationMs = duration,
-                            count = 10,
-                            width = thumbnailWidthPx,
-                            height = timelineHeightPx
-                        ).collect { fetchedThumbnails ->
-                            thumbnails = fetchedThumbnails
-                        }
-                    }
-                }
-
-                // Thumbnail Strip com scroll automático
-                val listState = rememberLazyListState()
-                val centerIndex by remember(timelineState.playheadPositionMs, duration, thumbnails.size) {
+                // Calcular frames baseado na duração (1 frame por segundo)
+                val frameWidth = with(density) { 80.dp.toPx() }
+                val frameCount by remember(duration) {
                     derivedStateOf {
-                        if (thumbnails.isEmpty()) 0
+                        if (duration <= 0) 0
                         else {
-                            val progress = timelineState.playheadPositionMs.toFloat() / duration
-                            ((progress * thumbnails.size).toInt().coerceIn(0, thumbnails.size - 1))
+                            val framesPerSecond = duration / 1000
+                            framesPerSecond.coerceAtLeast(10).coerceAtMost(60)
                         }
                     }
                 }
 
-                LaunchedEffect(centerIndex) {
-                    if (thumbnails.isNotEmpty()) {
-                        listState.animateScrollToItem(centerIndex)
+                // Estado para controle de scroll manual
+                var isScrolling by remember { mutableStateOf(false) }
+                val listState = rememberLazyListState()
+
+                // Reset scroll quando a posição volta a 0 (Stop)
+                LaunchedEffect(timelineState.playheadPositionMs) {
+                    if (timelineState.playheadPositionMs == 0L && !isScrolling) {
+                        listState.scrollToItem(0, 0)
+                    }
+                }
+
+                // Auto-scroll linear durante reprodução
+                LaunchedEffect(isPlaying, timelineState.playheadPositionMs, frameCount, duration) {
+                    if (isPlaying && frameCount > 0 && duration > 0 && !isScrolling) {
+                        val totalScrollableWidth = frameCount * frameWidth
+                        val progress = timelineState.playheadPositionMs.toFloat() / duration
+                        val currentScrollPx = progress * totalScrollableWidth
+
+                        val targetIndex = (currentScrollPx / frameWidth).toInt()
+                        val targetOffset = (currentScrollPx % frameWidth).toInt()
+
+                        listState.scrollToItem(
+                            index = targetIndex,
+                            scrollOffset = targetOffset
+                        )
+                    }
+                }
+
+                // Detectar scroll manual e atualizar preview
+                LaunchedEffect(listState) {
+                    androidx.compose.runtime.snapshotFlow { 
+                        listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset 
+                    }
+                    .collect { (index, offset) ->
+                        if (listState.isScrollInProgress && duration > 0 && frameCount > 0) {
+                            val msPerFrame = duration / frameCount.toFloat()
+                            val widthPerFramePx = frameWidth
+                            
+                            // Tempo base do frame atual
+                            val baseTimeMs = index * msPerFrame
+                            
+                            // Tempo adicional do offset dentro do frame
+                            val offsetTimeMs = (offset / widthPerFramePx) * msPerFrame
+                            
+                            val newTimeMs = (baseTimeMs + offsetTimeMs).toLong().coerceIn(0, duration)
+                            
+                            timelineViewModel.updatePlayheadPosition(newTimeMs)
+                            isScrubbing = true // Garante que o player busque frames rapidamente
+                        } else if (!listState.isScrollInProgress && isScrubbing) {
+                            // Fim do scroll manual
+                            isScrubbing = false
+                        }
                     }
                 }
 
                 LazyRow(
                     state = listState,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = maxWidth / 2)
                 ) {
-                    items(items = thumbnails, key = { it.timeMs }) { thumb ->
+                    items(frameCount.toInt()) { index ->
+                        val frameStartMs = (index * (duration / frameCount.toFloat())).toLong()
+                        val frameEndMs = ((index + 1) * (duration / frameCount.toFloat())).toLong()
+
+                        // Verificar se algum range cobre este frame
+                        val affectedRanges = timelineState.ranges.filter { range ->
+                            frameStartMs < range.endMs && frameEndMs > range.startMs
+                        }
+
                         Box(
                             modifier = Modifier
                                 .width(80.dp)
                                 .fillMaxHeight()
-                                .background(Color.DarkGray)
+                                .background(
+                                    if (index % 2 == 0)
+                                        Color.White
+                                    else
+                                        Color.LightGray.copy(alpha = 0.6f)
+                                )
+                                .border(
+                                    width = 0.5.dp,
+                                    color = Color.Gray.copy(alpha = 0.3f)
+                                )
+                                .clickable {
+                                    // Ao clicar, seek para este frame
+                                    isScrubbing = true
+                                    timelineViewModel.updatePlayheadPosition(frameStartMs)
+                                    previewManager.seekTo(frameStartMs)
+                                }
                         ) {
-                            thumb.bitmap?.let { bitmap ->
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
+                            // Desenhar ranges sobre este frame
+                            affectedRanges.forEach { range ->
+                                val rangeStartProgress = range.startMs.toFloat() / duration
+                                val rangeEndProgress = range.endMs.toFloat() / duration
+                                val frameStartProgress = frameStartMs.toFloat() / duration
+                                val frameEndProgress = frameEndMs.toFloat() / duration
+
+                                val overlapStart = maxOf(rangeStartProgress, frameStartProgress)
+                                val overlapEnd = minOf(rangeEndProgress, frameEndProgress)
+                                val overlapWidth = (overlapEnd - overlapStart) * frameWidth
+
+                                val isPlayheadInsideRange = timelineState.playheadPositionMs in range.startMs..range.endMs
+
+                                Box(
+                                    modifier = Modifier
+                                        .width(with(density) { overlapWidth.toDp() })
+                                        .fillMaxHeight()
+                                        .background(
+                                            when {
+                                                range.isSelected -> Color(0xFF2196F3).copy(alpha = 0.3f)
+                                                isPlayheadInsideRange -> Color(0xFFF44336).copy(alpha = 0.3f)
+                                                else -> Color(0xFF4CAF50).copy(alpha = 0.3f)
+                                            }
+                                        )
+                                        .border(
+                                            width = if (range.isSelected) 2.dp else 1.dp,
+                                            color = when {
+                                                range.isSelected -> Color(0xFF2196F3)
+                                                isPlayheadInsideRange -> Color(0xFFF44336)
+                                                else -> Color(0xFF4CAF50)
+                                            }
+                                        )
+                                        .clickable {
+                                            timelineViewModel.selectRange(range.id)
+                                            isScrubbing = true
+                                            timelineViewModel.updatePlayheadPosition(range.startMs)
+                                            previewManager.seekTo(range.startMs)
+                                        }
                                 )
                             }
+
+                            // Número do frame (opcional, para debug)
+                            Text(
+                                text = "${(frameStartMs / 1000).toInt()}s",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Black.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(4.dp)
+                            )
                         }
                     }
                 }
@@ -672,13 +804,14 @@ private fun RangesList(
 }
 
 /**
- * Formata milissegundos para MM:SS.
+ * Formata milissegundos para MM:SS:m.
  */
 private fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
-    return "%02d:%02d".format(minutes, seconds)
+    val tenths = (ms % 1000) / 100
+    return "%02d:%02d:%d".format(minutes, seconds, tenths)
 }
 
 /**
