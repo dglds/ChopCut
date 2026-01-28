@@ -123,33 +123,34 @@ fun Timeline(
         }
     }
 
-    // Inicializar Player
+    // 1. SETUP & METADATA
     LaunchedEffect(uri) {
         previewManager.prepare(context, uri, coroutineScope)
     }
 
-    // Atualizar duração no ViewModel
     LaunchedEffect(duration) {
         if (duration > 0) {
             timelineViewModel.updateTotalDuration(duration)
         }
     }
 
-    // Sincronização Player ↔ Timeline
+    // 2. PLAYER SYNCHRONIZATION (Two-way bind protected by isScrubbing)
+    
+    // Player -> Timeline (Playback updates)
     LaunchedEffect(currentPosition, duration, isScrubbing) {
         if (!isScrubbing && duration > 0) {
             timelineViewModel.updatePlayheadPosition(currentPosition)
         }
     }
 
-    // Sincronização Timeline → Player
+    // Timeline -> Player (Seek commands)
     LaunchedEffect(timelineState.playheadPositionMs, isScrubbing, duration) {
         if (isScrubbing && duration > 0) {
             previewManager.seekTo(timelineState.playheadPositionMs)
         }
     }
 
-    // Atualizar estado de scrubbing no player
+    // Scrubbing State Sync
     LaunchedEffect(isScrubbing) {
         previewManager.setScrubbing(isScrubbing)
     }
@@ -186,7 +187,7 @@ fun Timeline(
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .drawBehind {
                     // LED indicador de estado
-                    val ledSize = size.height * 0.08f
+                    val ledSize = size.height * 0.04f
                     val ledPadding = size.height * 0.03f
                     val ledRadius = ledSize / 2
 
@@ -196,20 +197,18 @@ fun Timeline(
 
                     // Cor do LED baseada no estado
                     val ledColor = when {
-                        !isReady -> Color.Transparent // Estado inicial - apagado
-                        !isPlaying -> Color(0xFFFF0000) // Pause - vermelho aceso
-                        else -> Color.Transparent // Playing - apagado
+                        !isReady -> Color(0xFFD32F2F) // Estado inicial/stop - vermelho
+                        !isPlaying -> Color(0xFFF57C00) // Pause - amarelo/laranja
+                        else -> Color(0xFF388E3C) // Playing - verde
                     }
 
-                    // Glow do LED
-                    if (ledColor != Color.Transparent) {
-                        drawCircle(
-                            color = ledColor,
-                            radius = ledRadius * 2,
-                            center = Offset(centerX, centerY),
-                            alpha = 0.3f
-                        )
-                    }
+                    // Glow sutil do LED
+                    drawCircle(
+                        color = ledColor,
+                        radius = ledRadius * 1.5f,
+                        center = Offset(centerX, centerY),
+                        alpha = 0.15f
+                    )
 
                     // LED principal
                     drawCircle(
@@ -349,16 +348,34 @@ fun Timeline(
                 var isScrolling by remember { mutableStateOf(false) }
                 val listState = rememberLazyListState()
 
-                // Reset scroll quando a posição volta a 0 (Stop)
-                LaunchedEffect(timelineState.playheadPositionMs) {
-                    if (timelineState.playheadPositionMs == 0L && !isScrolling) {
-                        listState.scrollToItem(0, 0)
+                // 3. UI SCROLL SYNCHRONIZATION
+
+                // User Input: Scroll -> Time (Scrubbing via list)
+                LaunchedEffect(listState) {
+                    androidx.compose.runtime.snapshotFlow { 
+                        listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset 
+                    }
+                    .collect { (index, offset) ->
+                        if (listState.isScrollInProgress && duration > 0 && frameCount > 0) {
+                            val msPerFrame = duration / frameCount.toFloat()
+                            val widthPerFramePx = frameWidth
+                            
+                            val baseTimeMs = index * msPerFrame
+                            val offsetTimeMs = (offset / widthPerFramePx) * msPerFrame
+                            val newTimeMs = (baseTimeMs + offsetTimeMs).toLong().coerceIn(0, duration)
+                            
+                            timelineViewModel.updatePlayheadPosition(newTimeMs)
+                            isScrubbing = true 
+                        } else if (!listState.isScrollInProgress && isScrubbing) {
+                            isScrubbing = false
+                        }
                     }
                 }
 
-                // Auto-scroll linear durante reprodução
-                LaunchedEffect(isPlaying, timelineState.playheadPositionMs, frameCount, duration) {
-                    if (isPlaying && frameCount > 0 && duration > 0 && !isScrolling) {
+                // System Output: Time -> Scroll (Playback, Stop, External Seeks)
+                // Mantém a lista visualmente sincronizada com o playhead quando o usuário não está interagindo
+                LaunchedEffect(timelineState.playheadPositionMs, frameCount, duration, isScrolling) {
+                    if (!isScrolling && frameCount > 0 && duration > 0) {
                         val totalScrollableWidth = frameCount * frameWidth
                         val progress = timelineState.playheadPositionMs.toFloat() / duration
                         val currentScrollPx = progress * totalScrollableWidth
@@ -373,31 +390,9 @@ fun Timeline(
                     }
                 }
 
-                // Detectar scroll manual e atualizar preview
-                LaunchedEffect(listState) {
-                    androidx.compose.runtime.snapshotFlow { 
-                        listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset 
-                    }
-                    .collect { (index, offset) ->
-                        if (listState.isScrollInProgress && duration > 0 && frameCount > 0) {
-                            val msPerFrame = duration / frameCount.toFloat()
-                            val widthPerFramePx = frameWidth
-                            
-                            // Tempo base do frame atual
-                            val baseTimeMs = index * msPerFrame
-                            
-                            // Tempo adicional do offset dentro do frame
-                            val offsetTimeMs = (offset / widthPerFramePx) * msPerFrame
-                            
-                            val newTimeMs = (baseTimeMs + offsetTimeMs).toLong().coerceIn(0, duration)
-                            
-                            timelineViewModel.updatePlayheadPosition(newTimeMs)
-                            isScrubbing = true // Garante que o player busque frames rapidamente
-                        } else if (!listState.isScrollInProgress && isScrubbing) {
-                            // Fim do scroll manual
-                            isScrubbing = false
-                        }
-                    }
+                // Detectar estado de scroll manual (auxiliar)
+                LaunchedEffect(listState.isScrollInProgress) {
+                    isScrolling = listState.isScrollInProgress
                 }
 
                 LazyRow(
