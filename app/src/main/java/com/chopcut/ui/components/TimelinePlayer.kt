@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -59,6 +61,8 @@ import kotlinx.coroutines.isActive
 @Composable
 fun TimelinePlayer(
     videoUri: Uri,
+    rangeManager: RangeManager,
+    onAddRangeRequest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -66,9 +70,9 @@ fun TimelinePlayer(
     // --- Configuration Constants ---
     val density = LocalDensity.current
     val pxPerSecond = remember(density) { with(density) { 60.dp.toPx() } }
-    val tickHeightMajor = remember(density) { with(density) { 16.dp.toPx() } } 
+    val tickHeightMajor = remember(density) { with(density) { 16.dp.toPx() } }
     val tickHeightMinor = remember(density) { with(density) { 8.dp.toPx() } }
-    val playheadColor = MaterialTheme.colorScheme.primary
+    val playheadColor = Color.Red // VISUAL: Playhead Vermelho mantido
 
     // --- State ---
     val exoPlayer = remember {
@@ -76,15 +80,21 @@ fun TimelinePlayer(
             .build()
             .apply {
                 repeatMode = Player.REPEAT_MODE_OFF
-                playWhenReady = false 
+                playWhenReady = false
             }
     }
 
     var videoDurationMs by remember { mutableStateOf(0L) }
     var isDragging by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
-    
+
+    // Master Scroll State
     var scrollOffsetPx by remember { mutableFloatStateOf(0f) }
+
+    // Range Resize State
+    var resizingRangeId by remember { mutableStateOf<String?>(null) }
+    var isResizingStart by remember { mutableStateOf(true) }
+    var lastDragX by remember { mutableFloatStateOf(0f) }
 
     val currentTimeMs by remember {
         derivedStateOf {
@@ -100,7 +110,7 @@ fun TimelinePlayer(
         val mediaItem = MediaItem.fromUri(videoUri)
         exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
-        
+
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) {
@@ -133,19 +143,21 @@ fun TimelinePlayer(
 
     // Sync: Scroll -> Player (Scrubbing)
     LaunchedEffect(currentTimeMs) {
+        // Optimization: Only seek if scrolling manually and diff is significant
         if (isDragging) {
              val playerTime = exoPlayer.currentPosition
              val diff = kotlin.math.abs(playerTime - currentTimeMs)
-             if (diff > 30) { 
+             if (diff > 30) {
                 exoPlayer.seekTo(currentTimeMs)
              }
         }
     }
 
     // --- Layout ---
-    Column(modifier = modifier) {
-        
-        // VIDEO AREA
+    Box(modifier = modifier) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // VIDEO AREA
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -180,20 +192,20 @@ fun TimelinePlayer(
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
                 ) {
                     Icon(
-                        if (isPlaying) Icons.Default.PlayArrow else Icons.Default.PlayArrow, 
+                        if (isPlaying) Icons.Default.PlayArrow else Icons.Default.PlayArrow,
                         contentDescription = "Play/Pause",
                         modifier = Modifier.size(32.dp)
                     )
                 }
-                
-                // Big text showing Time with smaller milliseconds
+
+                // Big text showing Time (VISUAL: Formatação mantida)
                 val annotatedTime = androidx.compose.ui.text.buildAnnotatedString {
                     val min = (currentTimeMs / 60000).toInt()
                     val sec = ((currentTimeMs % 60000) / 1000).toInt()
                     val ms = (currentTimeMs % 1000).toInt()
-                    
+
                     append(String.format("%02d:%02d", min, sec))
-                    
+
                     pushStyle(androidx.compose.ui.text.SpanStyle(
                         fontSize = MaterialTheme.typography.titleMedium.fontSize,
                         baselineShift = androidx.compose.ui.text.style.BaselineShift(0.2f)
@@ -215,21 +227,22 @@ fun TimelinePlayer(
         // TIMELINE AREA
         BoxWithConstraints(
             modifier = Modifier
-                .height(80.dp)
+                .height(100.dp) // VISUAL: Altura de 100dp mantida
                 .fillMaxWidth()
-                .background(Color(0xFFE0E0E0)) // Slightly darker for contrast against white UI
+                .background(Color(0xFFBDBDBD)) // VISUAL: Régua Cinza (Standard Grey)
         ) {
             val timelineWidth = constraints.maxWidth.toFloat()
             val centerOffset = timelineWidth / 2f
-            
+
             // Total width of the video in pixels
             val durationPx = (videoDurationMs / 1000f) * pxPerSecond
-            
+
+            // LÓGICA REVERTIDA: Usando scrollable nativo para melhor performance de fling/inércia
             val scrollableState = rememberScrollableState { delta ->
                 val oldOffset = scrollOffsetPx
                 val newOffset = (oldOffset - delta).coerceIn(0f, durationPx)
                 scrollOffsetPx = newOffset
-                oldOffset - newOffset 
+                oldOffset - newOffset
             }
 
             LaunchedEffect(scrollableState.isScrollInProgress) {
@@ -247,39 +260,48 @@ fun TimelinePlayer(
                         state = scrollableState
                     )
             ) {
-                val primaryColor = Color(0xFF424242) // Darker Grey for main ticks
-                val tickColor = Color(0xFF757575)   // Medium Grey
-                val minorTickColor = Color(0xFF9E9E9E) // Light Grey
-                
-                // Colors for "Out of bounds" areas
-                val neutralBgColor = Color(0xFFD6D6D6) 
-                val stripeColor = Color(0xFFBDBDBD)
+                // VISUAL: Cores ajustadas conforme solicitação (Cinza Escuro no fundo neutro)
+                val primaryColor = Color(0xFF212121)
+                val tickColor = Color(0xFF424242)
+                val neutralBgColor = Color(0xFF424242) // Dark Grey
+                val stripeColor = Color(0xFF616161)
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val currentScroll = scrollOffsetPx
-                    
+
                     val videoStartX = -currentScroll + centerOffset
                     val videoEndX = videoStartX + durationPx
 
-                    // 0. Draw "Low Relief" (Sunken) Effect - Inner Shadows
-                    // Top Shadow
+                    // VISUAL: Textura de Pontos (Dots)
+                    val dotColor = Color.Black.copy(alpha = 0.05f)
+                    val dotSpacing = 10.dp.toPx()
+                    for (x in 0..(size.width / dotSpacing).toInt()) {
+                        for (y in 0..(size.height / dotSpacing).toInt()) {
+                            drawCircle(
+                                color = dotColor,
+                                radius = 1.dp.toPx(),
+                                center = Offset(x * dotSpacing, y * dotSpacing)
+                            )
+                        }
+                    }
+
+                    // VISUAL: Sombras Internas (Baixo Relevo)
                     drawRect(
                         brush = Brush.verticalGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.15f), Color.Transparent),
+                            colors = listOf(Color.Black.copy(alpha = 0.2f), Color.Transparent),
                             startY = 0f,
-                            endY = size.height * 0.2f
+                            endY = size.height * 0.25f
                         )
                     )
-                    // Bottom Shadow
                     drawRect(
                         brush = Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.1f)),
-                            startY = size.height * 0.8f,
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.15f)),
+                            startY = size.height * 0.75f,
                             endY = size.height
                         )
                     )
 
-                    // 1. Draw Neutral Areas (Striped Background)
+                    // VISUAL: Áreas Neutras (Dark Grey + Stripes)
                     // Left Neutral Area
                     if (videoStartX > 0) {
                         drawRect(
@@ -289,7 +311,7 @@ fun TimelinePlayer(
                         )
                         clipRect(left = 0f, top = 0f, right = videoStartX, bottom = size.height) {
                             val stripeSpacing = 15.dp.toPx()
-                            var x = -size.height 
+                            var x = -size.height
                             while (x < videoStartX) {
                                 drawLine(
                                     color = stripeColor,
@@ -300,12 +322,12 @@ fun TimelinePlayer(
                                 x += stripeSpacing
                             }
                         }
-                        // Vertical Divider Line for start
+                        // Vertical Divider Line
                         drawLine(
-                            color = Color.Black.copy(alpha = 0.2f),
+                            color = Color.Black.copy(alpha = 0.4f),
                             start = Offset(videoStartX, 0f),
                             end = Offset(videoStartX, size.height),
-                            strokeWidth = 1.dp.toPx()
+                            strokeWidth = 1.5.dp.toPx()
                         )
                     }
 
@@ -329,26 +351,26 @@ fun TimelinePlayer(
                                 x += stripeSpacing
                             }
                         }
-                        // Vertical Divider Line for end
+                        // Vertical Divider Line
                         drawLine(
-                            color = Color.Black.copy(alpha = 0.2f),
+                            color = Color.Black.copy(alpha = 0.4f),
                             start = Offset(videoEndX, 0f),
                             end = Offset(videoEndX, size.height),
-                            strokeWidth = 1.dp.toPx()
+                            strokeWidth = 1.5.dp.toPx()
                         )
                     }
 
-                    // 2. Draw Ticks (Top Aligned)
+                    // VISUAL: Ticks (Top Aligned)
                     val startVisibleTimeSec = ((0 - centerOffset + currentScroll) / pxPerSecond).toInt()
                     val endVisibleTimeSec = ((size.width - centerOffset + currentScroll) / pxPerSecond).toInt() + 1
-                    
+
                     val durationSec = (videoDurationMs / 1000).toInt()
                     val startLoop = startVisibleTimeSec.coerceAtLeast(0)
                     val endLoop = endVisibleTimeSec.coerceAtMost(durationSec + 1)
 
                     for (sec in startLoop..endLoop) {
                         val xPos = (sec * pxPerSecond) - currentScroll + centerOffset
-                        
+
                         // Major Tick
                         drawLine(
                             color = if (sec % 5 == 0) primaryColor else tickColor,
@@ -357,13 +379,13 @@ fun TimelinePlayer(
                             strokeWidth = if (sec % 5 == 0) 2.dp.toPx() else 1.5.dp.toPx(),
                             cap = StrokeCap.Round
                         )
-                        
+
                         // Minor Ticks (0.5s)
                         val xPosMid = xPos + (pxPerSecond / 2)
                         val timeMid = sec + 0.5
                         if (timeMid * 1000 <= videoDurationMs) {
                             drawLine(
-                                color = minorTickColor,
+                                color = tickColor.copy(alpha = 0.5f), // Slightly lighter for minor ticks
                                 start = Offset(xPosMid, 0f),
                                 end = Offset(xPosMid, tickHeightMinor),
                                 strokeWidth = 1.dp.toPx(),
@@ -378,10 +400,64 @@ fun TimelinePlayer(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .width(2.dp)
-                        .height(80.dp) 
+                        .height(100.dp)
                         .background(playheadColor)
                 )
             }
+        }
+
+        // RANGE OVERLAY AREA (44dp: 20dp controles + 24dp ranges)
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val timelineWidth = constraints.maxWidth.toFloat()
+
+            RangeOverlay(
+                ranges = rangeManager.ranges,
+                scrollOffsetPx = scrollOffsetPx,
+                pxPerSecond = pxPerSecond,
+                timelineWidthPx = timelineWidth,
+                videoDurationMs = videoDurationMs,
+                onRangeClick = { rangeId ->
+                    rangeManager.selectRange(rangeId, true)
+                },
+                onRangeResizeStart = { rangeId, isStartHandle ->
+                    resizingRangeId = rangeId
+                    isResizingStart = isStartHandle
+                },
+                onRangeResize = { rangeId, deltaPx ->
+                    val range = rangeManager.ranges.find { it.id == rangeId } ?: return@RangeOverlay
+                    val deltaMs = ((deltaPx / pxPerSecond) * 1000).toLong()
+
+                    if (isResizingStart) {
+                        val newStartMs = (range.startMs + deltaMs)
+                            .coerceAtLeast(0L)
+                            .coerceAtMost(range.endMs - 500L)
+                        rangeManager.resizeRange(rangeId, newStartMs, null)
+                    } else {
+                        val newEndMs = (range.endMs + deltaMs)
+                            .coerceAtMost(videoDurationMs)
+                            .coerceAtLeast(range.startMs + 500L)
+                        rangeManager.resizeRange(rangeId, null, newEndMs)
+                    }
+                },
+                onRangeResizeEnd = {
+                    resizingRangeId = null
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        }
+
+        // Floating Action Button para adicionar range
+        Button(
+            onClick = onAddRangeRequest,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Add Range")
+            Text("Range")
         }
     }
 }

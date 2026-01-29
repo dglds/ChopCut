@@ -48,6 +48,7 @@ import androidx.media3.common.util.UnstableApi
 import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
+import com.chopcut.ui.components.RangeManager
 import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.components.TimelinePlayer
 import com.chopcut.ui.filter.TrimContent
@@ -99,6 +100,14 @@ fun EditorScreen(
 
     val activeTool by editorViewModel.activeTool.collectAsStateWithLifecycle()
     val playerState by previewManager.playerState.collectAsStateWithLifecycle()
+
+    // Range Manager para edição de vídeo - recriado quando a duração do vídeo mudar
+    val rangeManager = remember(videoInfo?.durationMs) {
+        RangeManager(
+            minRangeDurationMs = 500L,
+            videoDurationMs = videoInfo?.durationMs ?: 0L
+        )
+    }
 
     var exportScreenState by remember { mutableStateOf(ExportScreenState.SELECTING_PRESET) }
     var showExportScreen by remember { mutableStateOf(false) }
@@ -201,8 +210,8 @@ fun EditorScreen(
     ) { paddingValues ->
         EditorSplitLayout(
             modifier = Modifier.padding(paddingValues),
-            topWeight = 0.8f,
-            bottomWeight = 0.2f,
+            topWeight = 0.88f,
+            bottomWeight = 0.12f,
             topContent = {
                 Column(modifier = Modifier.fillMaxSize()) {
                     val currentVideoUri by editorViewModel.currentVideoUri.collectAsStateWithLifecycle()
@@ -216,8 +225,28 @@ fun EditorScreen(
                             .background(Color.Black)
                     ) {
                         if (videoUri != null) {
+                            // Função para adicionar range na posição atual
+                            fun addRangeAtCurrentPosition() {
+                                val durationMs = videoInfo?.durationMs ?: 0L
+                                if (durationMs > 0) {
+                                    val currentPosition = 0L // TODO: Obter posição atual do player
+                                    val defaultDurationMs = 2000L // 2 segundos padrão
+
+                                    val halfDuration = defaultDurationMs / 2
+                                    val startMs = maxOf(0L, currentPosition - halfDuration)
+                                    val endMs = minOf(durationMs, currentPosition + halfDuration)
+
+                                    rangeManager.addRangeAt(startMs, endMs)
+                                        .onFailure { error ->
+                                            Timber.e("Erro ao adicionar range: ${error.message}")
+                                        }
+                                }
+                            }
+
                             TimelinePlayer(
                                 videoUri = videoUri,
+                                rangeManager = rangeManager,
+                                onAddRangeRequest = { addRangeAtCurrentPosition() },
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
@@ -409,7 +438,7 @@ private fun EditorControlsPanel(
         shadowElevation = 3.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
