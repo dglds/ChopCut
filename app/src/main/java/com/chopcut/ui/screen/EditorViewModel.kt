@@ -513,6 +513,73 @@ class EditorViewModel(
         _activeTool.value = tool
     }
 
+    // ============================================================================
+    // PLAYER STATE
+    // ============================================================================
+    
+    private val _currentTimeMs = MutableStateFlow(0L)
+    val currentTimeMs: StateFlow<Long> = _currentTimeMs.asStateFlow()
+    
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+    
+    // Ranges para a timeline
+    private val _ranges = MutableStateFlow<List<com.chopcut.core.designsystem.organisms.TimelineRange>>(emptyList())
+    val ranges: StateFlow<List<com.chopcut.core.designsystem.organisms.TimelineRange>> = _ranges.asStateFlow()
+    
+    /**
+     * Atualiza o tempo atual do player
+     */
+    fun seekTo(timeMs: Long) {
+        _currentTimeMs.value = timeMs.coerceIn(0, _videoInfo.value?.durationMs ?: 0)
+    }
+    
+    /**
+     * Alterna entre play e pause
+     */
+    fun togglePlay() {
+        _isPlaying.value = !_isPlaying.value
+    }
+    
+    /**
+     * Define estado de reprodução
+     */
+    fun setPlaying(playing: Boolean) {
+        _isPlaying.value = playing
+    }
+    
+    /**
+     * Adiciona um novo range na timeline
+     */
+    fun addRange(startMs: Long, endMs: Long) {
+        val duration = _videoInfo.value?.durationMs ?: 0L
+        val validStart = startMs.coerceIn(0, duration)
+        val validEnd = endMs.coerceIn(validStart + 500, duration)
+        
+        val newRange = com.chopcut.core.designsystem.organisms.TimelineRange(
+            id = java.util.UUID.randomUUID().toString(),
+            startMs = validStart,
+            endMs = validEnd
+        )
+        _ranges.value = _ranges.value + newRange
+        Timber.d("Range adicionado: ${validStart}ms - ${validEnd}ms")
+    }
+    
+    /**
+     * Remove um range
+     */
+    fun removeRange(rangeId: String) {
+        _ranges.value = _ranges.value.filter { it.id != rangeId }
+    }
+    
+    /**
+     * Seleciona um range (para edição)
+     */
+    fun selectRange(rangeId: String) {
+        // TODO: Implementar seleção de range
+        Timber.d("Range selecionado: $rangeId")
+    }
+
     override fun onCleared() {
         super.onCleared()
         // ExportServiceManager é um lifecycle observer, então se limpará automaticamente
