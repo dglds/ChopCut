@@ -35,7 +35,7 @@ import timber.log.Timber
  */
 class EditorTimelineViewModel(
     private val context: Context,
-    private val previewManager: PreviewManager
+    val previewManager: PreviewManager
 ) : ViewModel() {
 
     // ============================================================================
