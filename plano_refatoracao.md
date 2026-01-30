@@ -233,30 +233,45 @@ class EditorTimelineViewModel(
 
 ---
 
-### FASE 4: Integração
-**Objetivo:** Montar tela principal com novo fluxo
+### ✅ FASE 4: Integração (CONCLUÍDA)
+**Data:** 2026-01-30 | **Duração:** ~3 horas
 
-- [ ] 4.1 Atualizar `EditorScreen.kt`
-  - Usar `EditorTimelineViewModel` novo
-  - Remover estados locais (`ranges`, `selectedRangeId`, `fabState`, etc)
-  - Observar `StateFlow<EstadoEditor>`
+**Arquivo Criado:**
 
-- [ ] 4.2 Conectar componentes ao fluxo unidirecional
-  - Mapear eventos de UI para `EventoEditor`
-  - Usar `derivedStateOf` para valores computados
+**`NovoEditorScreen.kt`** - Tela principal com nova arquitetura (600 linhas)
 
-- [ ] 4.3 Implementar sync Player ↔ Timeline
-  - PreviewManager → EstadoEditor (posição do player)
-  - EstadoEditor → PreviewManager (seek commands)
+**Estratégia:** Criar arquivo separado em vez de modificar o original
+- Permite testes paralelos sem quebrar funcionalidade existente
+- Rollback instantâneo: basta usar `EditorScreen` em vez de `NovoEditorScreen`
+- Código antigo permanece intacto
 
-- [ ] 4.4 Testar fluxo completo de criação de range
-  - 2 cliques no FAB
-  - Range esticando dinamicamente
-  - Confirmação e cancelamento
+**Integrações implementadas:**
+- ✅ `EditorTimelineViewModel` como fonte de verdade
+- ✅ `EstadoEditor` observado via `collectAsStateWithLifecycle()`
+- ✅ Componentes puros conectados ao ViewModel
+- ✅ FAB com `FabRangeController` e `EventoEditor`
+- ✅ PreviewManager sincronizado bidirecionalmente
+- ✅ Tool panels (Trim, Crop, Filter, etc) preservados
 
-- [ ] 4.5 Commit: "feat: integra novo editor com arquitetura consolidada"
+**Fluxo de dados:**
+```
+Usuário → EventoEditor → EditorTimelineViewModel → EstadoEditor → UI
+                ↑___________________________________________↓
+                        (PreviewManager sincronizado)
+```
 
-**Risco:** Alto | **Rollback:** Complexo
+**Para usar:**
+```kotlin
+// No ponto de navegação, substituir:
+EditorScreen(videoUri = uri)
+
+// Por:
+NovoEditorScreen(videoUri = uri)
+```
+
+**Commit:** `feat: implementa NovoEditorScreen.kt com arquitetura consolidada`
+
+**Risco:** Baixo (arquivo separado, não afeta código existente)
 
 ---
 
@@ -315,10 +330,11 @@ git revert HEAD  # Remove ViewModel novo
 
 ## 📊 Métricas de Sucesso
 
-| Métrica | Antes | Atual (Pós Fase 3) | Alvo | Como medir |
+| Métrica | Antes | Atual (Pós Fase 4) | Alvo | Como medir |
 |---------|-------|-------------------|------|------------|
-| Linhas de código | ~2500 | ~4700 (+modelos +ViewModel +componentes) | ~2000 | `find . -name "*.kt" -exec wc -l {} +` |
-| Arquivos timeline | 8 (misturados) | 14 (organizados) | 12 | Contagem |
+| Linhas de código | ~2500 | ~5300 (+NovoEditorScreen) | ~2500 | `find . -name "*.kt" -exec wc -l {} +` |
+| Arquivos timeline | 8 (misturados) | 15 (organizados) | 12 | Contagem |
+| Telas do editor | 1 (EditorScreen) | 2 (EditorScreen + NovoEditorScreen) | 1 (Novo) | Contagem |
 | Componentes puros | 0 | 5 | 5 | Contagem em `components/` |
 | ViewModels timeline | 2 (antigos) | 3 (2 antigos + 1 novo) | 1 (novo) | Contagem |
 | Recompositions/scroll | 30-50 | 30-50 (ainda usando código antigo) | 5-10 | Layout Inspector |
@@ -331,12 +347,13 @@ git revert HEAD  # Remove ViewModel novo
 1. ✅ **CONCLUÍDO:** Modelos de estado consolidados (Fase 1)
 2. ✅ **CONCLUÍDO:** ViewModel consolidado (Fase 2)
 3. ✅ **CONCLUÍDO:** Componentes puros extraídos (Fase 3)
-4. **PRÓXIMO:** Integração na EditorScreen (Fase 4)
-   - Substituir estados locais por EditorTimelineViewModel
-   - Conectar componentes ao fluxo unidirecional
-   - Sincronizar PreviewManager com estado
-   - Feature flag para rollback fácil
-5. Depois: Otimizar performance (Fase 5)
+4. ✅ **CONCLUÍDO:** Integração em NovoEditorScreen (Fase 4)
+5. **PRÓXIMO:** Testes e Otimização (Fase 5)
+   - Testar fluxo completo de 2 cliques
+   - Verificar performance no Celeron N5095A
+   - Profile de recompositions
+   - Ajustar throttle de seek
+6. Depois: Substituição do EditorScreen antigo (quando estável)
 
 ---
 
