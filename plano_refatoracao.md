@@ -179,34 +179,57 @@ class EditorTimelineViewModel(
 
 ---
 
-### FASE 3: Componentização
-**Objetivo:** Extrair componentes puros da TimelinePlayer.kt atual
+### ✅ FASE 3: Componentização (CONCLUÍDA)
+**Data:** 2026-01-30 | **Duração:** ~4 horas
 
-- [ ] 3.1 `VideoPreview.kt`
-  - Wrapper do ExoPlayer
-  - Parâmetros: `videoUri`, `posicaoMs`, `isPlaying`
-  - Callbacks: `onPlayPause`, `onSeek`
+**Arquivos Criados em `ui/timeline/components/`:**
 
-- [ ] 3.2 `TimelineScrubber.kt`
-  - Faixa scrollável com frames
-  - Parâmetros: `duracaoMs`, `posicaoMs`, `onPosicaoChange`
+| Componente | Linhas | Responsabilidade |
+|------------|--------|------------------|
+| `VideoPreview.kt` | 300 | Wrapper do ExoPlayer com LED indicador de estado |
+| `TimelineScrubber.kt` | 280 | Faixa scrollável com ticks de tempo e áreas neutras |
+| `PlayheadIndicator.kt` | 160 | Indicador central fixo com animação de relevo |
+| `FabRangeController.kt` | 210 | FAB com estados animados (ADD, CONFIRM, DELETE) |
+| `RangeOverlay.kt` | 530 | Overlay de ranges com drag de alças e gesture de delete |
 
-- [ ] 3.3 `RangeOverlay.kt`
-  - Desenha ranges vermelhos sobre timeline
-  - Parâmetros: `ranges: List<RangeCorte>`, `rangeEmCriacao: RangeCorte?`
-  - Suporta drag de alças
+**Detalhes dos componentes:**
 
-- [ ] 3.4 `PlayheadIndicator.kt`
-  - Indicador central fixo
-  - Estados: `normal`, `relevo` (animação)
+**1. VideoPreview**
+- Renderiza PlayerView do ExoPlayer
+- LED indicador de estado (verde=reproduzindo, laranja=pausado, vermelho=carregando)
+- Overlay de play/pause quando pausado
+- Suporte a fallback em caso de erro
 
-- [ ] 3.5 `FabRangeController.kt`
-  - Botão flutuante com estados visuais
-  - Parâmetros: `estadoFab: EstadoFab`, `onClick`
+**2. TimelineScrubber**
+- Scroll horizontal com `rememberScrollableState`
+- Ticks de tempo (principais a cada 5s, secundários a cada 1s, menores a cada 0.5s)
+- Áreas neutras com listras diagonais (antes do início e após o fim do vídeo)
+- Efeito de relevo (sunken) com gradientes de sombra
+- Sincronização bidirecional scroll ↔ tempo
 
-- [ ] 3.6 Commit: "feat: implementa componentes puros do editor"
+**3. PlayheadIndicator**
+- Linha vertical fixa no centro
+- Triângulo indicador no topo
+- Animação de largura e sombra quando em relevo
+- Versão com suporte a drag manual
 
-**Risco:** Médio | **Rollback:** Complexo (muitos arquivos)
+**4. FabRangeController**
+- Estados visuais: ADICIONAR (➕), CONFIRMAR (✓), DELETAR (🗑️)
+- Animação `AnimatedContent` entre estados (scale + fade)
+- Versão alternativa com números (①, ②)
+- Cores dinâmicas baseadas no estado
+
+**5. RangeOverlay**
+- Renderização via Canvas para performance
+- Glassmorphism verde para ranges
+- Drag de alças (início/fim) com hit test expandido
+- Auto-ajuste visual durante drag
+- Gesture de delete (arrastar para cima)
+- Zona de delete vermelha no topo
+
+**Commit:** `feat: implementa componentes puros do editor (Fase 3)`
+
+**Risco:** Médio | **Rollback:** Complexo (muitos arquivos) → MITIGADO por serem novos arquivos
 
 ---
 
@@ -292,12 +315,13 @@ git revert HEAD  # Remove ViewModel novo
 
 ## 📊 Métricas de Sucesso
 
-| Métrica | Antes | Atual (Pós Fase 2) | Alvo | Como medir |
+| Métrica | Antes | Atual (Pós Fase 3) | Alvo | Como medir |
 |---------|-------|-------------------|------|------------|
-| Linhas de código | ~2500 | ~3200 (+ViewModel) | ~1500 | `find . -name "*.kt" -exec wc -l {} +` |
-| Arquivos modelo | 3 (duplicados) | 5 (unificados) | 5 | Contagem |
-| ViewModels timeline | 1 (antigo) | 2 (antigo + novo) | 1 (novo) | Contagem |
-| Recompositions/scroll | 30-50 | 30-50 | 5-10 | Layout Inspector |
+| Linhas de código | ~2500 | ~4700 (+modelos +ViewModel +componentes) | ~2000 | `find . -name "*.kt" -exec wc -l {} +` |
+| Arquivos timeline | 8 (misturados) | 14 (organizados) | 12 | Contagem |
+| Componentes puros | 0 | 5 | 5 | Contagem em `components/` |
+| ViewModels timeline | 2 (antigos) | 3 (2 antigos + 1 novo) | 1 (novo) | Contagem |
+| Recompositions/scroll | 30-50 | 30-50 (ainda usando código antigo) | 5-10 | Layout Inspector |
 | FPS em scroll | 30-45 | 30-45 | 55-60 | Profile GPU |
 
 ---
@@ -306,13 +330,12 @@ git revert HEAD  # Remove ViewModel novo
 
 1. ✅ **CONCLUÍDO:** Modelos de estado consolidados (Fase 1)
 2. ✅ **CONCLUÍDO:** ViewModel consolidado (Fase 2)
-3. **PRÓXIMO:** Extrair componentes puros (Fase 3)
-   - VideoPreview.kt
-   - TimelineScrubber.kt
-   - RangeOverlay.kt
-   - PlayheadIndicator.kt
-   - FabRangeController.kt
-4. Depois: Integrar na EditorScreen (Fase 4)
+3. ✅ **CONCLUÍDO:** Componentes puros extraídos (Fase 3)
+4. **PRÓXIMO:** Integração na EditorScreen (Fase 4)
+   - Substituir estados locais por EditorTimelineViewModel
+   - Conectar componentes ao fluxo unidirecional
+   - Sincronizar PreviewManager com estado
+   - Feature flag para rollback fácil
 5. Depois: Otimizar performance (Fase 5)
 
 ---
