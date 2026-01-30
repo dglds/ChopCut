@@ -333,7 +333,11 @@ fun TimelinePlayer(
                 
                 if (timelineState.selectedRange != null) {
                     Button(
-                        onClick = { timelineViewModel.removeSelectedRange() },
+                        onClick = { 
+                            timelineState.selectedRange?.let { 
+                                timelineViewModel.removeRange(it.id) 
+                            }
+                        },
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error
                         )
@@ -356,8 +360,7 @@ fun TimelinePlayer(
                     timelineViewModel.updatePlayheadPosition(ms)
                 },
                 onRangeSelect = { id -> timelineViewModel.selectRange(id) },
-                onRangeStartChange = { ms -> timelineViewModel.updateSelectedRangeStart(ms) },
-                onRangeEndChange = { ms -> timelineViewModel.updateSelectedRangeEnd(ms) },
+                onRangeUpdate = { id, start, end -> timelineViewModel.updateRange(id, start, end) },
                 onScrubStart = { isScrubbing = true },
                 onScrubEnd = { 
                     isScrubbing = false

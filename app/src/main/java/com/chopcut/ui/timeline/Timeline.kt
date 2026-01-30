@@ -330,7 +330,9 @@ fun Timeline(
         if (duration > 0) {
             RangeControls(
                 onAddRange = { timelineViewModel.addRange() },
-                onRemoveRange = { timelineViewModel.removeSelectedRange() },
+                onRemoveRange = { 
+                    timelineState.selectedRange?.let { timelineViewModel.removeRange(it.id) }
+                },
                 hasSelectedRange = timelineState.selectedRange != null,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -408,8 +410,7 @@ fun Timeline(
                     timelineViewModel.updatePlayheadPosition(ms)
                 },
                 onRangeSelect = { id -> timelineViewModel.selectRange(id) },
-                onRangeStartChange = { ms -> timelineViewModel.updateSelectedRangeStart(ms) },
-                onRangeEndChange = { ms -> timelineViewModel.updateSelectedRangeEnd(ms) },
+                onRangeUpdate = { id, start, end -> timelineViewModel.updateRange(id, start, end) },
                 onScrubStart = { isScrubbing = true },
                 onScrubEnd = { 
                     isScrubbing = false
@@ -489,7 +490,7 @@ private fun RangeControls(
  */
 @Composable
 private fun RangesList(
-    ranges: List<com.chopcut.ui.timeline.model.VideoRange>,
+    ranges: List<com.chopcut.ui.components.TrimRangeData>,
     onRangeClick: (String) -> Unit
 ) {
     Column(

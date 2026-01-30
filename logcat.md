@@ -48,6 +48,14 @@ adb logcat -c
 adb logcat --pid=$(adb shell pidof -s com.chopcut) > logs_chopcut.txt
 ```
 
+## 6. Monitorar Componente Timeline ⏱️
+
+Ver todos os logs da timeline (seek, scroll, playhead, estado):
+
+```bash
+adb logcat -v time | grep -iE "timeline|seek|playhead"
+```
+
 ---
 
 ### Dica: Monitor Integrado

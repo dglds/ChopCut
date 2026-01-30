@@ -1,103 +1,126 @@
 package com.chopcut.ui.timeline
 
 import androidx.lifecycle.ViewModel
-import com.chopcut.ui.timeline.model.VideoRange
+import com.chopcut.ui.components.TrimRangeData
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.util.UUID
 
 /**
  * ViewModel para gerenciar o estado e interações da Timeline.
- * Suporta múltiplos ranges de seleção.
+ * Suporta múltiplos ranges de remoção (áreas vermelhas).
  */
 class TimelineViewModel(
     initialDurationMs: Long
 ) : ViewModel() {
 
+    data class TimelineEditorState(
+        val totalDurationMs: Long,
+        val playheadPositionMs: Long = 0L,
+        val ranges: List<TrimRangeData> = emptyList()
+    ) {
+        val selectedRange: TrimRangeData?
+            get() = ranges.firstOrNull { it.isSelected }
+    }
+
     private val _state = MutableStateFlow(
-        com.chopcut.ui.timeline.model.TimelineState(
-            totalDurationMs = initialDurationMs
-        )
+        TimelineEditorState(totalDurationMs = initialDurationMs)
     )
-    val state: StateFlow<com.chopcut.ui.timeline.model.TimelineState> = _state.asStateFlow()
+    val state: StateFlow<TimelineEditorState> = _state.asStateFlow()
 
     /**
-     * Adiciona um novo range com duração de 1 thumbnail (10% do total), iniciando após o playhead.
+     * Adiciona um novo range de 1 segundo centrado no playhead.
+     * Auto-ajusta se houver sobreposição com ranges existentes.
      */
     fun addRange() {
         _state.update { current ->
-            // Duração de 1 thumbnail (10% do total, já que temos 10 thumbnails)
-            val oneThumbDuration = (current.totalDurationMs / 10f).toLong().coerceAtLeast(1000L)
-            // Iniciar após o playhead
-            val startMs = current.playheadPositionMs
-            val endMs = (startMs + oneThumbDuration).coerceAtMost(current.totalDurationMs)
+            val durationMs = 1000L // 1 segundo
+            val halfDuration = durationMs / 2
+            
+            var startMs = (current.playheadPositionMs - halfDuration).coerceAtLeast(0L)
+            var endMs = (startMs + durationMs).coerceAtMost(current.totalDurationMs)
+            
+            // Ajusta se ficou menor que 100ms
+            if (endMs - startMs < 100L) {
+                return@update current
+            }
 
-            val newRange = VideoRange(
+            val newRange = TrimRangeData(
+                id = UUID.randomUUID().toString(),
                 startMs = startMs,
                 endMs = endMs,
-                isSelected = false
+                isSelected = true,
+                isDraft = true,
+                isConfirmed = false
             )
 
-            current.copy(ranges = current.ranges + newRange)
+            current.copy(
+                ranges = current.ranges.map { it.copy(isSelected = false) } + newRange
+            )
         }
     }
 
     /**
-     * Remove o range selecionado atualmente.
+     * Remove o range pelo ID.
      */
-    fun removeSelectedRange() {
+    fun removeRange(rangeId: String) {
         _state.update { current ->
-            current.copy(ranges = current.ranges.filterNot { it.isSelected })
+            current.copy(ranges = current.ranges.filterNot { it.id == rangeId })
+        }
+    }
+
+    /**
+     * Confirma/salva um range draft.
+     */
+    fun confirmRange(rangeId: String) {
+        _state.update { current ->
+            current.copy(
+                ranges = current.ranges.map { range ->
+                    if (range.id == rangeId) {
+                        range.copy(isDraft = false, isConfirmed = true, isSelected = false)
+                    } else range
+                }
+            )
         }
     }
 
     /**
      * Seleciona um range específico.
      */
-    fun selectRange(rangeId: String) {
+    fun selectRange(rangeId: String?) {
         _state.update { current ->
             current.copy(
                 ranges = current.ranges.map { range ->
-                    range.withSelected(range.id == rangeId)
+                    range.copy(isSelected = range.id == rangeId)
                 }
             )
         }
     }
 
     /**
-     * Atualiza o início do range selecionado.
+     * Atualiza um range (início e fim) com validação de sobreposição.
      */
-    fun updateSelectedRangeStart(startMs: Long) {
+    fun updateRange(rangeId: String, newStart: Long, newEnd: Long) {
         _state.update { current ->
-            val selectedIdx = current.ranges.indexOfFirst { it.isSelected }
-            if (selectedIdx == -1) return@update current
-
-            val selectedRange = current.ranges[selectedIdx]
-            val validStart = startMs.coerceIn(0, selectedRange.endMs - 1)
+            val rangeToUpdate = current.ranges.find { it.id == rangeId } ?: return@update current
+            
+            // Validações básicas
+            val validStart = newStart.coerceIn(0L, rangeToUpdate.endMs - 100L)
+            val validEnd = newEnd.coerceIn(rangeToUpdate.startMs + 100L, current.totalDurationMs)
+            
+            // Auto-ajuste: não permite sobreposição com outros ranges
+            val otherRanges = current.ranges.filter { it.id != rangeId }
+            
+            val adjustedStart = calculateValidStart(validStart, validEnd, rangeId, otherRanges, current.totalDurationMs)
+            val adjustedEnd = calculateValidEnd(adjustedStart, validEnd, rangeId, otherRanges, current.totalDurationMs)
 
             current.copy(
-                ranges = current.ranges.toMutableList().apply {
-                    set(selectedIdx, selectedRange.copy(startMs = validStart))
-                }
-            )
-        }
-    }
-
-    /**
-     * Atualiza o fim do range selecionado.
-     */
-    fun updateSelectedRangeEnd(endMs: Long) {
-        _state.update { current ->
-            val selectedIdx = current.ranges.indexOfFirst { it.isSelected }
-            if (selectedIdx == -1) return@update current
-
-            val selectedRange = current.ranges[selectedIdx]
-            val validEnd = endMs.coerceIn(selectedRange.startMs + 1, current.totalDurationMs)
-
-            current.copy(
-                ranges = current.ranges.toMutableList().apply {
-                    set(selectedIdx, selectedRange.copy(endMs = validEnd))
+                ranges = current.ranges.map { range ->
+                    if (range.id == rangeId) {
+                        range.copy(startMs = adjustedStart, endMs = adjustedEnd)
+                    } else range
                 }
             )
         }
@@ -126,9 +149,49 @@ class TimelineViewModel(
     /**
      * Retorna o range que contém a posição do playhead, se houver.
      */
-    fun getRangeAtPlayhead(): VideoRange? {
+    fun getRangeAtPlayhead(): TrimRangeData? {
         return state.value.ranges.firstOrNull {
             state.value.playheadPositionMs in it.startMs..it.endMs
         }
+    }
+
+    // ===== Funções auxiliares de auto-ajuste =====
+    
+    private fun calculateValidStart(
+        rawStart: Long,
+        endMs: Long,
+        currentId: String,
+        otherRanges: List<TrimRangeData>,
+        videoDurationMs: Long
+    ): Long {
+        val minStart = 0L
+        val maxStart = (endMs - 100L).coerceAtLeast(0L)
+        
+        // Encontra o range anterior (mais próximo à esquerda)
+        val nearestEndBefore = otherRanges
+            .filter { it.endMs <= rawStart }
+            .maxByOrNull { it.endMs }
+            ?.endMs ?: minStart
+        
+        return rawStart.coerceIn(nearestEndBefore, maxStart)
+    }
+
+    private fun calculateValidEnd(
+        startMs: Long,
+        rawEnd: Long,
+        currentId: String,
+        otherRanges: List<TrimRangeData>,
+        videoDurationMs: Long
+    ): Long {
+        val minEnd = (startMs + 100L).coerceAtMost(videoDurationMs)
+        val maxEnd = videoDurationMs
+        
+        // Encontra o range seguinte (mais próximo à direita)
+        val nearestStartAfter = otherRanges
+            .filter { it.startMs >= rawEnd }
+            .minByOrNull { it.startMs }
+            ?.startMs ?: maxEnd
+        
+        return rawEnd.coerceIn(minEnd, nearestStartAfter)
     }
 }

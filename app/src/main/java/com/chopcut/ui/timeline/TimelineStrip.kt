@@ -36,7 +36,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.chopcut.ui.timeline.model.VideoRange
+import com.chopcut.ui.components.TrimRangeData
 import kotlin.math.roundToInt
 
 /**
@@ -47,12 +47,11 @@ import kotlin.math.roundToInt
 fun TimelineStrip(
     durationMs: Long,
     playheadPositionMs: Long,
-    ranges: List<VideoRange>,
+    ranges: List<TrimRangeData>,
     listState: LazyListState,
     onSeek: (Long) -> Unit,
     onRangeSelect: (String) -> Unit,
-    onRangeStartChange: (Long) -> Unit,
-    onRangeEndChange: (Long) -> Unit,
+    onRangeUpdate: (String, Long, Long) -> Unit,
     onScrubStart: () -> Unit,
     onScrubEnd: () -> Unit,
     modifier: Modifier = Modifier
@@ -260,8 +259,8 @@ fun TimelineStrip(
                                         val deltaX = dragAmount.x
                                         val deltaMs = ((deltaX / containerWidth) * durationMs).toLong()
                                         val newStart = (dragStartValue + deltaMs)
-                                            .coerceIn(0, range.endMs - 1)
-                                        onRangeStartChange(newStart)
+                                            .coerceIn(0, range.endMs - 100)
+                                        onRangeUpdate(range.id, newStart, range.endMs)
                                     }
                                 }
                             }
@@ -298,8 +297,8 @@ fun TimelineStrip(
                                         val deltaX = dragAmount.x
                                         val deltaMs = ((deltaX / containerWidth) * durationMs).toLong()
                                         val newEnd = (dragStartValue + deltaMs)
-                                            .coerceIn(range.startMs + 1, durationMs)
-                                        onRangeEndChange(newEnd)
+                                            .coerceIn(range.startMs + 100, durationMs)
+                                        onRangeUpdate(range.id, range.startMs, newEnd)
                                     }
                                 }
                             }

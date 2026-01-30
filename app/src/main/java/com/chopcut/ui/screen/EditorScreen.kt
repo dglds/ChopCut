@@ -26,6 +26,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -48,9 +51,10 @@ import androidx.media3.common.util.UnstableApi
 import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
-import com.chopcut.ui.components.RangeManager
 import com.chopcut.ui.components.TrimRange
 import com.chopcut.ui.components.TimelinePlayer
+import com.chopcut.ui.components.TrimRangeData
+import androidx.compose.material.icons.filled.Add
 import com.chopcut.ui.filter.TrimContent
 import com.chopcut.ui.filter.CropContent
 import com.chopcut.ui.components.EditorSplitLayout
@@ -63,6 +67,15 @@ import com.chopcut.ui.filter.SpeedContent
 import com.chopcut.ui.filter.rememberFilterState
 import com.chopcut.ui.filter.rememberSpeedState
 import timber.log.Timber
+
+/**
+ * Estados do FAB para controle de trim
+ */
+private enum class FabState {
+    ADD,      // ➕ Criar novo range
+    CONFIRM,  // ✓ Confirmar range draft
+    DELETE    // 🗑️ Deletar range salvo
+}
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,14 +113,10 @@ fun EditorScreen(
 
     val activeTool by editorViewModel.activeTool.collectAsStateWithLifecycle()
     val playerState by previewManager.playerState.collectAsStateWithLifecycle()
-
-    // Range Manager para edição de vídeo - recriado quando a duração do vídeo mudar
-    val rangeManager = remember(videoInfo?.durationMs) {
-        RangeManager(
-            minRangeDurationMs = 500L,
-            videoDurationMs = videoInfo?.durationMs ?: 0L
-        )
-    }
+    
+    // --- Trim Ranges State ---
+    var ranges by remember { mutableStateOf(listOf<TrimRangeData>()) }
+    var selectedRangeId by remember { mutableStateOf<String?>(null) }
 
     var exportScreenState by remember { mutableStateOf(ExportScreenState.SELECTING_PRESET) }
     var showExportScreen by remember { mutableStateOf(false) }
@@ -166,6 +175,8 @@ fun EditorScreen(
     } }
     val hasSpeed by remember { derivedStateOf { edits.any { it is EditOperation.Speed && it.speed != 1.0f } } }
 
+    val currentPosition by previewManager.currentPosition.collectAsStateWithLifecycle()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -206,12 +217,114 @@ fun EditorScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            val currentTimeMs = currentPosition
+            // Verifica se o playhead está dentro de algum range
+            val rangeAtPlayhead = ranges.find { currentTimeMs in it.startMs..it.endMs }
+            
+            // Define o estado do FAB
+            val fabState = when {
+                rangeAtPlayhead == null -> FabState.ADD                    // Fora de range: Adicionar
+                rangeAtPlayhead.isDraft -> FabState.CONFIRM               // Dentro de draft: Confirmar
+                else -> FabState.DELETE                                    // Dentro de range salvo: Deletar
+            }
+            
+            FloatingActionButton(
+                onClick = {
+                    val videoDurationMs = videoInfo?.durationMs ?: 0L
+                    if (videoDurationMs <= 0) return@FloatingActionButton
+                    
+                    when (fabState) {
+                        FabState.ADD -> {
+                            // Cria novo range de 1 segundo centrado no playhead
+                            val durationMs = 1000L
+                            val halfDuration = durationMs / 2
+                            
+                            var startMs = (currentTimeMs - halfDuration).coerceAtLeast(0L)
+                            var endMs = (startMs + durationMs).coerceAtMost(videoDurationMs)
+                            
+                            // Garante mínimo de 100ms
+                            if (endMs - startMs < 100L) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Posição muito próxima do início/fim",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                                return@FloatingActionButton
+                            }
+                            
+                            // Auto-ajuste: verifica sobreposição
+                            val hasOverlap = ranges.any { existing ->
+                                (startMs < existing.endMs && endMs > existing.startMs)
+                            }
+                            
+                            if (hasOverlap) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Posição já ocupada por outro range",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                val newRange = TrimRangeData(
+                                    id = "range_${System.currentTimeMillis()}",
+                                    startMs = startMs,
+                                    endMs = endMs,
+                                    isSelected = true,
+                                    isDraft = true,
+                                    isConfirmed = false
+                                )
+                                ranges = ranges + newRange
+                                selectedRangeId = newRange.id
+                            }
+                        }
+                        FabState.CONFIRM -> {
+                            // Confirma/salva o range draft
+                            rangeAtPlayhead?.let { draft ->
+                                ranges = ranges.map { 
+                                    if (it.id == draft.id) it.copy(isDraft = false, isConfirmed = true) 
+                                    else it 
+                                }
+                                selectedRangeId = null
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Trim salvo",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                        FabState.DELETE -> {
+                            // Deleta o range confirmado
+                            rangeAtPlayhead?.let { rangeToDelete ->
+                                ranges = ranges.filter { it.id != rangeToDelete.id }
+                                selectedRangeId = null
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Trim removido",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    }
+                },
+                containerColor = when (fabState) {
+                    FabState.ADD -> MaterialTheme.colorScheme.primary
+                    FabState.CONFIRM -> MaterialTheme.colorScheme.tertiary
+                    FabState.DELETE -> MaterialTheme.colorScheme.error
+                }
+            ) {
+                when (fabState) {
+                    FabState.ADD -> Icon(Icons.Default.Add, contentDescription = "Adicionar Trim")
+                    FabState.CONFIRM -> Icon(Icons.Default.Check, contentDescription = "Confirmar Trim")
+                    FabState.DELETE -> Icon(Icons.Default.Delete, contentDescription = "Deletar Trim")
+                }
+            }
         }
     ) { paddingValues ->
         EditorSplitLayout(
             modifier = Modifier.padding(paddingValues),
-            topWeight = 0.88f,
-            bottomWeight = 0.12f,
+            topWeight = 0.8f,
+            bottomWeight = 0.2f,
             topContent = {
                 Column(modifier = Modifier.fillMaxSize()) {
                     val currentVideoUri by editorViewModel.currentVideoUri.collectAsStateWithLifecycle()
@@ -225,29 +338,22 @@ fun EditorScreen(
                             .background(Color.Black)
                     ) {
                         if (videoUri != null) {
-                            // Função para adicionar range na posição atual
-                            fun addRangeAtCurrentPosition() {
-                                val durationMs = videoInfo?.durationMs ?: 0L
-                                if (durationMs > 0) {
-                                    val currentPosition = 0L // TODO: Obter posição atual do player
-                                    val defaultDurationMs = 2000L // 2 segundos padrão
-
-                                    val halfDuration = defaultDurationMs / 2
-                                    val startMs = maxOf(0L, currentPosition - halfDuration)
-                                    val endMs = minOf(durationMs, currentPosition + halfDuration)
-
-                                    rangeManager.addRangeAt(startMs, endMs)
-                                        .onFailure { error ->
-                                            Timber.e("Erro ao adicionar range: ${error.message}")
-                                        }
-                                }
-                            }
-
                             TimelinePlayer(
                                 videoUri = videoUri,
-                                rangeManager = rangeManager,
-                                onAddRangeRequest = { addRangeAtCurrentPosition() },
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                ranges = ranges,
+                                selectedRangeId = selectedRangeId,
+                                onRangesChange = { ranges = it },
+                                onRangeSelect = { selectedRangeId = it },
+                                onRangeDelete = { id ->
+                                    ranges = ranges.filter { it.id != id }
+                                    selectedRangeId = null
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Range removido",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             )
                         } else {
                             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -357,22 +463,7 @@ fun EditorScreen(
                 }
             },
             bottomContent = {
-                EditorControlsPanel(
-                    activeTool = activeTool,
-                    onToolChange = { tool -> editorViewModel.setActiveTool(tool) },
-                    currentPosition = 0L,
-                    duration = videoInfo?.durationMs ?: 0L,
-                    isExporting = isExporting,
-                    hasTrim = hasTrim,
-                    hasCrop = hasCrop,
-                    hasFilter = hasFilter,
-                    hasSpeed = hasSpeed,
-                    videoInfo = videoInfo,
-                    trimRange = trimRange,
-                    edits = edits,
-                    onApplyEdit = { op -> editorViewModel.addOperation(op) },
-                    onTrimClick = { range -> if (range != null) editorViewModel.applyTrim(range) }
-                )
+                // Bottom bar removida
             }
         )
     }
@@ -438,7 +529,7 @@ private fun EditorControlsPanel(
         shadowElevation = 3.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp),
+            modifier = Modifier.fillMaxSize().padding(8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
