@@ -1,23 +1,26 @@
 package com.chopcut.ui.timeline
 
 /**
- * Estados bem definidos da timeline (CropSnap-style)
+ * Estados de interação do player e timeline (CropSnap-style)
  *
  * Estados principais que controlam o comportamento da timeline
  * e sua interação com o player de vídeo.
+ *
+ * Nota: Este arquivo foi renomeado de TimelineState.kt para evitar
+ * conflito com o modelo de dados TimelineState em model/TimelineModels.kt
  */
-sealed class TimelineState {
+sealed class PlayerInteractionState {
     /** Vídeo tocando, timeline auto-scrolling */
-    object Playing : TimelineState()
+    object Playing : PlayerInteractionState()
 
     /** Usuário arrastando a timeline */
-    object Scrubbing : TimelineState()
+    object Scrubbing : PlayerInteractionState()
 
     /** Seek settling após scroll */
-    object SeekSettling : TimelineState()
+    object SeekSettling : PlayerInteractionState()
 
     /** Timeline idle (vídeo pausado) */
-    object Idle : TimelineState()
+    object Idle : PlayerInteractionState()
 
     override fun toString(): String = when (this) {
         is Playing -> "Playing"
