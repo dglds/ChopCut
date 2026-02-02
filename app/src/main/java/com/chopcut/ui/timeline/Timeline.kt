@@ -68,6 +68,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.ui.PlayerView
 import com.chopcut.R
 import com.chopcut.ui.timeline.model.Thumbnail
+import com.chopcut.util.debug.DebugCaptureManager
+import com.chopcut.util.debug.DebugConfig
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import kotlin.math.roundToInt
@@ -109,6 +111,17 @@ fun Timeline(
 
     // Estado para thumbnails
     var thumbnails by remember { mutableStateOf<List<Thumbnail>>(emptyList()) }
+
+    // ===== THUMBNAIL LOADER (ESTABILIDADE PRIMEIRO) =====
+    val thumbnailLoader = remember { ThumbnailLoader(context) }
+    val thumbnailStats by thumbnailLoader.stats.collectAsState()
+    val loadingState by thumbnailLoader.loadingState.collectAsState()
+
+    // Debug capture manager para screenshots/vídeos
+    val captureManager = remember { DebugCaptureManager(context) }
+    
+    // Ref para a coluna da timeline (para screenshots)
+    val timelineColumnRef = remember { androidx.compose.ui.layout.LayoutCoordinates? }
 
     // Estado derivado: progresso (0f a 1f)
     val sliderPosition by remember {

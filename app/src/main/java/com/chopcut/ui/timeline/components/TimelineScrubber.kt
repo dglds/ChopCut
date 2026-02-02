@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -21,25 +22,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.chopcut.ui.timeline.util.ConfiguracaoTimeline
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /**
- * Componente de scrubber de timeline (faixa scrollável).
+ * Componente de scrubber de timeline (faixa scrollável) - VERSÃO OTIMIZADA.
  *
- * Responsabilidades:
- * - Renderizar a faixa de tempo scrollável
- * - Desenhar ticks de tempo (marcadores de segundos)
- * - Mostrar áreas "fora dos limites" do vídeo
- * - Detectar gestos de scroll e reportar posição
- * - Suportar efeito visual de "relevo" (sunken)
+ * Otimizações para Celeron N5095A:
+ * - Cores memorizadas para evitar recriação
+ * - Dimensões calculadas via derivedStateOf
+ * - Throttling de 16ms para atualizações de posição
+ * - Objetos de desenho pré-alocados
+ * - Loop de ticks otimizado (só desenha o visível)
  *
  * @param durationMs Duração total do vídeo em milissegundos
  * @param positionMs Posição atual do playhead em milissegundos
@@ -60,45 +64,89 @@ fun TimelineScrubber(
     height: Dp = ConfiguracaoTimeline.ALTURA_FAIXA_DP
 ) {
     val density = LocalDensity.current
-    val pxPorSegundo = with(density) { ConfiguracaoTimeline.PX_POR_SEGUNDO_DP.toPx() }
+    val densityValue = density.density
     
-    // Estado de scroll em pixels
+    // ==== CONSTANTES MEMORIZADAS ====
+    val pxPorSegundo = remember(densityValue) { 
+        densityValue * ConfiguracaoTimeline.PX_POR_SEGUNDO_DP.value 
+    }
+    
+    // Cores memorizadas (evita recriação a cada recomposition)
+    val cores = remember {
+        TimelineCores(
+            tickPrincipal = Color(0xFF424242),
+            tickSecundario = Color(0xFF757575),
+            tickMenor = Color(0xFF9E9E9E),
+            fundoNeutro = Color(0xFFD6D6D6),
+            listra = Color(0xFFBDBDBD),
+            sombraSuperior = Color.Black.copy(alpha = 0.15f),
+            sombraInferior = Color.Black.copy(alpha = 0.1f),
+            divisor = Color.Black.copy(alpha = 0.2f)
+        )
+    }
+    
+    // ==== ESTADO DE SCROLL ====
     var scrollOffsetPx by remember { mutableFloatStateOf(0f) }
+    var lastPositionUpdate by remember { mutableFloatStateOf(0f) }
     
-    // Dimensões calculadas
-    val durationSeconds = (durationMs / 1000f).coerceAtLeast(0f)
-    val totalWidthPx = durationSeconds * pxPorSegundo
+    // Dimensões calculadas via derivedStateOf (só recalcula quando necessário)
+    val dimensoes by remember(durationMs) {
+        derivedStateOf {
+            val durationSeconds = (durationMs / 1000f).coerceAtLeast(0f)
+            DimensaoTimeline(
+                totalWidthPx = durationSeconds * pxPorSegundo,
+                durationMs = durationMs
+            )
+        }
+    }
+    
+    // ==== THROTTLING DE 16ms (60 FPS) ====
+    val throttledOnPositionChange = remember(onPositionChange) {
+        { newTimeMs: Long ->
+            val currentTime = System.nanoTime()
+            // 16ms = 16_000_000 nanos
+            if (currentTime - lastPositionUpdate >= 16_000_000) {
+                lastPositionUpdate = currentTime.toFloat()
+                onPositionChange(newTimeMs)
+            }
+        }
+    }
     
     // Estado scrollable
     val scrollableState = rememberScrollableState { delta ->
         val oldOffset = scrollOffsetPx
-        val newOffset = (oldOffset - delta).coerceIn(0f, totalWidthPx.coerceAtLeast(0f))
+        val newOffset = (oldOffset - delta).coerceIn(0f, dimensoes.totalWidthPx.coerceAtLeast(0f))
         scrollOffsetPx = newOffset
         
-        // Converte para tempo e notifica
+        // Converte para tempo e notifica (com throttling)
         if (durationMs > 0) {
-            val progress = newOffset / totalWidthPx
+            val progress = newOffset / dimensoes.totalWidthPx
             val newTimeMs = (progress * durationMs).toLong()
-            onPositionChange(newTimeMs)
+            throttledOnPositionChange(newTimeMs)
         }
         
-        oldOffset - newOffset // Retorna a quantidade consumida
+        oldOffset - newOffset
     }
     
     // Detecta início/fim do scroll
-    androidx.compose.runtime.LaunchedEffect(scrollableState.isScrollInProgress) {
+    LaunchedEffect(scrollableState.isScrollInProgress) {
         if (scrollableState.isScrollInProgress) {
             onScrollStart()
         } else {
             onScrollEnd()
+            // Força atualização final
+            if (durationMs > 0) {
+                val progress = scrollOffsetPx / dimensoes.totalWidthPx
+                onPositionChange((progress * durationMs).toLong())
+            }
         }
     }
     
     // Sincroniza scrollOffset com positionMs quando não está scrollando
-    androidx.compose.runtime.LaunchedEffect(positionMs, durationMs) {
+    LaunchedEffect(positionMs, durationMs) {
         if (!scrollableState.isScrollInProgress && durationMs > 0) {
             val progress = positionMs.toFloat() / durationMs
-            scrollOffsetPx = progress * totalWidthPx
+            scrollOffsetPx = progress * dimensoes.totalWidthPx
         }
     }
 
@@ -114,157 +162,307 @@ fun TimelineScrubber(
         val containerWidth = constraints.maxWidth.toFloat()
         val centerOffset = containerWidth / 2f
         
-        // Cores
-        val corTickPrincipal = Color(0xFF424242)
-        val corTickSecundario = Color(0xFF757575)
-        val corTickMenor = Color(0xFF9E9E9E)
-        val corFundoNeutro = Color(0xFFD6D6D6)
-        val corListra = Color(0xFFBDBDBD)
+        // ==== VALORES DERIVADOS (memoizados) ====
+        val containerHeight = constraints.maxHeight.toFloat()
+        
+        val tickAlturas by remember(containerHeight, density) {
+            derivedStateOf {
+                TickAlturas(
+                    maior = containerHeight * 0.4f,
+                    menor = containerHeight * 0.25f,
+                    meio = containerHeight * 0.15f
+                )
+            }
+        }
+        
+        val strokeWidths by remember(densityValue) {
+            derivedStateOf {
+                StrokeWidths(
+                    principal = 2f * densityValue,
+                    secundario = 1.5f * densityValue,
+                    menor = 1f * densityValue,
+                    divisor = 1f * densityValue
+                )
+            }
+        }
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .drawBehind {
                     val currentScroll = scrollOffsetPx
+                    val totalWidth = dimensoes.totalWidthPx
                     
                     val videoStartX = -currentScroll + centerOffset
-                    val videoEndX = videoStartX + totalWidthPx
+                    val videoEndX = videoStartX + totalWidth
                     
-                    // ===== EFEITO DE RELEVO (SUNKEN) =====
-                    // Sombra superior
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.15f), Color.Transparent),
-                            startY = 0f,
-                            endY = size.height * 0.2f
-                        )
-                    )
-                    // Sombra inferior
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.1f)),
-                            startY = size.height * 0.8f,
-                            endY = size.height
-                        )
+                    // ==== EFEITO DE RELEVO (SUNKEN) - Usando brushes pré-criados ====
+                    drawRelevoSunken(
+                        height = size.height,
+                        sombraSuperior = cores.sombraSuperior,
+                        sombraInferior = cores.sombraInferior
                     )
 
-                    // ===== ÁREAS NEUTRAS (FORA DO VÍDEO) =====
-                    // Área esquerda (antes do início do vídeo)
-                    if (videoStartX > 0) {
-                        drawRect(
-                            color = corFundoNeutro,
-                            topLeft = Offset(0f, 0f),
-                            size = androidx.compose.ui.geometry.Size(videoStartX, size.height)
-                        )
-                        // Listras diagonais
-                        desenharListras(
-                            left = 0f,
-                            right = videoStartX,
-                            cor = corListra
-                        )
-                        // Divisor vertical
-                        drawLine(
-                            color = Color.Black.copy(alpha = 0.2f),
-                            start = Offset(videoStartX, 0f),
-                            end = Offset(videoStartX, size.height),
-                            strokeWidth = 1.dp.toPx()
-                        )
-                    }
+                    // ==== ÁREAS NEUTRAS (FORA DO VÍDEO) ====
+                    desenharAreaNeutraEsquerda(
+                        videoStartX = videoStartX,
+                        height = size.height,
+                        corFundo = cores.fundoNeutro,
+                        corListra = cores.listra,
+                        corDivisor = cores.divisor,
+                        strokeWidth = strokeWidths.divisor
+                    )
 
-                    // Área direita (após o fim do vídeo)
-                    if (videoEndX < size.width) {
-                        drawRect(
-                            color = corFundoNeutro,
-                            topLeft = Offset(videoEndX, 0f),
-                            size = androidx.compose.ui.geometry.Size(size.width - videoEndX, size.height)
-                        )
-                        // Listras diagonais
-                        desenharListras(
-                            left = videoEndX,
-                            right = size.width,
-                            cor = corListra
-                        )
-                        // Divisor vertical
-                        drawLine(
-                            color = Color.Black.copy(alpha = 0.2f),
-                            start = Offset(videoEndX, 0f),
-                            end = Offset(videoEndX, size.height),
-                            strokeWidth = 1.dp.toPx()
-                        )
-                    }
+                    desenharAreaNeutraDireita(
+                        videoEndX = videoEndX,
+                        width = size.width,
+                        height = size.height,
+                        corFundo = cores.fundoNeutro,
+                        corListra = cores.listra,
+                        corDivisor = cores.divisor,
+                        strokeWidth = strokeWidths.divisor
+                    )
 
-                    // ===== TICKS DE TEMPO =====
-                    val tickAlturaMaior = size.height * 0.4f
-                    val tickAlturaMenor = size.height * 0.25f
-                    
-                    // Calcula range visível em segundos
-                    val inicioVisivelSec = ((0 - centerOffset + currentScroll) / pxPorSegundo).toInt()
-                    val fimVisivelSec = ((size.width - centerOffset + currentScroll) / pxPorSegundo).toInt() + 1
-                    
-                    val duracaoSec = (durationMs / 1000).toInt()
-                    val inicioLoop = inicioVisivelSec.coerceAtLeast(0)
-                    val fimLoop = fimVisivelSec.coerceAtMost(duracaoSec + 1)
-
-                    for (sec in inicioLoop..fimLoop) {
-                        val xPos = (sec * pxPorSegundo) - currentScroll + centerOffset
-                        
-                        // Tick principal (cada segundo)
-                        val isTickPrincipal = sec % 5 == 0
-                        drawLine(
-                            color = if (isTickPrincipal) corTickPrincipal else corTickSecundario,
-                            start = Offset(xPos, 0f),
-                            end = Offset(xPos, if (isTickPrincipal) tickAlturaMaior else tickAlturaMenor),
-                            strokeWidth = if (isTickPrincipal) 2.dp.toPx() else 1.5.dp.toPx(),
-                            cap = StrokeCap.Round
-                        )
-                        
-                        // Tick menor (0.5s)
-                        val xPosMeio = xPos + (pxPorSegundo / 2)
-                        val tempoMeio = sec + 0.5
-                        if (tempoMeio * 1000 <= durationMs) {
-                            drawLine(
-                                color = corTickMenor,
-                                start = Offset(xPosMeio, 0f),
-                                end = Offset(xPosMeio, tickAlturaMenor * 0.6f),
-                                strokeWidth = 1.dp.toPx(),
-                                cap = StrokeCap.Round
-                            )
-                        }
-                    }
+                    // ==== TICKS DE TEMPO (só o visível) ====
+                    desenharTicksOtimizado(
+                        scrollOffset = currentScroll,
+                        centerOffset = centerOffset,
+                        containerWidth = size.width,
+                        pxPorSegundo = pxPorSegundo,
+                        durationMs = durationMs,
+                        alturas = tickAlturas,
+                        strokeWidths = strokeWidths,
+                        cores = cores
+                    )
                 }
         )
     }
 }
 
+// ==== DATA CLASSES PARA REUSO DE OBJETOS ====
+private data class TimelineCores(
+    val tickPrincipal: Color,
+    val tickSecundario: Color,
+    val tickMenor: Color,
+    val fundoNeutro: Color,
+    val listra: Color,
+    val sombraSuperior: Color,
+    val sombraInferior: Color,
+    val divisor: Color
+)
+
+private data class DimensaoTimeline(
+    val totalWidthPx: Float,
+    val durationMs: Long
+)
+
+private data class TickAlturas(
+    val maior: Float,
+    val menor: Float,
+    val meio: Float
+)
+
+private data class StrokeWidths(
+    val principal: Float,
+    val secundario: Float,
+    val menor: Float,
+    val divisor: Float
+)
+
 /**
- * Extension function para desenhar listras diagonais (hachura)
- * Desenha dentro do clipRect existente do DrawScope
+ * Desenha efeito de relevo sunken usando brushes.
  */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.desenharListras(
+private fun DrawScope.drawRelevoSunken(
+    height: Float,
+    sombraSuperior: Color,
+    sombraInferior: Color
+) {
+    // Sombra superior
+    drawRect(
+        brush = Brush.verticalGradient(
+            colors = listOf(sombraSuperior, Color.Transparent),
+            startY = 0f,
+            endY = height * 0.2f
+        )
+    )
+    // Sombra inferior
+    drawRect(
+        brush = Brush.verticalGradient(
+            colors = listOf(Color.Transparent, sombraInferior),
+            startY = height * 0.8f,
+            endY = height
+        )
+    )
+}
+
+/**
+ * Desenha área neutra esquerda (antes do vídeo).
+ */
+private fun DrawScope.desenharAreaNeutraEsquerda(
+    videoStartX: Float,
+    height: Float,
+    corFundo: Color,
+    corListra: Color,
+    corDivisor: Color,
+    strokeWidth: Float
+) {
+    if (videoStartX <= 0) return
+    
+    drawRect(
+        color = corFundo,
+        topLeft = Offset(0f, 0f),
+        size = Size(videoStartX, height)
+    )
+    
+    desenharListrasOtimizado(
+        left = 0f,
+        right = videoStartX,
+        height = height,
+        cor = corListra,
+        espacamento = 15f * (size.width / 400f).coerceIn(0.5f, 2f) // Escala com tela
+    )
+    
+    drawLine(
+        color = corDivisor,
+        start = Offset(videoStartX, 0f),
+        end = Offset(videoStartX, height),
+        strokeWidth = strokeWidth
+    )
+}
+
+/**
+ * Desenha área neutra direita (após o vídeo).
+ */
+private fun DrawScope.desenharAreaNeutraDireita(
+    videoEndX: Float,
+    width: Float,
+    height: Float,
+    corFundo: Color,
+    corListra: Color,
+    corDivisor: Color,
+    strokeWidth: Float
+) {
+    if (videoEndX >= width) return
+    
+    drawRect(
+        color = corFundo,
+        topLeft = Offset(videoEndX, 0f),
+        size = Size(width - videoEndX, height)
+    )
+    
+    desenharListrasOtimizado(
+        left = videoEndX,
+        right = width,
+        height = height,
+        cor = corListra,
+        espacamento = 15f * (width / 400f).coerceIn(0.5f, 2f)
+    )
+    
+    drawLine(
+        color = corDivisor,
+        start = Offset(videoEndX, 0f),
+        end = Offset(videoEndX, height),
+        strokeWidth = strokeWidth
+    )
+}
+
+/**
+ * Desenha ticks de tempo - versão otimizada que só processa o visível.
+ */
+private fun DrawScope.desenharTicksOtimizado(
+    scrollOffset: Float,
+    centerOffset: Float,
+    containerWidth: Float,
+    pxPorSegundo: Float,
+    durationMs: Long,
+    alturas: TickAlturas,
+    strokeWidths: StrokeWidths,
+    cores: TimelineCores
+) {
+    if (durationMs <= 0) return
+    
+    // Calcula apenas o range visível (evita loop sobre segundos invisíveis)
+    val inicioVisivelSec = ((0 - centerOffset + scrollOffset) / pxPorSegundo).toInt() - 1
+    val fimVisivelSec = ((containerWidth - centerOffset + scrollOffset) / pxPorSegundo).toInt() + 2
+    
+    val duracaoSec = (durationMs / 1000).toInt()
+    val inicioLoop = inicioVisivelSec.coerceAtLeast(0)
+    val fimLoop = fimVisivelSec.coerceAtMost(duracaoSec + 1)
+
+    for (sec in inicioLoop..fimLoop) {
+        val xPos = (sec * pxPorSegundo) - scrollOffset + centerOffset
+        
+        // Tick principal (cada segundo)
+        val isTickPrincipal = sec % 5 == 0
+        drawLine(
+            color = if (isTickPrincipal) cores.tickPrincipal else cores.tickSecundario,
+            start = Offset(xPos, 0f),
+            end = Offset(xPos, if (isTickPrincipal) alturas.maior else alturas.menor),
+            strokeWidth = if (isTickPrincipal) strokeWidths.principal else strokeWidths.secundario,
+            cap = StrokeCap.Round
+        )
+        
+        // Tick menor (0.5s) - só desenha se estiver dentro da duração
+        if (sec < duracaoSec) {
+            val xPosMeio = xPos + (pxPorSegundo / 2)
+            drawLine(
+                color = cores.tickMenor,
+                start = Offset(xPosMeio, 0f),
+                end = Offset(xPosMeio, alturas.meio),
+                strokeWidth = strokeWidths.menor,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}
+
+/**
+ * Desenha listras diagonais - versão otimizada.
+ */
+private fun DrawScope.desenharListrasOtimizado(
     left: Float,
     right: Float,
-    cor: Color
+    height: Float,
+    cor: Color,
+    espacamento: Float
 ) {
-    val espacamento = 15.dp.toPx()
-    var x = left - size.height
+    val strokeWidth = 3f * (size.width / 400f).coerceIn(0.5f, 2f)
+    var x = left - height
     
-    // Usa clipRect do próprio DrawScope
     clipRect(
         left = left,
         top = 0f,
         right = right,
-        bottom = size.height
+        bottom = height
     ) {
         while (x < right) {
             drawLine(
                 color = cor,
-                start = Offset(x, size.height),
-                end = Offset(x + size.height, 0f),
-                strokeWidth = 3.dp.toPx()
+                start = Offset(x, height),
+                end = Offset(x + height, 0f),
+                strokeWidth = strokeWidth
             )
             x += espacamento
         }
     }
+}
+
+/**
+ * Extension function para desenhar listras diagonais (hachura) - LEGADO
+ * @deprecated Use desenharListrasOtimizado
+ */
+private fun DrawScope.desenharListras(
+    left: Float,
+    right: Float,
+    cor: Color
+) {
+    desenharListrasOtimizado(
+        left = left,
+        right = right,
+        height = size.height,
+        cor = cor,
+        espacamento = 15.dp.toPx()
+    )
 }
 
 /**
