@@ -17,18 +17,18 @@ data class EditorState(
     val selectedRangeId: String? = null
 ) {
     val editingRange: RangeCorte?
-        get() = ranges.firstOrNull { it.isEditing }
+        get() = ranges.firstOrNull { it.emEdicao }
 
     val selectedRange: RangeCorte?
         get() = selectedRangeId?.let { id ->
-            ranges.firstOrNull { it.id == id && it.isConfirmed }
+            ranges.firstOrNull { it.id == id && it.confirmado }
         }
 
     val rangeAtPlayhead: RangeCorte?
         get() = ranges.noPlayhead(playheadPositionMs)
 
     val canDeleteAtPlayhead: Boolean
-        get() = rangeAtPlayhead?.isConfirmed == true
+        get() = rangeAtPlayhead?.confirmado == true
 
     val progress: Float
         get() = if (totalDurationMs > 0) {

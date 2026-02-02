@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -57,7 +58,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onNavigateToDevelop: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -131,6 +133,11 @@ fun SettingsScreen(
                 onClearCache = { settingsViewModel.clearChopCutDirectory() },
                 cleanupResult = cleanupResult,
                 onDismissResult = { settingsViewModel.clearCleanupResult() }
+            )
+
+            // Developer Card
+            DeveloperSettingsCard(
+                onNavigateToDevelop = onNavigateToDevelop
             )
 
             // Reset Button
@@ -692,6 +699,60 @@ fun ThumbnailFormatSelectionDialog(
             }
         }
     )
+}
+
+/**
+ * Developer settings card - access to development/testing screen
+ */
+@Composable
+fun DeveloperSettingsCard(
+    onNavigateToDevelop: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Build,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = "Desenvolvimento",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = "Acesse a área de testes para visualizar e testar componentes isoladamente.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = onNavigateToDevelop,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Abrir Área de Testes")
+            }
+        }
+    }
 }
 
 /**

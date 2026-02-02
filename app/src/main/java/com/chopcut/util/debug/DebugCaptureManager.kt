@@ -15,6 +15,8 @@ import android.view.View
 import android.view.Window
 import androidx.annotation.RequiresApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -244,7 +246,7 @@ class DebugCaptureManager(private val context: Context) {
      */
     private fun captureSnapshot(view: View, label: String) {
         // Usa coroutines de forma fire-and-forget
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        GlobalScope.launch(Dispatchers.IO) {
             captureScreenshot(view, label)
         }
     }

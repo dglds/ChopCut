@@ -121,7 +121,7 @@ fun Timeline(
     val captureManager = remember { DebugCaptureManager(context) }
     
     // Ref para a coluna da timeline (para screenshots)
-    val timelineColumnRef = remember { androidx.compose.ui.layout.LayoutCoordinates? }
+    var timelineColumnRef by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
 
     // Estado derivado: progresso (0f a 1f)
     val sliderPosition by remember {
