@@ -38,6 +38,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -123,6 +124,21 @@ fun EditorScreen(
     // --- Trim Ranges State ---
     var ranges by remember { mutableStateOf(listOf<TrimRangeData>()) }
     var selectedRangeId by remember { mutableStateOf<String?>(null) }
+
+    // --- Prepare Video Player ---
+    val coroutineScope = rememberCoroutineScope()
+    LaunchedEffect(videoUri) {
+        if (videoUri != Uri.EMPTY) {
+            previewManager.prepare(context, videoUri, coroutineScope)
+        }
+    }
+    
+    // Cleanup on dispose
+    DisposableEffect(Unit) {
+        onDispose {
+            previewManager.release()
+        }
+    }
 
     var exportScreenState by remember { mutableStateOf(ExportScreenState.SELECTING_PRESET) }
     var showExportScreen by remember { mutableStateOf(false) }
