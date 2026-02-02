@@ -18,6 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.chopcut.ui.timeline.components.PlayheadIndicator
 import com.chopcut.ui.timeline.components.ProgressBar
+import com.chopcut.ui.timeline.components.TimelineScrubber
+import com.chopcut.ui.timeline.util.ConfiguracaoTimeline
 
 /**
  * Tela de desenvolvimento para testes de visualização de componentes.
@@ -196,6 +198,70 @@ fun DevelopScreen(
                     ColorRow("Error", MaterialTheme.colorScheme.error)
                     ColorRow("Background", MaterialTheme.colorScheme.background)
                     ColorRow("Surface", MaterialTheme.colorScheme.surface)
+                }
+            }
+            
+            // ============================================
+            // SEÇÃO: Timelines (Comparação)
+            // ============================================
+            SectionTitle("Comparação de Timelines")
+            
+            val mockDurationMs = 60000L // 1 minuto mock
+            val mockPositionMs = 15000L // 15 segundos mock
+            
+            // 1. TimelineScrubber (Nova Arquitetura)
+            ComponentTestCard(
+                title = "TimelineScrubber (Nova)",
+                description = "Componente puro da nova arquitetura - otimizado para Celeron N5095A"
+            ) {
+                Column {
+                    Text(
+                        text = "Posição: ${mockPositionMs/1000}s / ${mockDurationMs/1000}s",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(ConfiguracaoTimeline.ALTURA_FAIXA_DP)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        TimelineScrubber(
+                            durationMs = mockDurationMs,
+                            positionMs = mockPositionMs,
+                            onPositionChange = { /* mock */ },
+                            onScrollStart = { /* mock */ },
+                            onScrollEnd = { /* mock */ },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
+            
+            // 2. Timeline.kt (Antiga)
+            ComponentTestCard(
+                title = "Timeline.kt (Antiga)",
+                description = "Implementação monolítica - mantida para referência"
+            ) {
+                Column {
+                    Text(
+                        text = "Timeline unificada com player integrado",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "⚠️ Requer PreviewManager e vídeo real",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { /* Navegar para TimelineComparisonScreen */ },
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Ver em TimelineComparisonScreen")
+                    }
                 }
             }
             
