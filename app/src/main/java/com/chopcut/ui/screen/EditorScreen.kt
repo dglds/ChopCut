@@ -375,14 +375,22 @@ fun EditorScreen(
                                         .height(ConfiguracaoTimeline.ALTURA_FAIXA_DP)
                                 ) {
                                     if (durationMs > 0) {
+                                        val isPlayerReady by remember {
+                                            derivedStateOf { playerState != PlayerState.STOPPED }
+                                        }
+                                        
                                         TimelineScrubber(
                                             durationMs = durationMs,
                                             positionMs = currentPosition,
                                             onPositionChange = { newPositionMs ->
-                                                previewManager.seekTo(newPositionMs)
+                                                if (isPlayerReady) {
+                                                    previewManager.seekTo(newPositionMs)
+                                                }
                                             },
                                             onScrollStart = {
-                                                previewManager.pause()
+                                                if (isPlayerReady) {
+                                                    previewManager.pause()
+                                                }
                                             },
                                             onScrollEnd = {
                                                 // Player permanece pausado após scroll

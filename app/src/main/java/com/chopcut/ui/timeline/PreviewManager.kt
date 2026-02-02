@@ -284,7 +284,10 @@ class PreviewManager(private val context: Context) {
      * @param positionMs Position in milliseconds
      */
     fun seekTo(positionMs: Long) {
-        val player = exoPlayer ?: throw IllegalStateException("PreviewManager not initialized")
+        val player = exoPlayer ?: run {
+            Timber.w("PreviewManager: Cannot seek, player not initialized yet")
+            return
+        }
 
         if (!player.isCurrentMediaItemSeekable) {
             Timber.w("PreviewManager: Media item is NOT seekable!")
