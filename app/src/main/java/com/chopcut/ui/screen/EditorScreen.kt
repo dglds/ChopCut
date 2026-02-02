@@ -62,7 +62,11 @@ import com.chopcut.ui.components.ToolPanelContainer
 import com.chopcut.ui.timeline.PreviewManager
 import com.chopcut.ui.timeline.PlayerState
 import com.chopcut.ui.timeline.components.TimelineScrubber
+import com.chopcut.ui.timeline.components.VideoPreview
+import com.chopcut.ui.timeline.components.PlayheadIndicator
+import com.chopcut.ui.timeline.components.RangeOverlay
 import com.chopcut.ui.timeline.util.ConfiguracaoTimeline
+import androidx.compose.ui.platform.LocalDensity
 import com.chopcut.ui.filter.FilterContent
 import com.chopcut.ui.filter.RotationContent
 import com.chopcut.ui.filter.SpeedContent
@@ -331,8 +335,11 @@ fun EditorScreen(
                 Column(modifier = Modifier.fillMaxSize()) {
                     val currentVideoUri by editorViewModel.currentVideoUri.collectAsStateWithLifecycle()
                     val videoUri = currentVideoUri
+                    val durationMs = videoInfo?.durationMs ?: 0L
+                    val density = LocalDensity.current
+                    val pxPorSegundo = with(density) { ConfiguracaoTimeline.PX_POR_SEGUNDO_DP.toPx() }
                     
-                    // Area do Player e Timeline (Fixo)
+                    // NOVA ARQUITETURA: VideoPreview + TimelineScrubber
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -340,23 +347,104 @@ fun EditorScreen(
                             .background(Color.Black)
                     ) {
                         if (videoUri != null) {
-                            TimelinePlayer(
-                                videoUri = videoUri,
-                                modifier = Modifier.fillMaxSize(),
-                                ranges = ranges,
-                                selectedRangeId = selectedRangeId,
-                                onRangesChange = { ranges = it },
-                                onRangeSelect = { selectedRangeId = it },
-                                onRangeDelete = { id ->
-                                    ranges = ranges.filter { it.id != id }
-                                    selectedRangeId = null
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "Range removido",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                // 1. VIDEO PREVIEW (novo componente)
+                                VideoPreview(
+                                    videoUri = videoUri,
+                                    exoPlayer = previewManager.exoPlayer,
+                                    isReady = playerState != PlayerState.STOPPED,
+                                    isPlaying = playerState == PlayerState.PLAYING,
+                                    currentPosition = currentPosition,
+                                    duration = durationMs,
+                                    onTogglePlayPause = {
+                                        when (playerState) {
+                                            PlayerState.PLAYING -> previewManager.pause()
+                                            PlayerState.PAUSED -> previewManager.play()
+                                            PlayerState.STOPPED -> previewManager.play()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f)
+                                )
+                                
+                                // 2. TIMELINE SCRUBBER (novo componente otimizado)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(ConfiguracaoTimeline.ALTURA_FAIXA_DP)
+                                ) {
+                                    if (durationMs > 0) {
+                                        TimelineScrubber(
+                                            durationMs = durationMs,
+                                            positionMs = currentPosition,
+                                            onPositionChange = { newPositionMs ->
+                                                previewManager.seekTo(newPositionMs)
+                                            },
+                                            onScrollStart = {
+                                                previewManager.pause()
+                                            },
+                                            onScrollEnd = {
+                                                // Player permanece pausado após scroll
+                                            },
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                        
+                                        // RangeOverlay (se houver ranges)
+                                        if (ranges.isNotEmpty()) {
+                                            val context = LocalContext.current
+                                            val containerWidthPx = context.resources.displayMetrics.widthPixels.toFloat()
+                                            
+                                            RangeOverlay(
+                                                ranges = ranges.map { 
+                                                    com.chopcut.ui.timeline.model.RangeCorte(
+                                                        id = it.id,
+                                                        inicioMs = it.startMs,
+                                                        fimMs = it.endMs,
+                                                        confirmado = it.isConfirmed,
+                                                        emEdicao = it.isDraft
+                                                    )
+                                                },
+                                                rangeEmCriacao = null,
+                                                rangeSelecionadoId = selectedRangeId,
+                                                posicaoPlayheadMs = currentPosition,
+                                                duracaoMs = durationMs,
+                                                scrollOffsetPx = 0f,
+                                                containerWidthPx = containerWidthPx,
+                                                pxPorSegundo = pxPorSegundo,
+                                                onRangeSelect = { selectedRangeId = it },
+                                                onRangeUpdate = { id, inicio, fim ->
+                                                    ranges = ranges.map { 
+                                                        if (it.id == id) it.copy(startMs = inicio, endMs = fim) 
+                                                        else it 
+                                                    }
+                                                },
+                                                onRangeDelete = { id ->
+                                                    ranges = ranges.filter { it.id != id }
+                                                    selectedRangeId = null
+                                                    android.widget.Toast.makeText(
+                                                        context,
+                                                        "Range removido",
+                                                        android.widget.Toast.LENGTH_SHORT
+                                                    ).show()
+                                                },
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                        
+                                        // PlayheadIndicator fixo no centro
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            PlayheadIndicator(
+                                                isRelevo = ranges.any { it.isDraft && currentPosition in it.startMs..it.endMs },
+                                                modifier = Modifier.fillMaxHeight()
+                                            )
+                                        }
+                                    }
                                 }
-                            )
+                            }
                         } else {
                             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                         }
@@ -378,80 +466,6 @@ fun EditorScreen(
                                 VideoInfoBadge(Icons.Default.PlayArrow, formatTime(info.durationMs))
                                 VideoInfoBadge(Icons.Default.Edit, "${info.width}x${info.height}")
                                 VideoInfoBadge(Icons.Default.Notifications, "${info.frameRate} fps")
-                            }
-                        }
-
-                        // ============================================
-                        // COMPARAÇÃO DE TIMELINES
-                        // ============================================
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
-                            )
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    text = "Comparação de Timelines",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                                
-                                Spacer(modifier = Modifier.height(8.dp))
-                                
-                                // 1. Timeline Antiga (TimelinePlayer - atual)
-                                Text(
-                                    text = "1. TimelinePlayer (Atual/Antiga)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                                Text(
-                                    text = "Implementação monolítica com player integrado",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                                )
-                                
-                                Spacer(modifier = Modifier.height(8.dp))
-                                
-                                // 2. Timeline Nova (TimelineScrubber)
-                                Text(
-                                    text = "2. TimelineScrubber (Nova)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                                Text(
-                                    text = "Componente puro - otimizado para Celeron N5095A",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                                )
-                                
-                                val durationMs = videoInfo?.durationMs ?: 0L
-                                if (durationMs > 0) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(ConfiguracaoTimeline.ALTURA_FAIXA_DP)
-                                            .padding(top = 4.dp)
-                                    ) {
-                                        TimelineScrubber(
-                                            durationMs = durationMs,
-                                            positionMs = currentPosition,
-                                            onPositionChange = { newPositionMs ->
-                                                previewManager.seekTo(newPositionMs)
-                                            },
-                                            onScrollStart = {
-                                                previewManager.pause()
-                                            },
-                                            onScrollEnd = {
-                                                // Player permanece pausado após scroll
-                                            },
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                }
                             }
                         }
 
