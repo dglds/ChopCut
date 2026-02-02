@@ -60,14 +60,7 @@ import com.chopcut.ui.filter.TrimContent
 import com.chopcut.ui.filter.CropContent
 import com.chopcut.ui.components.EditorSplitLayout
 import com.chopcut.ui.components.ToolPanelContainer
-import com.chopcut.ui.timeline.PreviewManager
-import com.chopcut.ui.timeline.PlayerState
-import com.chopcut.ui.timeline.components.TimelineScrubber
-import com.chopcut.ui.timeline.components.VideoPreview
-import com.chopcut.ui.timeline.components.PlayheadIndicator
-import com.chopcut.ui.timeline.components.RangeOverlay
-import com.chopcut.ui.timeline.util.ConfiguracaoTimeline
-import androidx.compose.ui.platform.LocalDensity
+import com.chopcut.ui.components.TimelinePlayer
 import com.chopcut.ui.filter.FilterContent
 import com.chopcut.ui.filter.RotationContent
 import com.chopcut.ui.filter.SpeedContent
@@ -95,8 +88,6 @@ fun EditorScreen(
 ) {
     val context = LocalContext.current
 
-    val previewManager = remember { PreviewManager(context) }
-
     var trimRange by remember { mutableStateOf<TrimRange?>(null) }
 
     val editorViewModel: EditorViewModel = viewModel(
@@ -119,36 +110,16 @@ fun EditorScreen(
     val presets by editorViewModel.availablePresets.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val activeTool by editorViewModel.activeTool.collectAsStateWithLifecycle()
-    val playerState by previewManager.playerState.collectAsStateWithLifecycle()
     
     // --- Trim Ranges State ---
     var ranges by remember { mutableStateOf(listOf<TrimRangeData>()) }
     var selectedRangeId by remember { mutableStateOf<String?>(null) }
-
-    // --- Prepare Video Player ---
-    val coroutineScope = rememberCoroutineScope()
-    LaunchedEffect(videoUri) {
-        if (videoUri != Uri.EMPTY) {
-            previewManager.prepare(context, videoUri, coroutineScope)
-        }
-    }
-    
-    // Cleanup on dispose
-    DisposableEffect(Unit) {
-        onDispose {
-            previewManager.release()
-        }
-    }
 
     var exportScreenState by remember { mutableStateOf(ExportScreenState.SELECTING_PRESET) }
     var showExportScreen by remember { mutableStateOf(false) }
     var lastExportUri by remember { mutableStateOf<Uri?>(null) }
     var lastExportName by remember { mutableStateOf<String?>(null) }
     var lastExportError by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(edits) {
-        previewManager.applyEffects(edits)
-    }
 
     LaunchedEffect(Unit) {
         editorViewModel.messageFlow.collect { message ->
@@ -197,8 +168,6 @@ fun EditorScreen(
     } }
     val hasSpeed by remember { derivedStateOf { edits.any { it is EditOperation.Speed && it.speed != 1.0f } } }
 
-    val currentPosition by previewManager.currentPosition.collectAsStateWithLifecycle()
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -241,15 +210,14 @@ fun EditorScreen(
             )
         },
         floatingActionButton = {
-            val currentTimeMs = currentPosition
-            // Verifica se o playhead está dentro de algum range
-            val rangeAtPlayhead = ranges.find { currentTimeMs in it.startMs..it.endMs }
+            // Verifica se há algum range selecionado
+            val selectedRange = ranges.find { it.id == selectedRangeId }
             
             // Define o estado do FAB
             val fabState = when {
-                rangeAtPlayhead == null -> FabState.ADD                    // Fora de range: Adicionar
-                rangeAtPlayhead.isDraft -> FabState.CONFIRM               // Dentro de draft: Confirmar
-                else -> FabState.DELETE                                    // Dentro de range salvo: Deletar
+                selectedRange == null -> FabState.ADD                    // Nenhum range selecionado: Adicionar
+                !selectedRange.isConfirmed -> FabState.CONFIRM           // Range não confirmado: Confirmar
+                else -> FabState.DELETE                                  // Range confirmado: Deletar
             }
             
             FloatingActionButton(
@@ -259,12 +227,9 @@ fun EditorScreen(
                     
                     when (fabState) {
                         FabState.ADD -> {
-                            // Cria novo range de 1 segundo centrado no playhead
-                            val durationMs = 1000L
-                            val halfDuration = durationMs / 2
-                            
-                            var startMs = (currentTimeMs - halfDuration).coerceAtLeast(0L)
-                            var endMs = (startMs + durationMs).coerceAtMost(videoDurationMs)
+                            // Cria novo range de 1 segundo no início do vídeo
+                            val startMs = 0L
+                            val endMs = 1000L.coerceAtMost(videoDurationMs)
                             
                             // Garante mínimo de 100ms
                             if (endMs - startMs < 100L) {
@@ -302,7 +267,7 @@ fun EditorScreen(
                         }
                         FabState.CONFIRM -> {
                             // Confirma/salva o range draft
-                            rangeAtPlayhead?.let { draft ->
+                            selectedRange?.let { draft ->
                                 ranges = ranges.map { 
                                     if (it.id == draft.id) it.copy(isDraft = false, isConfirmed = true) 
                                     else it 
@@ -317,7 +282,7 @@ fun EditorScreen(
                         }
                         FabState.DELETE -> {
                             // Deleta o range confirmado
-                            rangeAtPlayhead?.let { rangeToDelete ->
+                            selectedRange?.let { rangeToDelete ->
                                 ranges = ranges.filter { it.id != rangeToDelete.id }
                                 selectedRangeId = null
                                 android.widget.Toast.makeText(
@@ -351,11 +316,8 @@ fun EditorScreen(
                 Column(modifier = Modifier.fillMaxSize()) {
                     val currentVideoUri by editorViewModel.currentVideoUri.collectAsStateWithLifecycle()
                     val videoUri = currentVideoUri
-                    val durationMs = videoInfo?.durationMs ?: 0L
-                    val density = LocalDensity.current
-                    val pxPorSegundo = with(density) { ConfiguracaoTimeline.PX_POR_SEGUNDO_DP.toPx() }
                     
-                    // NOVA ARQUITETURA: VideoPreview + TimelineScrubber
+                    // TIMELINE ANTIGA (TimelinePlayer)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -363,112 +325,23 @@ fun EditorScreen(
                             .background(Color.Black)
                     ) {
                         if (videoUri != null) {
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                // 1. VIDEO PREVIEW (novo componente)
-                                VideoPreview(
-                                    videoUri = videoUri,
-                                    exoPlayer = previewManager.exoPlayer,
-                                    isReady = playerState != PlayerState.STOPPED,
-                                    isPlaying = playerState == PlayerState.PLAYING,
-                                    currentPosition = currentPosition,
-                                    duration = durationMs,
-                                    onTogglePlayPause = {
-                                        when (playerState) {
-                                            PlayerState.PLAYING -> previewManager.pause()
-                                            PlayerState.PAUSED -> previewManager.play()
-                                            PlayerState.STOPPED -> previewManager.play()
-                                        }
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f)
-                                )
-                                
-                                // 2. TIMELINE SCRUBBER (novo componente otimizado)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(ConfiguracaoTimeline.ALTURA_FAIXA_DP)
-                                ) {
-                                    if (durationMs > 0) {
-                                        val isPlayerReady by remember {
-                                            derivedStateOf { playerState != PlayerState.STOPPED }
-                                        }
-                                        
-                                        TimelineScrubber(
-                                            durationMs = durationMs,
-                                            positionMs = currentPosition,
-                                            onPositionChange = { newPositionMs ->
-                                                if (isPlayerReady) {
-                                                    previewManager.seekTo(newPositionMs)
-                                                }
-                                            },
-                                            onScrollStart = {
-                                                if (isPlayerReady) {
-                                                    previewManager.pause()
-                                                }
-                                            },
-                                            onScrollEnd = {
-                                                // Player permanece pausado após scroll
-                                            },
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                        
-                                        // RangeOverlay (se houver ranges)
-                                        if (ranges.isNotEmpty()) {
-                                            val context = LocalContext.current
-                                            val containerWidthPx = context.resources.displayMetrics.widthPixels.toFloat()
-                                            
-                                            RangeOverlay(
-                                                ranges = ranges.map { 
-                                                    com.chopcut.ui.timeline.model.RangeCorte(
-                                                        id = it.id,
-                                                        inicioMs = it.startMs,
-                                                        fimMs = it.endMs,
-                                                        confirmado = it.isConfirmed,
-                                                        emEdicao = it.isDraft
-                                                    )
-                                                },
-                                                rangeEmCriacao = null,
-                                                rangeSelecionadoId = selectedRangeId,
-                                                posicaoPlayheadMs = currentPosition,
-                                                duracaoMs = durationMs,
-                                                scrollOffsetPx = 0f,
-                                                containerWidthPx = containerWidthPx,
-                                                pxPorSegundo = pxPorSegundo,
-                                                onRangeSelect = { selectedRangeId = it },
-                                                onRangeUpdate = { id, inicio, fim ->
-                                                    ranges = ranges.map { 
-                                                        if (it.id == id) it.copy(startMs = inicio, endMs = fim) 
-                                                        else it 
-                                                    }
-                                                },
-                                                onRangeDelete = { id ->
-                                                    ranges = ranges.filter { it.id != id }
-                                                    selectedRangeId = null
-                                                    android.widget.Toast.makeText(
-                                                        context,
-                                                        "Range removido",
-                                                        android.widget.Toast.LENGTH_SHORT
-                                                    ).show()
-                                                },
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        }
-                                        
-                                        // PlayheadIndicator fixo no centro
-                                        Box(
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            PlayheadIndicator(
-                                                isRelevo = ranges.any { it.isDraft && currentPosition in it.startMs..it.endMs },
-                                                modifier = Modifier.fillMaxHeight()
-                                            )
-                                        }
-                                    }
+                            TimelinePlayer(
+                                videoUri = videoUri,
+                                modifier = Modifier.fillMaxSize(),
+                                ranges = ranges,
+                                selectedRangeId = selectedRangeId,
+                                onRangesChange = { ranges = it },
+                                onRangeSelect = { selectedRangeId = it },
+                                onRangeDelete = { id ->
+                                    ranges = ranges.filter { it.id != id }
+                                    selectedRangeId = null
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Range removido",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
                                 }
-                            }
+                            )
                         } else {
                             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                         }
