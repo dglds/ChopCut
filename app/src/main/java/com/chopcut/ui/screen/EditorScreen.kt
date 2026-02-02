@@ -61,6 +61,8 @@ import com.chopcut.ui.components.EditorSplitLayout
 import com.chopcut.ui.components.ToolPanelContainer
 import com.chopcut.ui.timeline.PreviewManager
 import com.chopcut.ui.timeline.PlayerState
+import com.chopcut.ui.timeline.components.TimelineScrubber
+import com.chopcut.ui.timeline.util.ConfiguracaoTimeline
 import com.chopcut.ui.filter.FilterContent
 import com.chopcut.ui.filter.RotationContent
 import com.chopcut.ui.filter.SpeedContent
@@ -376,6 +378,80 @@ fun EditorScreen(
                                 VideoInfoBadge(Icons.Default.PlayArrow, formatTime(info.durationMs))
                                 VideoInfoBadge(Icons.Default.Edit, "${info.width}x${info.height}")
                                 VideoInfoBadge(Icons.Default.Notifications, "${info.frameRate} fps")
+                            }
+                        }
+
+                        // ============================================
+                        // COMPARAÇÃO DE TIMELINES
+                        // ============================================
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "Comparação de Timelines",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                // 1. Timeline Antiga (TimelinePlayer - atual)
+                                Text(
+                                    text = "1. TimelinePlayer (Atual/Antiga)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = "Implementação monolítica com player integrado",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                )
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                // 2. Timeline Nova (TimelineScrubber)
+                                Text(
+                                    text = "2. TimelineScrubber (Nova)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = "Componente puro - otimizado para Celeron N5095A",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                )
+                                
+                                val durationMs = videoInfo?.durationMs ?: 0L
+                                if (durationMs > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(ConfiguracaoTimeline.ALTURA_FAIXA_DP)
+                                            .padding(top = 4.dp)
+                                    ) {
+                                        TimelineScrubber(
+                                            durationMs = durationMs,
+                                            positionMs = currentPosition,
+                                            onPositionChange = { newPositionMs ->
+                                                previewManager.seekTo(newPositionMs)
+                                            },
+                                            onScrollStart = {
+                                                previewManager.pause()
+                                            },
+                                            onScrollEnd = {
+                                                // Player permanece pausado após scroll
+                                            },
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
                             }
                         }
 
