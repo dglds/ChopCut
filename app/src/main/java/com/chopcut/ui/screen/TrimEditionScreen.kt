@@ -1,30 +1,39 @@
 package com.chopcut.ui.screen
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.chopcut.data.repository.ProjectRepository
 import com.chopcut.ui.components.TimelinePlayer
 import com.chopcut.ui.components.TrimRangeData
 import com.chopcut.ui.theme.ChopCutTheme
 import com.chopcut.ui.viewmodel.TimelineViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Tela de edição de trim de vídeo.
@@ -47,13 +56,44 @@ fun TrimEditionScreen(
     onExportComplete: () -> Unit = {},
     viewModel: TimelineViewModel = viewModel()
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
 
     // Estado local para seleção de range na UI
     var selectedRangeId by remember { mutableStateOf<String?>(null) }
 
+    // Estado para carregar URI do projeto (quando videoUri é vazio)
+    var loadedVideoUri by remember { mutableStateOf<Uri?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Carrega vídeo do projeto se necessário
+    LaunchedEffect(videoUri, projectId) {
+        if (videoUri == Uri.EMPTY && projectId != null) {
+            isLoading = true
+            errorMessage = null
+
+            withContext(Dispatchers.IO) {
+                val repository = ProjectRepository(context)
+                val project = repository.getProject(projectId)
+
+                if (project != null) {
+                    loadedVideoUri = Uri.parse(project.sourceVideoUri)
+                } else {
+                    errorMessage = "Projeto não encontrado"
+                }
+            }
+
+            isLoading = false
+        } else {
+            loadedVideoUri = videoUri
+        }
+    }
+
+    // URI final a ser usado (do parâmetro ou carregado do projeto)
+    val finalVideoUri = loadedVideoUri ?: Uri.EMPTY
+
     // Converter ranges do ViewModel para o formato do TimelinePlayer
-    // Adiciona isSelected baseado no selectedRangeId
     val rangesForPlayer = remember(uiState.ranges, selectedRangeId) {
         uiState.ranges.map { range ->
             range.copy(isSelected = range.id == selectedRangeId)
@@ -76,9 +116,29 @@ fun TrimEditionScreen(
             )
         }
     ) { paddingValues ->
-        if (videoUri != Uri.EMPTY) {
-            TimelinePlayer(
-                videoUri = videoUri,
+        when {
+            isLoading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            errorMessage != null -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = errorMessage ?: "Erro desconhecido",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            finalVideoUri != Uri.EMPTY -> {
+                TimelinePlayer(
+                    videoUri = finalVideoUri,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
@@ -110,7 +170,20 @@ fun TrimEditionScreen(
                 }
             )
         }
+        else -> {
+            // Sem vídeo disponível
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Nenhum vídeo selecionado",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
     }
+}
 }
 
 /**
