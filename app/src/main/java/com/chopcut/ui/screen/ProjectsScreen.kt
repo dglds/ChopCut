@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -60,8 +59,7 @@ import java.util.Locale
 fun ProjectsScreen(
     viewModel: ProjectsViewModel = viewModel(),
     onNavigateToEditor: (String?, android.net.Uri?) -> Unit,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToTimelineComparison: ((android.net.Uri?) -> Unit)? = null
+    onNavigateToSettings: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -77,17 +75,6 @@ fun ProjectsScreen(
             TopAppBar(
                 title = { Text("ChopCut") },
                 actions = {
-                    // Botão de debug para comparar timelines (só aparece se callback fornecido)
-                    if (onNavigateToTimelineComparison != null) {
-                        IconButton(onClick = { 
-                            onNavigateToTimelineComparison(null) 
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = "Comparar Timelines (Debug)"
-                            )
-                        }
-                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Configurações")
                     }

@@ -16,10 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.chopcut.ui.timeline.components.PlayheadIndicator
-import com.chopcut.ui.timeline.components.ProgressBar
-import com.chopcut.ui.timeline.components.TimelineScrubber
-import com.chopcut.ui.timeline.util.ConfiguracaoTimeline
+// Componentes de timeline removidos - pasta ui/timeline excluída
 
 /**
  * Tela de desenvolvimento para testes de visualização de componentes.
@@ -82,76 +79,6 @@ fun DevelopScreen(
             }
             
             // ============================================
-            // SEÇÃO: Componentes de Timeline
-            // ============================================
-            SectionTitle("Componentes de Timeline")
-            
-            // PlayheadIndicator
-            ComponentTestCard(
-                title = "PlayheadIndicator",
-                description = "Indicador central do playhead em dois estados"
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Estado normal
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Normal:", modifier = Modifier.width(80.dp))
-                        Box(
-                            modifier = Modifier
-                                .height(60.dp)
-                                .width(2.dp)
-                                .background(Color.Gray)
-                        ) {
-                            PlayheadIndicator(
-                                isRelevo = false,
-                                modifier = Modifier.fillMaxHeight()
-                            )
-                        }
-                    }
-                    
-                    // Estado em criação (relevo)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Em Criação:", modifier = Modifier.width(80.dp))
-                        Box(
-                            modifier = Modifier
-                                .height(60.dp)
-                                .width(2.dp)
-                                .background(Color.Gray)
-                        ) {
-                            PlayheadIndicator(
-                                isRelevo = true,
-                                modifier = Modifier.fillMaxHeight()
-                            )
-                        }
-                    }
-                }
-            }
-            
-            // ProgressBar
-            ComponentTestCard(
-                title = "ProgressBar",
-                description = "Barra de progresso em diferentes estados"
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ProgressBar(
-                        progress = 0.25f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    ProgressBar(
-                        progress = 0.5f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    ProgressBar(
-                        progress = 0.75f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    ProgressBar(
-                        progress = 1.0f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-            
-            // ============================================
             // SEÇÃO: Botões e Controles
             // ============================================
             SectionTitle("Botões e Controles")
@@ -198,70 +125,6 @@ fun DevelopScreen(
                     ColorRow("Error", MaterialTheme.colorScheme.error)
                     ColorRow("Background", MaterialTheme.colorScheme.background)
                     ColorRow("Surface", MaterialTheme.colorScheme.surface)
-                }
-            }
-            
-            // ============================================
-            // SEÇÃO: Timelines (Comparação)
-            // ============================================
-            SectionTitle("Comparação de Timelines")
-            
-            val mockDurationMs = 60000L // 1 minuto mock
-            val mockPositionMs = 15000L // 15 segundos mock
-            
-            // 1. TimelineScrubber (Nova Arquitetura)
-            ComponentTestCard(
-                title = "TimelineScrubber (Nova)",
-                description = "Componente puro da nova arquitetura - otimizado para Celeron N5095A"
-            ) {
-                Column {
-                    Text(
-                        text = "Posição: ${mockPositionMs/1000}s / ${mockDurationMs/1000}s",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(ConfiguracaoTimeline.ALTURA_FAIXA_DP)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        TimelineScrubber(
-                            durationMs = mockDurationMs,
-                            positionMs = mockPositionMs,
-                            onPositionChange = { /* mock */ },
-                            onScrollStart = { /* mock */ },
-                            onScrollEnd = { /* mock */ },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-            }
-            
-            // 2. Timeline.kt (Antiga)
-            ComponentTestCard(
-                title = "Timeline.kt (Antiga)",
-                description = "Implementação monolítica - mantida para referência"
-            ) {
-                Column {
-                    Text(
-                        text = "Timeline unificada com player integrado",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Text(
-                        text = "⚠️ Requer PreviewManager e vídeo real",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { /* Navegar para TimelineComparisonScreen */ },
-                        enabled = false,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Ver em TimelineComparisonScreen")
-                    }
                 }
             }
             

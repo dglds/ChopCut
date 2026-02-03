@@ -23,7 +23,6 @@ import com.chopcut.ui.screen.EditorScreen
 import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.ProjectsScreen
 import com.chopcut.ui.screen.SettingsScreen
-import com.chopcut.ui.screen.TimelineComparisonScreen
 import com.chopcut.ui.theme.ChopCutTheme
 
 /**
@@ -82,15 +81,6 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onNavigateToSettings = {
                                     navController.navigate("settings")
-                                },
-                                onNavigateToTimelineComparison = { videoUri ->
-                                    val encodedUri = videoUri?.let { 
-                                        java.net.URLEncoder.encode(it.toString(), "UTF-8")
-                                    }
-                                    val route = encodedUri?.let {
-                                        "timeline_comparison?videoUri=$it"
-                                    } ?: "timeline_comparison"
-                                    navController.navigate(route)
                                 }
                             )
                         }
@@ -168,30 +158,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // ==================== TIMELINE COMPARISON SCREEN (DEBUG) ====================
-                        composable(
-                            route = "timeline_comparison?videoUri={videoUri}",
-                            arguments = listOf(
-                                navArgument("videoUri") {
-                                    type = NavType.StringType
-                                    nullable = true
-                                    defaultValue = null
-                                }
-                            )
-                        ) { backStackEntry ->
-                            val videoUriString = backStackEntry.arguments?.getString("videoUri")
-                            val decodedUri = videoUriString?.let {
-                                java.net.URLDecoder.decode(it, "UTF-8")
-                            }
-                            val videoUri = decodedUri?.let { Uri.parse(it) }
-
-                            TimelineComparisonScreen(
-                                videoUri = videoUri ?: Uri.EMPTY,
-                                onNavigateBack = {
-                                    navController.popBackStack()
-                                }
-                            )
-                        }
                     }
                 }
             }
