@@ -1,0 +1,8 @@
+{
+  "track_id": "trim_range_20260203",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-02-03T15:00:00Z",
+  "updated_at": "2026-02-03T15:00:00Z",
+  "description": "Implemente a feature trim-range para remoção de múltiplos pedaços do vídeo na TimelinePlayer."
+}
