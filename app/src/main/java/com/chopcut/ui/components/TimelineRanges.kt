@@ -21,22 +21,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
 /**
- * Representa um range de trim (área a ser removida) com ID único
- * @property isDraft Se true, range está em edição (alças visíveis)
- * @property isConfirmed Se true, range já foi salvo e pode ser deletado
- */
-data class TrimRangeData(
-    val id: String,
-    val startMs: Long,
-    val endMs: Long,
-    val isSelected: Boolean = false,
-    val isDraft: Boolean = true,      // true = em edição, false = salvo
-    val isConfirmed: Boolean = false  // true = já foi confirmado
-) {
-    val durationMs: Long get() = endMs - startMs
-}
-
-/**
  * Estados de drag para as alças
  */
 private sealed class DragState {

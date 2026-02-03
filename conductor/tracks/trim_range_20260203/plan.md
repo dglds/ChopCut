@@ -1,7 +1,7 @@
 # Implementation Plan - Trim Range Feature
 
 ## Phase 1: Data & State Management
-- [ ] Task: Update `TrimRangeData` Data Model
+- [~] Task: Update `TrimRangeData` Data Model
     - [ ] Add properties for validation (e.g., collision checks) if needed.
     - [ ] Ensure it supports serialization/parcelling if necessary for state saving.
 - [ ] Task: Implement `TimelineViewModel` Logic
