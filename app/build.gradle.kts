@@ -98,3 +98,43 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
+
+// ==================== DEPLOYMENT TASKS ====================
+
+val scriptsDir = rootDir.resolve("gradle/scripts")
+
+/**
+ * Deploy completo: build + install + restart
+ * Executa script: gradle/scripts/deploy.sh
+ */
+tasks.register<Exec>("deploy") {
+    group = "deploy"
+    description = "Build, install, kill and restart the app"
+    dependsOn("assembleDebug")
+    workingDir = rootDir
+    commandLine("bash", scriptsDir.resolve("deploy.sh"))
+}
+
+/**
+ * Instala APK apenas (sem restart)
+ * Executa script: gradle/scripts/install.sh
+ */
+tasks.register<Exec>("install") {
+    group = "deploy"
+    description = "Install APK only (no restart)"
+    dependsOn("assembleDebug")
+    workingDir = rootDir
+    commandLine("bash", scriptsDir.resolve("install.sh"))
+}
+
+/**
+ * Conecta via WiFi
+ * Executa script: gradle/scripts/wifi.sh
+ */
+tasks.register<Exec>("wifi") {
+    group = "deploy"
+    description = "Connect to device via WiFi"
+    workingDir = rootDir
+    commandLine("bash", scriptsDir.resolve("wifi.sh"))
+}
+
