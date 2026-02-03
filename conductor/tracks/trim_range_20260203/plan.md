@@ -4,7 +4,7 @@
 - [x] Task: Update `TrimRangeData` Data Model [f244002]
     - [x] Add properties for validation (e.g., collision checks) if needed.
     - [x] Ensure it supports serialization/parcelling if necessary for state saving.
-- [ ] Task: Implement `TimelineViewModel` Logic
+- [~] Task: Implement `TimelineViewModel` Logic
     - [ ] Create `List<TrimRangeData>` in `UiState`.
     - [ ] Implement `addRange(range: TrimRangeData)` with collision validation.
     - [ ] Implement `removeRange(rangeId: String)` logic.

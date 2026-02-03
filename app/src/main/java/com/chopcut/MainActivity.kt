@@ -21,6 +21,7 @@ import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.DevelopScreen
 import com.chopcut.ui.screen.EditorScreen
 import com.chopcut.ui.screen.HomeScreen
+import com.chopcut.ui.screen.TrimEditionScreen
 import com.chopcut.ui.screen.ProjectsScreen
 import com.chopcut.ui.screen.SettingsScreen
 import com.chopcut.ui.theme.ChopCutTheme
@@ -125,7 +126,7 @@ class MainActivity : ComponentActivity() {
                             }
                             val videoUri = decodedUri?.let { Uri.parse(it) }
 
-                            EditorScreen(
+                            TrimEditionScreen(
                                 videoUri = videoUri ?: Uri.EMPTY,
                                 projectId = projectId,
                                 onNavigateBack = {
