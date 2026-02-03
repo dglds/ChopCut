@@ -1,18 +1,22 @@
 package com.chopcut.ui.screen
 
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,234 +27,195 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chopcut.data.repository.ProjectRepository
-import com.chopcut.ui.components.TimelinePlayer
-import com.chopcut.ui.components.TrimRangeData
-import com.chopcut.ui.theme.ChopCutTheme
+import com.chopcut.ui.components.TimelineEditor
 import com.chopcut.ui.viewmodel.TimelineViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
-/**
- * Tela de edição de trim de vídeo.
- *
- * Layout:
- * - Player de vídeo no topo (70% da tela)
- * - Timeline com ranges na parte inferior (30% da tela)
- * - FAB flutuante para ações de adicionar/definir/deletar ranges
- *
- * @param videoUri URI do vídeo sendo editado
- * @param projectId ID do projeto (opcional)
- * @param onNavigateBack Callback para voltar à tela anterior
- * @param onExportComplete Callback quando exportação é concluída
- */
 @Composable
 fun TrimEditionScreen(
     videoUri: Uri,
     projectId: String? = null,
-    onNavigateBack: () -> Unit = {},
-    onExportComplete: () -> Unit = {},
     viewModel: TimelineViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsState()
-
-    // Estado local para seleção de range na UI
-    var selectedRangeId by remember { mutableStateOf<String?>(null) }
-
-    // Estado para carregar URI do projeto (quando videoUri é vazio)
+    val state by viewModel.state.collectAsState()
     var loadedVideoUri by remember { mutableStateOf<Uri?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Carrega vídeo do projeto se necessário
     LaunchedEffect(videoUri, projectId) {
         if (videoUri == Uri.EMPTY && projectId != null) {
             isLoading = true
-            errorMessage = null
-
             withContext(Dispatchers.IO) {
-                val repository = ProjectRepository(context)
-                val project = repository.getProject(projectId)
-
+                val repo = ProjectRepository(context)
+                val project = repo.getProject(projectId)
                 if (project != null) {
                     loadedVideoUri = Uri.parse(project.sourceVideoUri)
                 } else {
                     errorMessage = "Projeto não encontrado"
                 }
             }
-
             isLoading = false
         } else {
             loadedVideoUri = videoUri
         }
     }
 
-    // URI final a ser usado (do parâmetro ou carregado do projeto)
-    val finalVideoUri = loadedVideoUri ?: Uri.EMPTY
+    when {
+        isLoading -> {
+            Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) { CircularProgressIndicator() }
+        }
+        errorMessage != null -> {
+            Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) { Text(errorMessage!!, color = MaterialTheme.colorScheme.error) }
+        }
+        loadedVideoUri != null -> {
+            Column(modifier = Modifier.fillMaxSize()) {
+                TimelineEditor(
+                    videoUri = loadedVideoUri!!,
+                    trimPosition = state.trimPosition,
+                    currentPosition = state.currentPosition,
+                    onPositionChange = { viewModel.setCurrentPosition(it) },
+                    onAddPosition = { viewModel.addPosition(state.currentPosition) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                )
 
-    // Converter ranges do ViewModel para o formato do TimelinePlayer
-    val rangesForPlayer = remember(uiState.ranges, selectedRangeId) {
-        uiState.ranges.map { range ->
-            range.copy(isSelected = range.id == selectedRangeId)
+                RangeInfoPanel(
+                    ranges = state.trimPosition.completeRanges,
+                    currentPosition = state.currentPosition,
+                    isDraftMode = state.trimPosition.isDraftMode,
+                    draftPosition = state.trimPosition.draftPosition,
+                    onAddPosition = { viewModel.addPosition(state.currentPosition) },
+                    onClear = { viewModel.clear() }
+                )
+            }
+        }
+        else -> {
+            Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) { Text("Nenhum vídeo selecionado") }
         }
     }
+}
 
-    Scaffold(
-        floatingActionButton = {
-            TrimEditionFab(
-                isDefining = uiState.isDefining,
-                selectedRangeId = selectedRangeId,
-                onStartRange = { viewModel.startRange() },
-                onEndRange = { viewModel.endRange() },
-                onDeleteRange = {
-                    selectedRangeId?.let { id ->
-                        viewModel.removeRange(id)
-                        selectedRangeId = null
-                    }
-                }
+@Composable
+private fun RangeInfoPanel(
+    ranges: List<Pair<Long, Long>>,
+    currentPosition: Long,
+    isDraftMode: Boolean,
+    draftPosition: Long?,
+    onAddPosition: () -> Unit,
+    onClear: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        tonalElevation = 4.dp,
+        shadowElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 48.dp)
+        ) {
+            Text(
+                text = "RANGES DE CORTE",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
             )
-        }
-    ) { paddingValues ->
-        when {
-            isLoading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-            errorMessage != null -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (ranges.isEmpty() && !isDraftMode) {
+                Text(
+                    text = "Nenhum range definido",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                ranges.forEachIndexed { index, (start, end) ->
+                    val duration = end - start
                     Text(
-                        text = errorMessage ?: "Erro desconhecido",
-                        color = MaterialTheme.colorScheme.error
+                        text = "Range ${index + 1}: ${formatTime(start)} - ${formatTime(end)} (${formatTime(duration)})",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                if (isDraftMode && draftPosition != null) {
+                    val draftDuration = kotlin.math.abs(currentPosition - draftPosition)
+                    Text(
+                        text = "Draft: ${formatTime(draftPosition)} → ${formatTime(currentPosition)} (${formatTime(draftDuration)})",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFFFF9800),
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
-            finalVideoUri != Uri.EMPTY -> {
-                TimelinePlayer(
-                    videoUri = finalVideoUri,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                ranges = rangesForPlayer,
-                selectedRangeId = selectedRangeId,
-                onRangesChange = { updatedRanges ->
-                    // Sincroniza alterações de posição do TimelinePlayer com ViewModel
-                    updatedRanges.forEach { updatedRange ->
-                        val originalRange = uiState.ranges.find { it.id == updatedRange.id }
-                        if (originalRange != null && 
-                            (originalRange.startMs != updatedRange.startMs || 
-                             originalRange.endMs != updatedRange.endMs)) {
-                            // Range foi movido/redimensionado no TimelinePlayer
-                            // Atualiza no ViewModel se for um range draft
-                            if (updatedRange.isDraft && !updatedRange.isConfirmed) {
-                                viewModel.updateRangeEnd(updatedRange.endMs)
-                            }
-                        }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isDraftMode) {
+                    Button(
+                        onClick = onAddPosition,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFF9800)
+                        )
+                    ) {
+                        Text("CONFIRMAR")
                     }
-                },
-                onRangeSelect = { rangeId ->
-                    selectedRangeId = rangeId
-                },
-                onRangeDelete = { rangeId ->
-                    viewModel.removeRange(rangeId)
-                    if (selectedRangeId == rangeId) {
-                        selectedRangeId = null
+                } else {
+                    Button(
+                        onClick = onAddPosition,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("INICIAR RANGE")
                     }
                 }
-            )
-        }
-        else -> {
-            // Sem vídeo disponível
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Nenhum vídeo selecionado",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-    }
-}
-}
 
-/**
- * FAB da tela de trim com estados dinâmicos.
- * Estados: Add (novo range) -> Confirm (definindo) -> Delete (range selecionado)
- */
-@Composable
-private fun TrimEditionFab(
-    isDefining: Boolean,
-    selectedRangeId: String?,
-    onStartRange: () -> Unit,
-    onEndRange: () -> Unit,
-    onDeleteRange: () -> Unit
-) {
-    when {
-        isDefining -> {
-            // Estado: Definindo fim do range (Mark B) - ícone de check
-            FloatingActionButton(
-                onClick = onEndRange,
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Definir fim do range",
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
-            }
-        }
-        selectedRangeId != null -> {
-            // Estado: Range confirmado selecionado - ícone de delete
-            FloatingActionButton(
-                onClick = onDeleteRange,
-                containerColor = MaterialTheme.colorScheme.error
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Deletar range selecionado",
-                    tint = MaterialTheme.colorScheme.onError
-                )
-            }
-        }
-        else -> {
-            // Estado: Adicionar novo range - ícone de add
-            FloatingActionButton(
-                onClick = onStartRange,
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Adicionar range de trim",
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
+                Spacer(modifier = Modifier.width(8.dp))
+
+                if (ranges.isNotEmpty() || isDraftMode) {
+                    Button(
+                        onClick = onClear,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("LIMPAR")
+                    }
+                }
             }
         }
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-private fun TrimEditionScreenPreview() {
-    ChopCutTheme {
-        // Preview com placeholder pois precisa de Context para ExoPlayer
-        androidx.compose.material3.Surface {
-            androidx.compose.material3.Text(
-                text = "TrimEditionScreen Preview\n(Requires video file)",
-                modifier = Modifier.padding(16.dp)
-            )
-        }
-    }
+private fun formatTime(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    val millis = (ms % 1000) / 10
+    return String.format("%02d:%02d.%02d", minutes, seconds, millis)
 }

@@ -1,0 +1,7 @@
+# Logs ChopCut
+
+# Playhead: position [range] quando dentro
+adb logcat -c && adb logcat | grep -i "Playhead"
+
+# FAB: estado atual
+adb logcat -c && adb logcat | grep -i "FAB"

@@ -52,7 +52,6 @@ import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.ExportPreset
 import com.chopcut.data.model.FilterType
 import com.chopcut.ui.components.TrimRange
-import com.chopcut.ui.components.TimelinePlayer
 import com.chopcut.ui.components.TrimRangeData
 import com.chopcut.ui.filter.TrimContent
 import com.chopcut.ui.filter.CropContent
@@ -314,36 +313,6 @@ fun EditorScreen(
                     val currentVideoUri by editorViewModel.currentVideoUri.collectAsStateWithLifecycle()
                     val videoUri = currentVideoUri
                     
-                    // TIMELINE ANTIGA (TimelinePlayer)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .background(Color.Black)
-                    ) {
-                        if (videoUri != null) {
-                            TimelinePlayer(
-                                videoUri = videoUri,
-                                modifier = Modifier.fillMaxSize(),
-                                ranges = ranges,
-                                selectedRangeId = selectedRangeId,
-                                onRangesChange = { ranges = it },
-                                onRangeSelect = { selectedRangeId = it },
-                                onRangeDelete = { id ->
-                                    ranges = ranges.filter { it.id != id }
-                                    selectedRangeId = null
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "Range removido",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            )
-                        } else {
-                            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                        }
-                    }
-
                     // Area de Ferramentas e Info (Scrollable)
                     Column(
                         modifier = Modifier
