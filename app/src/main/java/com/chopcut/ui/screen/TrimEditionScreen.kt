@@ -1,12 +1,7 @@
 package com.chopcut.ui.screen
 
 import android.net.Uri
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -16,17 +11,18 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.chopcut.ui.components.TimelinePlayer
+import com.chopcut.ui.components.TrimRangeData
 import com.chopcut.ui.theme.ChopCutTheme
 import com.chopcut.ui.viewmodel.TimelineViewModel
 
@@ -53,114 +49,85 @@ fun TrimEditionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // Estado local para seleção de range na UI
+    var selectedRangeId by remember { mutableStateOf<String?>(null) }
+
+    // Converter ranges do ViewModel para o formato do TimelinePlayer
+    // Adiciona isSelected baseado no selectedRangeId
+    val rangesForPlayer = remember(uiState.ranges, selectedRangeId) {
+        uiState.ranges.map { range ->
+            range.copy(isSelected = range.id == selectedRangeId)
+        }
+    }
+
     Scaffold(
         floatingActionButton = {
             TrimEditionFab(
                 isDefining = uiState.isDefining,
+                selectedRangeId = selectedRangeId,
                 onStartRange = { viewModel.startRange() },
                 onEndRange = { viewModel.endRange() },
                 onDeleteRange = {
-                    uiState.activeRangeId?.let { viewModel.removeRange(it) }
+                    selectedRangeId?.let { id ->
+                        viewModel.removeRange(id)
+                        selectedRangeId = null
+                    }
                 }
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            // ==================== VIDEO PLAYER (PLACEHOLDER) ====================
-            Box(
+        if (videoUri != Uri.EMPTY) {
+            TimelinePlayer(
+                videoUri = videoUri,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(0.7f)
-                    .background(MaterialTheme.colorScheme.surface)
-            ) {
-                if (videoUri != Uri.EMPTY) {
-                    // TODO: Implementar player real (TimelinePlayer ou ExoPlayer)
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Player de vídeo\n${videoUri.path?.takeLast(30) ?: "..."}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Nenhum vídeo selecionado",
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
-
-            // ==================== TIMELINE (PLACEHOLDER) ====================
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(0.3f)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant,
-                        shape = MaterialTheme.shapes.medium
-                    )
-            ) {
-                // TODO: Implementar TimelineRangesOverlay ou TimelinePlayer
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Timeline (${uiState.ranges.size} ranges)",
-                        modifier = Modifier.padding(top = 8.dp),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    if (uiState.ranges.isNotEmpty()) {
-                        uiState.ranges.forEach { range ->
-                            Text(
-                                text = "${range.id.take(8)}: ${range.startMs}ms - ${range.endMs}ms ${if (range.isConfirmed) "✓" else "✏"}",
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                ranges = rangesForPlayer,
+                selectedRangeId = selectedRangeId,
+                onRangesChange = { updatedRanges ->
+                    // Sincroniza alterações de posição do TimelinePlayer com ViewModel
+                    updatedRanges.forEach { updatedRange ->
+                        val originalRange = uiState.ranges.find { it.id == updatedRange.id }
+                        if (originalRange != null && 
+                            (originalRange.startMs != updatedRange.startMs || 
+                             originalRange.endMs != updatedRange.endMs)) {
+                            // Range foi movido/redimensionado no TimelinePlayer
+                            // Atualiza no ViewModel se for um range draft
+                            if (updatedRange.isDraft && !updatedRange.isConfirmed) {
+                                viewModel.updateRangeEnd(updatedRange.endMs)
+                            }
                         }
                     }
-                    if (uiState.isDefining) {
-                        Text(
-                            text = "Definindo: pos=${uiState.currentPlayheadMs}ms",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
+                },
+                onRangeSelect = { rangeId ->
+                    selectedRangeId = rangeId
+                },
+                onRangeDelete = { rangeId ->
+                    viewModel.removeRange(rangeId)
+                    if (selectedRangeId == rangeId) {
+                        selectedRangeId = null
                     }
                 }
-            }
+            )
         }
     }
 }
 
 /**
  * FAB da tela de trim com estados dinâmicos.
+ * Estados: Add (novo range) -> Confirm (definindo) -> Delete (range selecionado)
  */
 @Composable
 private fun TrimEditionFab(
     isDefining: Boolean,
+    selectedRangeId: String?,
     onStartRange: () -> Unit,
     onEndRange: () -> Unit,
     onDeleteRange: () -> Unit
 ) {
     when {
         isDefining -> {
-            // Estado: Definindo fim do range (Mark B)
+            // Estado: Definindo fim do range (Mark B) - ícone de check
             FloatingActionButton(
                 onClick = onEndRange,
                 containerColor = MaterialTheme.colorScheme.primary
@@ -172,8 +139,21 @@ private fun TrimEditionFab(
                 )
             }
         }
+        selectedRangeId != null -> {
+            // Estado: Range confirmado selecionado - ícone de delete
+            FloatingActionButton(
+                onClick = onDeleteRange,
+                containerColor = MaterialTheme.colorScheme.error
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Deletar range selecionado",
+                    tint = MaterialTheme.colorScheme.onError
+                )
+            }
+        }
         else -> {
-            // Estado: Adicionar novo range
+            // Estado: Adicionar novo range - ícone de add
             FloatingActionButton(
                 onClick = onStartRange,
                 containerColor = MaterialTheme.colorScheme.primary
@@ -192,8 +172,12 @@ private fun TrimEditionFab(
 @Composable
 private fun TrimEditionScreenPreview() {
     ChopCutTheme {
-        TrimEditionScreen(
-            videoUri = Uri.EMPTY
-        )
+        // Preview com placeholder pois precisa de Context para ExoPlayer
+        androidx.compose.material3.Surface {
+            androidx.compose.material3.Text(
+                text = "TrimEditionScreen Preview\n(Requires video file)",
+                modifier = Modifier.padding(16.dp)
+            )
+        }
     }
 }
