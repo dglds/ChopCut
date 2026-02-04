@@ -2,6 +2,7 @@ package com.chopcut.ui.screen
 
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,11 +11,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -91,19 +100,29 @@ fun TrimEditionScreen(
                     currentPosition = state.currentPosition,
                     onPositionChange = { viewModel.setCurrentPosition(it) },
                     onAddPosition = { viewModel.addPosition(state.currentPosition) },
+                    extraContent = {
+                        RangeList(
+                            ranges = state.trimPosition.completeRanges,
+                            currentPosition = state.currentPosition,
+                            isDraftMode = state.trimPosition.isDraftMode,
+                            draftPosition = state.trimPosition.draftPosition
+                        )
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
                 )
 
-                RangeInfoPanel(
-                    ranges = state.trimPosition.completeRanges,
-                    currentPosition = state.currentPosition,
+                val isInsideRange = state.trimPosition.isPositionInRange(state.currentPosition)
+
+                RangeControls(
                     isDraftMode = state.trimPosition.isDraftMode,
-                    draftPosition = state.trimPosition.draftPosition,
+                    isInsideRange = isInsideRange,
                     onAddPosition = { viewModel.addPosition(state.currentPosition) },
-                    onClear = { viewModel.clear() }
+                    onClear = { viewModel.removeRangeAt(state.currentPosition) }
                 )
+                
+                Spacer(modifier = Modifier.height(48.dp))
             }
         }
         else -> {
@@ -116,97 +135,107 @@ fun TrimEditionScreen(
 }
 
 @Composable
-private fun RangeInfoPanel(
+private fun RangeList(
     ranges: List<Pair<Long, Long>>,
     currentPosition: Long,
     isDraftMode: Boolean,
-    draftPosition: Long?,
+    draftPosition: Long?
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (ranges.isEmpty() && !isDraftMode) {
+            Text(
+                text = "Nenhum range definido",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Gray
+            )
+        } else {
+            ranges.forEachIndexed { index, (start, end) ->
+                Text(
+                    text = "#${index + 1} ${formatTime(start)} → ${formatTime(end)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White
+                )
+            }
+
+            if (isDraftMode && draftPosition != null) {
+                Text(
+                    text = "Draft: ${formatTime(draftPosition)} → ${formatTime(currentPosition)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFFFF9800),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RangeControls(
+    isDraftMode: Boolean,
+    isInsideRange: Boolean,
     onAddPosition: () -> Unit,
     onClear: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        tonalElevation = 4.dp,
-        shadowElevation = 8.dp
+        color = Color.Transparent,
+        tonalElevation = 0.dp
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 48.dp)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "RANGES DE CORTE",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (ranges.isEmpty() && !isDraftMode) {
-                Text(
-                    text = "Nenhum range definido",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            // Botão CONFIRMAR (Draft) ou INICIAR RANGE (Tesoura)
+            // A Tesoura só aparece se NÃO estivermos em Draft e NÃO estivermos dentro de um range
+            if (isDraftMode) {
+                IconButton(
+                    onClick = onAddPosition,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(Color(0xFFFF9800), androidx.compose.foundation.shape.CircleShape),
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = "Confirmar")
+                }
+            } else if (!isInsideRange) {
+                IconButton(
+                    onClick = onAddPosition,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape),
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+                ) {
+                    Icon(Icons.Default.ContentCut, contentDescription = "Iniciar Range")
+                }
             } else {
-                ranges.forEachIndexed { index, (start, end) ->
-                    val duration = end - start
-                    Text(
-                        text = "Range ${index + 1}: ${formatTime(start)} - ${formatTime(end)} (${formatTime(duration)})",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                if (isDraftMode && draftPosition != null) {
-                    val draftDuration = kotlin.math.abs(currentPosition - draftPosition)
-                    Text(
-                        text = "Draft: ${formatTime(draftPosition)} → ${formatTime(currentPosition)} (${formatTime(draftDuration)})",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFFF9800),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                // Espaço reservado para manter layout se necessário, ou apenas não mostrar nada
+                Spacer(modifier = Modifier.size(64.dp)) 
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.width(32.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (isDraftMode) {
-                    Button(
-                        onClick = onAddPosition,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFF9800)
-                        )
-                    ) {
-                        Text("CONFIRMAR")
-                    }
-                } else {
-                    Button(
-                        onClick = onAddPosition,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("INICIAR RANGE")
-                    }
+            // Botão LIXEIRA
+            // Aparece se estivermos em Draft (cancelar) OU dentro de um range (deletar range)
+            if (isInsideRange || isDraftMode) {
+                IconButton(
+                    onClick = onClear,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(MaterialTheme.colorScheme.error, androidx.compose.foundation.shape.CircleShape),
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Limpar")
                 }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                if (ranges.isNotEmpty() || isDraftMode) {
-                    Button(
-                        onClick = onClear,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("LIMPAR")
-                    }
-                }
+            } else {
+                 Spacer(modifier = Modifier.size(64.dp))
             }
         }
     }
@@ -216,6 +245,7 @@ private fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
-    val millis = (ms % 1000) / 10
-    return String.format("%02d:%02d.%02d", minutes, seconds, millis)
+    val centis = (ms % 1000) / 10
+    // Formato MM:SS.cc (Minutos totais : Segundos . Centésimos)
+    return String.format("%02d:%02d.%02d", minutes, seconds, centis)
 }

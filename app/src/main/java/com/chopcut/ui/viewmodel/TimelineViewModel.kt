@@ -35,6 +35,17 @@ class TimelineViewModel : ViewModel() {
         _state.update { it.copy(videoDurationMs = duration) }
     }
 
+    fun removeRangeAt(pos: Long) {
+        val current = _state.value.trimPosition
+        if (current.isDraftMode) {
+            val newPositions = current.positions.dropLast(1)
+            _state.update { it.copy(trimPosition = current.copy(positions = newPositions)) }
+        } else {
+            val newTrim = current.removeRangeAt(pos)
+            _state.update { it.copy(trimPosition = newTrim) }
+        }
+    }
+
     fun clear() {
         _state.value = TimelineEditorState()
         Timber.d("Timeline: estado limpo")

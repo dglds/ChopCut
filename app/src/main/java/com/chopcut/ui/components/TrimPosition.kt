@@ -24,6 +24,20 @@ data class TrimPosition(
         return if (pos in positions) this else copy(positions = positions + pos)
     }
 
+    fun removeRangeAt(pos: Long): TrimPosition {
+        val rangeToRemove = completeRanges.find { (s, e) -> pos in s..e }
+        return if (rangeToRemove != null) {
+            val newRanges = completeRanges.filterNot { it == rangeToRemove }
+            val newPositions = newRanges.flatMap { listOf(it.first, it.second) }.toMutableList()
+            if (isDraftMode) {
+                newPositions.add(positions.last())
+            }
+            copy(positions = newPositions)
+        } else {
+            this
+        }
+    }
+
     private fun mergeRanges(positions: List<Long>): List<Pair<Long, Long>> {
         if (positions.size < 2) return emptyList()
 
