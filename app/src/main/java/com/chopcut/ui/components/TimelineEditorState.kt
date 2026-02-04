@@ -5,6 +5,12 @@ data class TimelineEditorState(
     val currentPosition: Long = 0L,
     val videoDurationMs: Long = 0L
 ) {
+    val totalTrimmedMs: Long
+        get() = trimPosition.completeRanges.sumOf { it.second - it.first }
+
+    val finalDurationMs: Long
+        get() = (videoDurationMs - totalTrimmedMs).coerceAtLeast(0L)
+
     val isDraftMode: Boolean get() = trimPosition.isDraftMode
 
     val isInsideRange: Boolean get() = trimPosition.isPositionInRange(currentPosition)
