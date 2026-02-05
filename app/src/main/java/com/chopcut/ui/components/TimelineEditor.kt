@@ -4,6 +4,9 @@ import android.net.Uri
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -75,6 +78,40 @@ fun TimelineEditor(
     var scrollOffsetPx by remember { mutableFloatStateOf(0f) }
     var videoDurationMs by remember { mutableLongStateOf(0L) }
     var isPlaying by remember { mutableStateOf(false) }
+
+    // Thumbnails State
+    val thumbnails = remember { androidx.compose.runtime.mutableStateMapOf<Long, android.graphics.Bitmap>() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    
+    // Fetch thumbnails based on scroll
+    LaunchedEffect(scrollOffsetPx, videoDurationMs) {
+        if (videoDurationMs == 0L) return@LaunchedEffect
+        
+        val visibleDurationPx = with(density) { 
+            // Assuming screen width roughly, or the timeline width. 
+            // Better to fetch a bit more than visible.
+            1000.dp.toPx() 
+        }
+        
+        val startTimeSec = (scrollOffsetPx / pxPerSecond).toLong()
+        val endTimeSec = ((scrollOffsetPx + visibleDurationPx) / pxPerSecond).toLong()
+        
+        for (sec in startTimeSec..endTimeSec) {
+            val timeMs = sec * 1000
+            if (timeMs > videoDurationMs) break
+            if (!thumbnails.containsKey(timeMs)) {
+                launch(Dispatchers.IO) {
+                    val bmp = ThumbnailUtils.getThumbnail(context, videoUri, timeMs)
+                    if (bmp != null) {
+                        // Update state on Main thread to ensure proper recomposition and safety
+                        withContext(Dispatchers.Main) {
+                            thumbnails[timeMs] = bmp
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
@@ -217,16 +254,18 @@ fun TimelineEditor(
         }
 
         // 3. TIMELINE RULER (Moved up, Gray BG, Pause on Scroll)
+        Spacer(modifier = Modifier.height(10.dp))
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(100.dp)
+                .height(64.dp)
                 .background(Color(0xFF2A2A2A)) // Fundo Cinza (não preto)
         ) {
             val timelineWidth = constraints.maxWidth.toFloat()
             val centerOffset = timelineWidth / 2f
             val durationPx = (videoDurationMs / 1000f) * pxPerSecond
-
+            val rulerHeight = with(density) { 24.dp.toPx() }
+            
             val scrollableState = androidx.compose.foundation.gestures.rememberScrollableState { delta ->
                 // PAUSE ON MANIPULATION
                 if (isPlaying) {
@@ -260,7 +299,67 @@ fun TimelineEditor(
                     val startTickIndex = (scrollOffsetPx / tickSpacing).toInt() - (centerOffset / tickSpacing).toInt() - 2
                     val endTickIndex = startTickIndex + (timelineWidth / tickSpacing).toInt() + 4
                     
-                    val rulerTopY = 30.dp.toPx()
+
+                    val rulerTopY = 0f
+
+                    // DRAW THUMBNAILS
+                    // Draw thumbnails every second
+                     val thumbnailHeight = size.height - rulerHeight
+                     val thumbnailTop = rulerHeight
+                     val thumbnailWidth = pxPerSecond // 1 second width
+                     
+                     // Clip the thumbnails to the video duration so they don't overshoot visually
+                     drawContext.canvas.save()
+                     val clipEnd = centerOffset + (videoDurationMs / 1000f * pxPerSecond) - currentScroll
+                     drawContext.canvas.clipRect(0f, thumbnailTop, clipEnd, size.height)
+                     
+                     for (i in startTickIndex..endTickIndex) {
+                         // We only draw thumbnails at integer seconds (0, 1, 2...)
+                         // Mapping tick index (0.1s) to second
+                         if (i % 10 == 0) {
+                             val second = i / 10
+                             val timeMs = second * 1000L
+                             
+                             if (timeMs in 0 until videoDurationMs) {
+                                 val x = centerOffset + (second * pxPerSecond) - currentScroll
+                                 
+                                 thumbnails[timeMs]?.let { bmp ->
+                                     drawIntoCanvas { canvas ->
+                                         // Implement CenterCrop logic to avoid distortion
+                                         val viewWidth = thumbnailWidth
+                                         val viewHeight = thumbnailHeight
+                                         val bmpWidth = bmp.width.toFloat()
+                                         val bmpHeight = bmp.height.toFloat()
+                                         
+                                         val scale: Float
+                                         var dx = 0f
+                                         var dy = 0f
+                                         
+                                         // Calculate scale to cover the destination area (CenterCrop)
+                                         if (bmpWidth * viewHeight > viewWidth * bmpHeight) {
+                                             scale = viewHeight / bmpHeight
+                                             dx = (viewWidth - bmpWidth * scale) * 0.5f
+                                         } else {
+                                             scale = viewWidth / bmpWidth
+                                             dy = (viewHeight - bmpHeight * scale) * 0.5f
+                                         }
+                                         
+                                         canvas.save()
+                                         canvas.translate(x, thumbnailTop)
+                                         canvas.clipRect(0f, 0f, viewWidth, viewHeight)
+                                         canvas.translate(dx, dy)
+                                         canvas.scale(scale, scale)
+                                         canvas.nativeCanvas.drawBitmap(bmp, 0f, 0f, null)
+                                         canvas.restore()
+                                     }
+                                 }
+                             }
+                         }
+                     }
+                     drawContext.canvas.restore()
+                     
+                     // Dim the thumbnails slightly so ruler is visible
+                     drawRect(Color.Black.copy(alpha = 0.3f))
 
                     for (i in startTickIndex..endTickIndex) {
                         val tickTimeSec = i * 0.1f
@@ -277,34 +376,30 @@ fun TimelineEditor(
                             else -> (size.height - rulerTopY) * 0.2f
                         }
                         
-                        // Ticks mais escuros conforme solicitado
-                        val tickColor = if (isSecond) Color(0xFF616161) else Color(0xFF424242)
+                        
+                        // Ticks White
+                        val tickColor = Color.White
                         val stroke = if (isSecond) 2.dp.toPx() else 1.dp.toPx()
                         
+                        // Ticks drawn in the top ruler area
+                        val tickStartY = 0f
+                        val tickEndY = tickHeight.coerceAtMost(rulerHeight)
+
                         drawLine(
                             tickColor,
-                            Offset(x, rulerTopY),
-                            Offset(x, rulerTopY + tickHeight),
+                            Offset(x, tickStartY),
+                            Offset(x, tickEndY),
                             stroke
                         )
-
-                        if (isSecond) {
-                            drawIntoCanvas { canvas ->
-                                canvas.nativeCanvas.drawText(
-                                    (i / 10).toString(),
-                                    x,
-                                    rulerTopY + tickHeight + 12.dp.toPx(),
-                                    textPaint
-                                )
-                            }
-                        }
+                        
+                        // TEXT REMOVED per user request
                     }
 
                     trimPosition.completeRanges.forEach { (start, end) ->
                         val startX = centerOffset + (start / 1000f) * pxPerSecond - currentScroll
                         val endX = centerOffset + (end / 1000f) * pxPerSecond - currentScroll
                         if (endX >= 0 && startX <= size.width) {
-                            val rangeY = rulerTopY / 2
+                            val rangeY = 4.dp.toPx()
                             val isActive = currentTimeMs >= start && currentTimeMs <= end
                             
                             val rangeColor = if (isActive) Color.Red else Color(0xFFE91E63)
@@ -320,7 +415,7 @@ fun TimelineEditor(
                             val minX = minOf(startX, playheadX)
                             val maxX = maxOf(startX, playheadX)
                             
-                            val rangeY = rulerTopY / 2
+                            val rangeY = 4.dp.toPx()
                             drawLine(Color(0xFFFF9800), Offset(minX, rangeY), Offset(maxX, rangeY), 8.dp.toPx())
                         }
                     }
@@ -376,7 +471,9 @@ fun TimelineEditor(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // 5. RANGE LIST (Moved down)
         extraContent()
