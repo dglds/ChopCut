@@ -18,6 +18,7 @@ import com.chopcut.data.model.EditOperation
 import com.chopcut.data.model.Project
 import com.chopcut.data.repository.ProjectRepository
 import com.chopcut.ui.components.TimelineEditor
+import com.chopcut.ui.components.ThumbnailUtils
 import com.chopcut.ui.components.trim.RangeList
 import com.chopcut.ui.components.trim.TrimControlPanel
 import com.chopcut.ui.components.feedback.ErrorState
@@ -27,6 +28,7 @@ import com.chopcut.ui.viewmodel.TimelineViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,15 +90,44 @@ fun TrimEditionScreen(
                         actions = {
                             IconButton(
                                 onClick = {
-                                    scope.launch {
+                                    scope.launch(Dispatchers.IO) {
                                         isSaving = true
                                         try {
                                             val repo = ProjectRepository(context)
+
+                                            // Gerar thumbnail do primeiro frame
+                                            val thumbnailPath = try {
+                                                val bitmap = ThumbnailUtils.getThumbnail(
+                                                    context,
+                                                    loadedVideoUri!!,
+                                                    0L // Primeiro frame
+                                                )
+                                                if (bitmap != null) {
+                                                    // Salvar thumbnail em arquivo interno
+                                                    val thumbnailsDir = java.io.File(context.filesDir, "thumbnails")
+                                                    thumbnailsDir.mkdirs()
+                                                    val thumbnailFile = java.io.File(
+                                                        thumbnailsDir,
+                                                        "${System.currentTimeMillis()}_thumb.jpg"
+                                                    )
+                                                    java.io.FileOutputStream(thumbnailFile).use { out ->
+                                                        android.graphics.Bitmap.CompressFormat.JPEG.let { format ->
+                                                            bitmap.compress(format, 90, out)
+                                                        }
+                                                    }
+                                                    thumbnailFile.absolutePath
+                                                } else null
+                                            } catch (e: Exception) {
+                                                Timber.e(e, "Failed to generate thumbnail")
+                                                null
+                                            }
+
                                             val project = Project(
                                                 id = projectId ?: java.util.UUID.randomUUID().toString(),
-                                                name = "Projeto ${System.currentTimeMillis()}",
+                                                name = "Projeto ${java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}",
                                                 sourceVideoUri = loadedVideoUri.toString(),
-                                                duration = state.videoDurationMs
+                                                duration = state.videoDurationMs,
+                                                thumbnail = thumbnailPath
                                             )
                                             val edits = state.trimPosition.completeRanges.map { (start, end) ->
                                                 EditOperation.Trim(start, end)
