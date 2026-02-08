@@ -1,22 +1,9 @@
 package com.chopcut.ui.screen
 
 import android.net.Uri
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -26,6 +13,9 @@ import com.chopcut.data.repository.ProjectRepository
 import com.chopcut.ui.components.TimelineEditor
 import com.chopcut.ui.components.trim.RangeList
 import com.chopcut.ui.components.trim.TrimControlPanel
+import com.chopcut.ui.components.feedback.ErrorState
+import com.chopcut.ui.components.feedback.LoadingState
+import com.chopcut.ui.theme.ChopCutSpacing
 import com.chopcut.ui.viewmodel.TimelineViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -62,16 +52,16 @@ fun TrimEditionScreen(
 
     when {
         isLoading -> {
-            Box(
-                Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator() }
+            LoadingState(modifier = Modifier.fillMaxSize())
         }
         errorMessage != null -> {
-            Box(
-                Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) { Text(errorMessage!!, color = MaterialTheme.colorScheme.error) }
+            ErrorState(
+                title = "Erro ao carregar",
+                message = errorMessage!!,
+                modifier = Modifier.fillMaxSize(),
+                actionLabel = "Voltar",
+                onAction = { /* TODO: Navigate back */ }
+            )
         }
         loadedVideoUri != null -> {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -104,15 +94,18 @@ fun TrimEditionScreen(
                     onAddPosition = { viewModel.addPosition(state.currentPosition) },
                     onDelete = { viewModel.removeRangeAt(state.currentPosition) }
                 )
-                
-                Spacer(modifier = Modifier.height(48.dp))
+
+                Spacer(modifier = Modifier.height(ChopCutSpacing.xxl))
             }
         }
         else -> {
-            Box(
-                Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) { Text("Nenhum vídeo selecionado") }
+            ErrorState(
+                title = "Nenhum vídeo selecionado",
+                message = "Selecione um vídeo para começar a editar",
+                modifier = Modifier.fillMaxSize(),
+                actionLabel = "Voltar",
+                onAction = { /* TODO: Navigate back */ }
+            )
         }
     }
 }

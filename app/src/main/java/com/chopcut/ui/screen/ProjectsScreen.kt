@@ -1,6 +1,7 @@
 package com.chopcut.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,15 +20,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -40,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +47,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chopcut.data.model.Project
+import com.chopcut.ui.components.atoms.formatDuration
+import com.chopcut.ui.components.buttons.ChopCutFab
+import com.chopcut.ui.components.feedback.EmptyState
+import com.chopcut.ui.components.feedback.ErrorState
+import com.chopcut.ui.components.feedback.LoadingState
+import com.chopcut.ui.theme.ChopCutSpacing
+import com.chopcut.ui.theme.Primary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -82,9 +89,11 @@ fun ProjectsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { videoPickerLauncher.launch("video/*") }) {
-                Icon(Icons.Default.Add, contentDescription = "Novo Projeto")
-            }
+            ChopCutFab(
+                onClick = { videoPickerLauncher.launch("video/*") },
+                icon = Icons.Default.Add,
+                contentDescription = "Novo Projeto"
+            )
         }
     ) { paddingValues ->
         Box(
@@ -94,38 +103,31 @@ fun ProjectsScreen(
         ) {
             when (val state = uiState) {
                 is ProjectsUiState.Loading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    LoadingState(modifier = Modifier.align(Alignment.Center))
                 }
                 is ProjectsUiState.Error -> {
-                    Text(
-                        text = "Erro: ${state.message}",
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.align(Alignment.Center)
+                    ErrorState(
+                        title = "Erro",
+                        message = state.message,
+                        modifier = Modifier.align(Alignment.Center),
+                        actionLabel = "Tentar Novamente",
+                        onAction = { /* loadProjects será chamado automaticamente ao reconstruir */ }
                     )
                 }
                 is ProjectsUiState.Success -> {
                     if (state.projects.isEmpty()) {
-                        Column(
-                            modifier = Modifier.align(Alignment.Center),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "Nenhum projeto ainda",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = "Clique no + para começar",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        EmptyState(
+                            icon = Icons.Default.VideoLibrary,
+                            title = "Nenhum projeto ainda",
+                            message = "Clique no + para começar a editar vídeos",
+                            modifier = Modifier.align(Alignment.Center)
+                        )
                     } else {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(2),
-                            contentPadding = PaddingValues(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            contentPadding = PaddingValues(ChopCutSpacing.md),
+                            horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.md),
+                            verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.md)
                         ) {
                             items(state.projects) { project ->
                                 ProjectItem(
@@ -167,10 +169,11 @@ fun ProjectItem(
     }
 
     Card(
-        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .height(160.dp)
+            .clickable(onClick = onClick),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Thumbnail Background
@@ -185,10 +188,10 @@ fun ProjectItem(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("🎬", style = MaterialTheme.typography.displayMedium)
+                    Text("🎬", style = androidx.compose.material3.MaterialTheme.typography.displayMedium)
                 }
             }
 
@@ -198,7 +201,7 @@ fun ProjectItem(
                     .align(Alignment.TopEnd)
                     .padding(4.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                         shape = androidx.compose.foundation.shape.CircleShape
                     )
             ) {
@@ -237,25 +240,25 @@ fun ProjectItem(
             ) {
                 Text(
                     text = project.name,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = androidx.compose.ui.graphics.Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                
+
                 Row(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = formatDate(project.modifiedAt),
-                        style = MaterialTheme.typography.labelSmall,
+                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                         color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f)
                     )
                     Text(
                         text = formatDuration(project.duration),
-                        style = MaterialTheme.typography.labelSmall,
+                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                         color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f)
                     )
                 }
@@ -267,11 +270,4 @@ fun ProjectItem(
 private fun formatDate(timestamp: Long): String {
     val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
     return sdf.format(Date(timestamp))
-}
-
-private fun formatDuration(ms: Long): String {
-    val seconds = ms / 1000
-    val minutes = seconds / 60
-    val remainingSeconds = seconds % 60
-    return String.format(Locale.getDefault(), "%d:%02d", minutes, remainingSeconds)
 }

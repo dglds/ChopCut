@@ -21,13 +21,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -42,12 +41,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.chopcut.ui.components.buttons.ChopCutPrimaryButton
+import com.chopcut.ui.components.cards.ChopCutCard
+import com.chopcut.ui.components.feedback.ErrorState
+import com.chopcut.ui.components.feedback.LoadingState
+import com.chopcut.ui.theme.ChopCutSpacing
+import com.chopcut.ui.theme.ErrorDark
+import com.chopcut.ui.theme.OnSurface
+import com.chopcut.ui.theme.Primary
 import kotlinx.coroutines.launch
 
 /**
@@ -90,9 +96,9 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(paddingValues)
-                .padding(16.dp)
+                .padding(ChopCutSpacing.md)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.md)
         ) {
             // Export Settings
             ExportSettingsCard(
@@ -141,12 +147,11 @@ fun SettingsScreen(
             )
 
             // Reset Button
-            Button(
+            ChopCutPrimaryButton(
+                text = "Restaurar Padrões",
                 onClick = { settingsViewModel.resetToDefaults() },
                 modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Restaurar Padrões")
-            }
+            )
         }
     }
 }
@@ -166,23 +171,18 @@ fun ExportSettingsCard(
     var showResolutionDialog by remember { mutableStateOf(false) }
     var showFrameRateDialog by remember { mutableStateOf(false) }
 
-    Card(
+    ChopCutCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        showShadow = true
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column {
             Text(
                 text = "Configurações de Exportação",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(ChopCutSpacing.md))
 
             // Codec Selection
             SettingRow(
@@ -205,13 +205,12 @@ fun ExportSettingsCard(
                 onClick = { showFrameRateDialog = true }
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(ChopCutSpacing.sm))
 
             // Bitrate Slider
             Text(
                 text = "Bitrate: ${settings.bitrateKbps} kbps",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )
             Slider(
@@ -222,8 +221,7 @@ fun ExportSettingsCard(
             )
             Text(
                 text = bitrateDescription(settings.bitrateKbps),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
             )
         }
     }
@@ -273,29 +271,23 @@ fun AudioSettingsCard(
     settings: ExportSettings,
     onAudioBitrateChange: (Int) -> Unit
 ) {
-    Card(
+    ChopCutCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
+        showShadow = true
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column {
             Text(
                 text = "Configurações de Áudio",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(ChopCutSpacing.md))
 
             // Audio Bitrate Slider
             Text(
                 text = "Bitrate de Áudio: ${settings.audioBitrateKbps} kbps",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )
             Slider(
@@ -306,16 +298,14 @@ fun AudioSettingsCard(
             )
             Text(
                 text = audioBitrateDescription(settings.audioBitrateKbps),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ChopCutSpacing.xs))
 
             Text(
                 text = "Formato: AAC (Advanced Audio Coding)",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
             )
         }
     }
@@ -330,19 +320,18 @@ fun AdvancedSettingsCard(
     onKeyFrameIntervalChange: (Int) -> Unit,
     onUseFastPathChange: (Boolean) -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
+    ChopCutCard(
+        modifier = Modifier.fillMaxWidth(),
+        showShadow = true
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column {
             Text(
                 text = "Configurações Avançadas",
-                style = MaterialTheme.typography.titleMedium,
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(ChopCutSpacing.md))
 
             // Key Frame Interval
             var showKeyFrameDialog by remember { mutableStateOf(false) }
@@ -364,7 +353,7 @@ fun AdvancedSettingsCard(
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(ChopCutSpacing.sm))
 
             // Fast Path Toggle
             Row(
@@ -375,12 +364,11 @@ fun AdvancedSettingsCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Caminho Rápido (Fast Path)",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
                     )
                     Text(
                         text = "Usa cópia direta quando possível",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                     )
                 }
                 androidx.compose.material3.Switch(
@@ -397,34 +385,31 @@ fun AdvancedSettingsCard(
  */
 @Composable
 fun InfoCard() {
-    Card(
+    ChopCutCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        showShadow = false
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(ChopCutSpacing.xs),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = Primary,
                 modifier = Modifier.size(24.dp)
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(ChopCutSpacing.xs))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Sobre as Configurações",
-                    style = MaterialTheme.typography.titleSmall,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "Bitrate mais alto = melhor qualidade, arquivo maior. " +
                            "H.265 oferece melhor compressão que H.264.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                 )
             }
         }
@@ -445,11 +430,11 @@ fun StorageSettingsCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
+            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.errorContainer
         )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(ChopCutSpacing.md)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
@@ -457,32 +442,32 @@ fun StorageSettingsCard(
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = ErrorDark,
                     modifier = Modifier.size(24.dp)
                 )
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(ChopCutSpacing.xs))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Armazenamento",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.onErrorContainer
                     )
                     Text(
                         text = "Limpar pasta de exportações (Movies/ChopCut)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
                     )
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(ChopCutSpacing.sm))
 
-            Button(
+            androidx.compose.material3.Button(
                 onClick = { showConfirmDialog = true },
                 modifier = Modifier.fillMaxWidth(),
                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error
+                    containerColor = ErrorDark
                 )
             ) {
                 Text("Limpar Vídeos Exportados")
@@ -508,7 +493,7 @@ fun StorageSettingsCard(
                         onClearCache()
                     }
                 ) {
-                    Text("Limpar", color = MaterialTheme.colorScheme.error)
+                    Text("Limpar", color = ErrorDark)
                 }
             },
             dismissButton = {
@@ -550,29 +535,23 @@ fun ThumbnailSettingsCard(
     var showFormatDialog by remember { mutableStateOf(false) }
     var showDimensionDialog by remember { mutableStateOf(false) }
 
-    Card(
+    ChopCutCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-        )
+        showShadow = true
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column {
             Text(
                 text = "Configurações de Thumbnails",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(ChopCutSpacing.md))
 
             // Thumbs Per Second Slider
             Text(
                 text = "Thumbnails por Segundo: ${thumbnailSettings.thumbsPerSecond}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )
             Slider(
@@ -584,17 +563,15 @@ fun ThumbnailSettingsCard(
             )
             Text(
                 text = thumbsPerSecondDescription(thumbnailSettings.thumbsPerSecond),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(ChopCutSpacing.sm))
 
             // Quality Slider
             Text(
                 text = "Qualidade: ${thumbnailSettings.quality}%",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )
             Slider(
@@ -606,11 +583,10 @@ fun ThumbnailSettingsCard(
             )
             Text(
                 text = qualityDescription(thumbnailSettings.quality),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(ChopCutSpacing.sm))
 
             // Format Selection
             SettingRow(
@@ -678,13 +654,12 @@ fun ThumbnailFormatSelectionDialog(
                             Column {
                                 Text(
                                     text = format.displayName,
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                                 Text(
                                     text = format.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                                 )
                             }
                         },
@@ -708,49 +683,41 @@ fun ThumbnailFormatSelectionDialog(
 fun DeveloperSettingsCard(
     onNavigateToDevelop: () -> Unit
 ) {
-    Card(
+    ChopCutCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-        )
+        showShadow = false
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column(modifier = Modifier.padding(ChopCutSpacing.xs)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Default.Build,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
                     modifier = Modifier.size(24.dp)
                 )
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(ChopCutSpacing.xs))
                 Text(
                     text = "Desenvolvimento",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ChopCutSpacing.xs))
 
             Text(
                 text = "Acesse a área de testes para visualizar e testar componentes isoladamente.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(ChopCutSpacing.sm))
 
-            Button(
+            ChopCutPrimaryButton(
+                text = "Abrir Área de Testes",
                 onClick = onNavigateToDevelop,
                 modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Abrir Área de Testes")
-            }
+            )
         }
     }
 }
@@ -779,7 +746,7 @@ fun ThumbnailDimensionSelectionDialog(
                         label = {
                             Text(
                                 text = preset.displayName,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         },
@@ -814,17 +781,19 @@ fun SettingRow(
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f)
         )
-        Button(
+        androidx.compose.material3.Button(
             onClick = onClick,
-            modifier = Modifier.width(120.dp)
+            modifier = Modifier.width(120.dp),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer
+            )
         ) {
             Text(
                 text = value,
-                style = MaterialTheme.typography.bodyMedium
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
             )
         }
     }
@@ -855,13 +824,12 @@ fun CodecSelectionDialog(
                             Column {
                                 Text(
                                     text = codec.displayName,
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                                 Text(
                                     text = codecDescription(codec),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                                 )
                             }
                         },
@@ -903,13 +871,12 @@ fun ResolutionSelectionDialog(
                             Column {
                                 Text(
                                     text = preset.displayName,
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                                 Text(
                                     text = preset.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                                 )
                             }
                         },
@@ -952,7 +919,7 @@ fun FrameRateSelectionDialog(
                         label = {
                             Text(
                                 text = "$fps fps${if (fps >= 50) " (Suave)" else if (fps <= 25) " (Cinemático)" else " (Padrão)"}",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         },
@@ -995,7 +962,7 @@ fun KeyFrameIntervalDialog(
                         label = {
                             Text(
                                 text = "$interval segundo${if (interval > 1) "s" else ""}",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         },
@@ -1006,8 +973,7 @@ fun KeyFrameIntervalDialog(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = "Intervalos menores = melhor qualidade, arquivo maior",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
             )
         },
         confirmButton = {

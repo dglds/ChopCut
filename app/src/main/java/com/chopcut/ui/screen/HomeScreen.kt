@@ -18,13 +18,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -36,6 +33,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.chopcut.ui.components.atoms.formatDuration
+import com.chopcut.ui.components.buttons.ChopCutPrimaryButton
+import com.chopcut.ui.components.buttons.ChopCutSecondaryButton
+import com.chopcut.ui.components.cards.ChopCutCard
+import com.chopcut.ui.components.feedback.EmptyState
+import com.chopcut.ui.components.feedback.ErrorState
+import com.chopcut.ui.theme.ChopCutSpacing
+import com.chopcut.ui.theme.Primary
 
 /**
  * Home screen - Main entry point for video editing
@@ -87,68 +92,62 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(ChopCutSpacing.md),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.md)
         ) {
             // Header
             item {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(vertical = 32.dp)
+                    modifier = Modifier.padding(vertical = ChopCutSpacing.lg)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
                         modifier = Modifier.size(80.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = Primary
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(ChopCutSpacing.md))
                     Text(
                         text = "ChopCut",
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = "Editor de Vídeo Android",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge
                     )
                 }
             }
 
-            // Select Video Card
+            // Select Video Card - usando ChopCutCard
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
+                ChopCutCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    showShadow = true
                 ) {
                     Column(
-                        modifier = Modifier.padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = "Começar a Editar",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
-                        Spacer(Modifier.height(16.dp))
-                        Button(
+                        Spacer(Modifier.height(ChopCutSpacing.md))
+
+                        ChopCutPrimaryButton(
+                            text = "Selecionar Vídeo",
                             onClick = { videoPickerLauncher.launch("video/*") },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text("Selecionar Vídeo")
-                        }
+                            modifier = Modifier.fillMaxWidth(),
+                            icon = Icons.Default.VideoLibrary
+                        )
 
                         // Show selected video info
                         val uri = selectedUri
                         if (uri != null) {
-                            Spacer(Modifier.height(16.dp))
+                            Spacer(Modifier.height(ChopCutSpacing.md))
 
                             when (val state = uiState) {
                                 is HomeUiState.VideoLoaded -> {
@@ -157,15 +156,15 @@ fun HomeScreen(
                                 is HomeUiState.Loading -> {
                                     Text(
                                         text = "Carregando...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary
+                                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                        color = Primary
                                     )
                                 }
                                 else -> {
                                     Text(
                                         text = "Vídeo selecionado: ${uri.lastPathSegment}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary
+                                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                        color = Primary
                                     )
                                 }
                             }
@@ -178,33 +177,27 @@ fun HomeScreen(
             val uri = selectedUri
             if (uri != null && uiState is HomeUiState.VideoLoaded) {
                 item {
-                    Button(
+                    ChopCutPrimaryButton(
+                        text = "Abrir Editor",
                         onClick = { onNavigateToEditor(uri) },
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Abrir Editor")
-                    }
+                    )
                 }
             }
 
-            // Features
+            // Features Card
             item {
-                Card(
+                ChopCutCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    )
+                    showShadow = true
                 ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp)
-                    ) {
+                    Column {
                         Text(
                             text = "Recursos",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(ChopCutSpacing.sm))
                         FeatureItem("✂️", "Trim", "Cortar vídeos em partes")
                         FeatureItem("🔗", "Join", "Concatenar vídeos")
                         FeatureItem("🗜️", "Compress", "Reduzir tamanho/bitrate")
@@ -219,31 +212,12 @@ fun HomeScreen(
             when (uiState) {
                 is HomeUiState.Error -> {
                     item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "Erro",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    text = (uiState as HomeUiState.Error).message,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Button(onClick = { viewModel.resetState() }) {
-                                    Text("Dismiss")
-                                }
-                            }
-                        }
+                        ErrorState(
+                            title = "Erro",
+                            message = (uiState as HomeUiState.Error).message,
+                            actionLabel = "Dispensar",
+                            onAction = { viewModel.resetState() }
+                        )
                     }
                 }
                 else -> {}
@@ -258,24 +232,22 @@ private fun FeatureItem(icon: String, title: String, description: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xs),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = icon,
-            style = MaterialTheme.typography.titleLarge
+            style = androidx.compose.material3.MaterialTheme.typography.titleLarge
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
             )
             Text(
                 text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
             )
         }
     }
@@ -283,20 +255,16 @@ private fun FeatureItem(icon: String, title: String, description: String) {
 
 @Composable
 private fun VideoInfoPreview(videoInfo: com.chopcut.data.model.VideoInfo) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+    ChopCutCard(
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column {
             Text(
                 text = videoInfo.fileName,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ChopCutSpacing.xs))
             InfoRowPreview("Resolução", "${videoInfo.width}x${videoInfo.height}")
             InfoRowPreview("Duração", formatDuration(videoInfo.durationMs))
             InfoRowPreview("Codec", videoInfo.videoCodec ?: "Unknown")
@@ -314,21 +282,12 @@ private fun InfoRowPreview(label: String, value: String) {
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onPrimaryContainer
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium
         )
     }
-}
-
-private fun formatDuration(ms: Long): String {
-    val seconds = ms / 1000
-    val minutes = seconds / 60
-    val remainingSeconds = seconds % 60
-    return String.format(java.util.Locale.getDefault(), "%d:%02d", minutes, remainingSeconds)
 }

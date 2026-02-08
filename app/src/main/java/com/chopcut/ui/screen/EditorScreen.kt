@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -192,6 +193,20 @@ fun EditorScreen(
                     }
                     IconButton(onClick = { editorViewModel.redo() }, enabled = canRedo) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Refazer")
+                    }
+                    IconButton(
+                        onClick = { editorViewModel.saveProject(manual = true) },
+                        enabled = saveStatus != EditorViewModel.SaveStatus.SAVING
+                    ) {
+                        Icon(
+                            Icons.Default.Save,
+                            contentDescription = "Salvar",
+                            tint = when (saveStatus) {
+                                EditorViewModel.SaveStatus.SAVED -> Color(0xFF4CAF50)
+                                EditorViewModel.SaveStatus.SAVING -> MaterialTheme.colorScheme.onSurfaceVariant
+                                EditorViewModel.SaveStatus.UNSAVED -> MaterialTheme.colorScheme.primary
+                            }
+                        )
                     }
                     IconButton(
                         onClick = {
