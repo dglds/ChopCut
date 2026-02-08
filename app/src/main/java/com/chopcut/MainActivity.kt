@@ -127,7 +127,8 @@ class MainActivity : ComponentActivity() {
 
                             TrimEditionScreen(
                                 videoUri = videoUri ?: Uri.EMPTY,
-                                projectId = projectId
+                                projectId = projectId,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 
