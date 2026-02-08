@@ -19,7 +19,6 @@ import androidx.navigation.navArgument
 import com.chopcut.data.local.PreferencesManager
 import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.DevelopScreen
-import com.chopcut.ui.screen.EditorScreen
 import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.TrimEditionScreen
 import com.chopcut.ui.screen.ProjectsScreen
