@@ -3,7 +3,10 @@ package com.chopcut.ui.components
 data class TimelineEditorState(
     val trimPosition: TrimPosition = TrimPosition.Empty,
     val currentPosition: Long = 0L,
-    val videoDurationMs: Long = 0L
+    val videoDurationMs: Long = 0L,
+    val waveformData: WaveformData = WaveformData.empty(),
+    val isWaveformLoading: Boolean = false,
+    val waveformError: String? = null
 ) {
     val totalTrimmedMs: Long
         get() = trimPosition.completeRanges.sumOf { it.second - it.first }

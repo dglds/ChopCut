@@ -45,12 +45,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -67,6 +69,9 @@ fun TimelineEditor(
     videoUri: Uri,
     trimPosition: TrimPosition,
     currentPosition: Long,
+    waveformData: WaveformData = WaveformData.empty(),
+    isWaveformLoading: Boolean = false,
+    waveformError: String? = null,
     onPositionChange: (Long) -> Unit,
     onAddPosition: () -> Unit,
     extraContent: @Composable () -> Unit = {},
@@ -285,6 +290,34 @@ fun TimelineEditor(
                     .scrollable(scrollableState, Orientation.Horizontal)
             ) {
                 val currentScroll = scrollOffsetPx
+
+                // WAVEFORM LAYER (Background for ruler)
+                if (isWaveformLoading) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                         androidx.compose.material3.CircularProgressIndicator(
+                             modifier = Modifier.size(24.dp),
+                             color = androidx.compose.material3.MaterialTheme.colorScheme.primary
+                         )
+                    }
+                } else if (waveformError != null) {
+                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                         Text(text = "❌", fontSize = 12.sp) 
+                    }
+                } else if (waveformData.amplitudes.isNotEmpty()) {
+                     val waveformWidth = (videoDurationMs / 1000f) * pxPerSecond
+                     val waveformStartOffset = centerOffset - currentScroll
+                     
+                     WaveForm(
+                         amplitudes = waveformData.amplitudes,
+                         modifier = Modifier
+                             .fillMaxHeight()
+                             .width(with(density) { waveformWidth.toDp() })
+                             .graphicsLayer {
+                                 translationX = waveformStartOffset
+                             },
+                         maxAmp = 1.0f // Normalize
+                     )
+                }
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val textPaint = android.graphics.Paint().apply {

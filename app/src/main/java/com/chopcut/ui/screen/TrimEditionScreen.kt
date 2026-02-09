@@ -64,6 +64,12 @@ fun TrimEditionScreen(
         }
     }
 
+    LaunchedEffect(loadedVideoUri) {
+        if (loadedVideoUri != null && loadedVideoUri != Uri.EMPTY) {
+            viewModel.loadWaveform(loadedVideoUri!!)
+        }
+    }
+
     when {
         isLoading -> {
             LoadingState(modifier = Modifier.fillMaxSize())
@@ -169,6 +175,9 @@ fun TrimEditionScreen(
                     videoUri = loadedVideoUri!!,
                     trimPosition = state.trimPosition,
                     currentPosition = state.currentPosition,
+                    waveformData = state.waveformData,
+                    isWaveformLoading = state.isWaveformLoading,
+                    waveformError = state.waveformError,
                     onPositionChange = { viewModel.setCurrentPosition(it) },
                     onAddPosition = { viewModel.addPosition(state.currentPosition) },
                     extraContent = {

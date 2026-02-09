@@ -1,18 +1,81 @@
 package com.chopcut.ui.viewmodel
 
-import androidx.lifecycle.ViewModel
+
+
+import android.app.Application
+import android.net.Uri
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.chopcut.data.audio.AudioDataExtractor
+import com.chopcut.data.audio.WaveFormGenerator
 import com.chopcut.ui.components.TrimPosition
 import com.chopcut.ui.components.TimelineEditorState
+import com.chopcut.ui.components.WaveformData
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
-class TimelineViewModel : ViewModel() {
+class TimelineViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(TimelineEditorState())
     val state: StateFlow<TimelineEditorState> = _state.asStateFlow()
+    
+    // Extractor
+    private val audioDataExtractor = AudioDataExtractor(application)
+
+    fun loadWaveform(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _state.update { it.copy(isWaveformLoading = true, waveformError = null) }
+            try {
+                Timber.d("Timeline: Extracting waveform for $uri")
+                val rawData = audioDataExtractor.extractRawPcmData(uri)
+                if (rawData != null && rawData.pcmSamples.isNotEmpty()) {
+                    val bars = 200 // Number of bars to render
+                    val amplitudes = WaveFormGenerator.generateWaveform(rawData.pcmSamples, bars)
+                    
+                    val waveform = WaveformData(
+                        amplitudes = amplitudes,
+                        sampleRate = rawData.sampleRate,
+                        durationMs = rawData.durationMs
+                    )
+                    
+                    withContext(Dispatchers.Main) { 
+                        _state.update { 
+                            it.copy(
+                                waveformData = waveform,
+                                isWaveformLoading = false
+                            ) 
+                        }
+                    }
+                    Timber.d("Timeline: Waveform extracted (${amplitudes.size} points)")
+                } else {
+                    withContext(Dispatchers.Main) {
+                        _state.update {
+                            it.copy(
+                                isWaveformLoading = false,
+                                waveformError = "Sem dados de áudio"
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Timeline: Failed to extract waveform")
+                withContext(Dispatchers.Main) {
+                    _state.update {
+                        it.copy(
+                            isWaveformLoading = false,
+                            waveformError = "Erro ao carregar áudio: ${e.message}"
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     fun addPosition(pos: Long) {
         val current = _state.value.trimPosition
@@ -33,6 +96,10 @@ class TimelineViewModel : ViewModel() {
 
     fun setVideoDuration(duration: Long) {
         _state.update { it.copy(videoDurationMs = duration) }
+    }
+
+    fun setWaveformData(data: com.chopcut.ui.components.WaveformData) {
+        _state.update { it.copy(waveformData = data) }
     }
 
     fun removeRangeAt(pos: Long) {

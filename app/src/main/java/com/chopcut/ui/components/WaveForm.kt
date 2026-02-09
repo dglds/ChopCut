@@ -19,16 +19,24 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.dp
 
+/**
+ * Visualizador de Waveform com efeitos neon e animação
+ *
+ * Estilo osciloscópio com gradiente dark, glow e cores vibrantes
+ *
+ * @param amplitudes Lista de amplitudes do áudio (0.0 a 1.0)
+ * @param maxAmp Amplitude máxima para normalização
+ * @param avgAmp Amplitude média para cálculo de thresholds
+ * @param mirrored Se true, espelha verticalmente (centrado)
+ * @param modifier Modificador
+ */
 @Composable
 fun WaveForm(
     amplitudes: List<Float>,
     maxAmp: Float = 0.5f,
     avgAmp: Float = 0.1f,
     mirrored: Boolean = false,
-    modifier: Modifier = Modifier,
-    fadeInMs: Long = 0L,
-    fadeOutMs: Long = 0L,
-    durationMs: Long = 0L
+    modifier: Modifier = Modifier
 ) {
     if (amplitudes.isEmpty()) {
         Text(
@@ -72,30 +80,9 @@ fun WaveForm(
             val normalizedAmp = if (maxAmp > 0) (amp / maxAmp).coerceIn(0f, 1f) else 0f
             val animatedAmp = normalizedAmp * animatedProgress.value
 
-            // Calculate fade multiplier based on position
-            var fadeMultiplier = 1.0f
-            if (durationMs > 0 && amplitudes.isNotEmpty()) {
-                val positionMs = (index.toFloat() / amplitudes.size) * durationMs
-
-                // Fade in
-                if (fadeInMs > 0 && positionMs < fadeInMs) {
-                    fadeMultiplier = positionMs / fadeInMs
-                }
-
-                // Fade out
-                if (fadeOutMs > 0) {
-                    val fadeOutStart = durationMs - fadeOutMs
-                    if (positionMs > fadeOutStart) {
-                        val remaining = durationMs - positionMs
-                        fadeMultiplier = remaining / fadeOutMs
-                    }
-                }
-            }
-            fadeMultiplier = fadeMultiplier.coerceIn(0f, 1f)
-
             val barHeight = when {
                 amp <= lowThreshold -> size.height * 0.08f
-                else -> size.height * (animatedAmp * 0.80f + 0.15f) * fadeMultiplier
+                else -> size.height * (animatedAmp * 0.80f + 0.15f)
             }
 
             val x = index * barWidth
@@ -105,10 +92,15 @@ fun WaveForm(
                 size.height - barHeight
             }
 
-            val baseColor = Color.White
+            val baseColor = when {
+                amp > highThreshold -> Color(0xFF00D9FF)  // Ciano neon
+                amp > lowThreshold -> Color(0xFF00FFB3)  // Verde neon
+                else -> Color(0xFFFF6B6B)                 // Vermmelho neon
+            }
 
             val glowColor = baseColor.copy(alpha = 0.3f)
 
+            // Efeito glow/blur
             drawIntoCanvas { canvas ->
                 val paint = android.graphics.Paint().apply {
                     color = glowColor.hashCode()
@@ -125,8 +117,15 @@ fun WaveForm(
                 )
             }
 
+            // Barra principal com gradiente vertical (efeito 3D)
             drawRoundRect(
-                color = Color.White,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        baseColor,
+                        baseColor.copy(alpha = 0.7f),
+                        baseColor.copy(alpha = 0.4f)
+                    )
+                ),
                 topLeft = androidx.compose.ui.geometry.Offset(x + gap, y),
                 size = androidx.compose.ui.geometry.Size(barWidth - gap * 2, barHeight),
                 cornerRadius = CornerRadius(2f, 2f)
@@ -136,7 +135,7 @@ fun WaveForm(
 }
 
 /**
- * Waveform data model
+ * Modelo de dados do Waveform
  */
 data class WaveformData(
     val amplitudes: List<Float>,
