@@ -263,13 +263,15 @@ fun TimelineEditor(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
-                .background(Color(0xFF2A2A2A)) // Fundo Cinza (não preto)
+                .height(100.dp) // Increased height to accommodate WaveForm below Thumbs
+                .background(Color(0xFF2A2A2A)) // Fundo Cinza
         ) {
             val timelineWidth = constraints.maxWidth.toFloat()
             val centerOffset = timelineWidth / 2f
             val durationPx = (videoDurationMs / 1000f) * pxPerSecond
             val rulerHeight = with(density) { 24.dp.toPx() }
+            val waveformHeightDp = 36.dp
+            val thumbnailsHeightDp = 40.dp
             
             val scrollableState = androidx.compose.foundation.gestures.rememberScrollableState { delta ->
                 // PAUSE ON MANIPULATION
@@ -291,17 +293,18 @@ fun TimelineEditor(
             ) {
                 val currentScroll = scrollOffsetPx
 
-                // WAVEFORM LAYER (Background for ruler)
+                // WAVEFORM LAYER (Bottom)
                 if (isWaveformLoading) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.align(Alignment.BottomCenter).height(waveformHeightDp).fillMaxWidth(), contentAlignment = Alignment.Center) {
                          androidx.compose.material3.CircularProgressIndicator(
-                             modifier = Modifier.size(24.dp),
-                             color = androidx.compose.material3.MaterialTheme.colorScheme.primary
+                             modifier = Modifier.size(20.dp),
+                             color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                             strokeWidth = 2.dp
                          )
                     }
                 } else if (waveformError != null) {
-                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                         Text(text = "❌", fontSize = 12.sp) 
+                     Box(modifier = Modifier.align(Alignment.BottomCenter).height(waveformHeightDp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                         Text(text = "❌", fontSize = 10.sp) 
                     }
                 } else if (waveformData.amplitudes.isNotEmpty()) {
                      val waveformWidth = (videoDurationMs / 1000f) * pxPerSecond
@@ -310,7 +313,8 @@ fun TimelineEditor(
                      WaveForm(
                          amplitudes = waveformData.amplitudes,
                          modifier = Modifier
-                             .fillMaxHeight()
+                             .height(waveformHeightDp)
+                             .align(Alignment.BottomStart) // Align to bottom
                              .width(with(density) { waveformWidth.toDp() })
                              .graphicsLayer {
                                  translationX = waveformStartOffset
@@ -321,7 +325,7 @@ fun TimelineEditor(
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val textPaint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.parseColor("#BDBDBD") // Texto um pouco mais escuro que branco puro
+                        color = android.graphics.Color.parseColor("#BDBDBD")
                         textSize = 10.dp.toPx()
                         textAlign = android.graphics.Paint.Align.CENTER
                         typeface = android.graphics.Typeface.DEFAULT
@@ -336,15 +340,16 @@ fun TimelineEditor(
                     val rulerTopY = 0f
 
                     // DRAW THUMBNAILS
-                    // Draw thumbnails every second
-                     val thumbnailHeight = size.height - rulerHeight
+                    // Draw thumbnails below ruler, above waveform
+                     val thumbnailHeight = thumbnailsHeightDp.toPx()
                      val thumbnailTop = rulerHeight
                      val thumbnailWidth = pxPerSecond // 1 second width
                      
                      // Clip the thumbnails to the video duration so they don't overshoot visually
                      drawContext.canvas.save()
                      val clipEnd = centerOffset + (videoDurationMs / 1000f * pxPerSecond) - currentScroll
-                     drawContext.canvas.clipRect(0f, thumbnailTop, clipEnd, size.height)
+                     // Limit clip rect to thumbnail area
+                     drawContext.canvas.clipRect(0f, thumbnailTop, clipEnd, thumbnailTop + thumbnailHeight)
                      
                      for (i in startTickIndex..endTickIndex) {
                          // We only draw thumbnails at integer seconds (0, 1, 2...)
@@ -391,8 +396,7 @@ fun TimelineEditor(
                      }
                      drawContext.canvas.restore()
                      
-                     // Dim the thumbnails slightly so ruler is visible
-                     drawRect(Color.Black.copy(alpha = 0.3f))
+                     // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.
 
                     for (i in startTickIndex..endTickIndex) {
                         val tickTimeSec = i * 0.1f
