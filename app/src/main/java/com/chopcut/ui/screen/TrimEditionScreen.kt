@@ -44,6 +44,11 @@ fun TrimEditionScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isSaving by remember { mutableStateOf(false) }
+    
+    // Waveform Config State
+    var showWaveformConfig by remember { mutableStateOf(false) }
+    var waveformStyle by remember { mutableStateOf(com.chopcut.ui.components.WaveformStyle()) }
+    
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(videoUri, projectId) {
@@ -94,6 +99,14 @@ fun TrimEditionScreen(
                             }
                         },
                         actions = {
+                            // Waveform Settings Button
+                            IconButton(onClick = { showWaveformConfig = !showWaveformConfig }) {
+                                Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Default.Settings,
+                                    contentDescription = "Configurar Onda"
+                                )
+                            }
+                            
                             IconButton(
                                 onClick = {
                                     scope.launch(Dispatchers.IO) {
@@ -171,40 +184,49 @@ fun TrimEditionScreen(
                         .fillMaxSize()
                         .padding(paddingValues)
                 ) {
-                TimelineEditor(
-                    videoUri = loadedVideoUri!!,
-                    trimPosition = state.trimPosition,
-                    currentPosition = state.currentPosition,
-                    waveformData = state.waveformData,
-                    isWaveformLoading = state.isWaveformLoading,
-                    waveformError = state.waveformError,
-                    onPositionChange = { viewModel.setCurrentPosition(it) },
-                    onAddPosition = { viewModel.addPosition(state.currentPosition) },
-                    extraContent = {
-                        RangeList(
-                            ranges = state.trimPosition.completeRanges,
-                            currentPosition = state.currentPosition,
-                            totalDurationMs = state.videoDurationMs,
-                            finalDurationMs = state.finalDurationMs,
-                            isDraftMode = state.trimPosition.isDraftMode,
-                            draftPosition = state.trimPosition.draftPosition
+                    if (showWaveformConfig) {
+                        com.chopcut.ui.components.WaveformConfigPanel(
+                            currentStyle = waveformStyle,
+                            onStyleChange = { waveformStyle = it },
+                            onApply = { showWaveformConfig = false }
                         )
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                )
+                    }
+                    
+                    TimelineEditor(
+                        videoUri = loadedVideoUri!!,
+                        trimPosition = state.trimPosition,
+                        currentPosition = state.currentPosition,
+                        waveformData = state.waveformData,
+                        isWaveformLoading = state.isWaveformLoading,
+                        waveformError = state.waveformError,
+                        waveformStyle = waveformStyle,
+                        onPositionChange = { viewModel.setCurrentPosition(it) },
+                        onAddPosition = { viewModel.addPosition(state.currentPosition) },
+                        extraContent = {
+                            RangeList(
+                                ranges = state.trimPosition.completeRanges,
+                                currentPosition = state.currentPosition,
+                                totalDurationMs = state.videoDurationMs,
+                                finalDurationMs = state.finalDurationMs,
+                                isDraftMode = state.trimPosition.isDraftMode,
+                                draftPosition = state.trimPosition.draftPosition
+                            )
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    )
 
-                val isInsideRange = state.trimPosition.isPositionInRange(state.currentPosition)
+                    val isInsideRange = state.trimPosition.isPositionInRange(state.currentPosition)
 
-                TrimControlPanel(
-                    isDraftMode = state.trimPosition.isDraftMode,
-                    isInsideRange = isInsideRange,
-                    onAddPosition = { viewModel.addPosition(state.currentPosition) },
-                    onDelete = { viewModel.removeRangeAt(state.currentPosition) }
-                )
+                    TrimControlPanel(
+                        isDraftMode = state.trimPosition.isDraftMode,
+                        isInsideRange = isInsideRange,
+                        onAddPosition = { viewModel.addPosition(state.currentPosition) },
+                        onDelete = { viewModel.removeRangeAt(state.currentPosition) }
+                    )
 
-                Spacer(modifier = Modifier.height(ChopCutSpacing.xxl))
+                    Spacer(modifier = Modifier.height(ChopCutSpacing.xxl))
                 }
             }
         }

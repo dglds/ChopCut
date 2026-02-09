@@ -72,6 +72,7 @@ fun TimelineEditor(
     waveformData: WaveformData = WaveformData.empty(),
     isWaveformLoading: Boolean = false,
     waveformError: String? = null,
+    waveformStyle: WaveformStyle = WaveformStyle(),
     onPositionChange: (Long) -> Unit,
     onAddPosition: () -> Unit,
     extraContent: @Composable () -> Unit = {},
@@ -319,7 +320,8 @@ fun TimelineEditor(
                              .graphicsLayer {
                                  translationX = waveformStartOffset
                              },
-                         maxAmp = 1.0f // Normalize
+                         maxAmp = 1.0f, // Normalize
+                         style = waveformStyle
                      )
                 }
 

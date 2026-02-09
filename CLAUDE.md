@@ -1,6 +1,8 @@
 # CLAUDE.md
 ## Dev rules
  - Pense em português pt-br.
+ - As alterações devem ser feitas na worktree claude-code
+ 
 
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
