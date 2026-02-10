@@ -1,9 +1,12 @@
 package com.chopcut.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -96,7 +99,7 @@ fun WaveformConfigPanel(
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Icon(androidx.compose.material.icons.Icons.Default.Check, contentDescription = null)
+                Icon(Icons.Filled.Check, contentDescription = null)
                 Spacer(Modifier.width(4.dp))
                 Text("APLICAR")
             }

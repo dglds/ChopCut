@@ -256,6 +256,12 @@ When user's prompt is NOT in English:
 
 ---
 
+## <MEMORY[user_preferences]>
+
+- **Git Protocol**: DO NOT commit files until explicitly requested by the user.
+
+---
+
 ## 📁 QUICK REFERENCE
 
 ### Agents & Skills

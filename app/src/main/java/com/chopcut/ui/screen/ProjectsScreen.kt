@@ -1,5 +1,6 @@
 package com.chopcut.ui.screen
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,12 +71,23 @@ fun ProjectsScreen(
     onNavigateToSettings: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     // Video picker launcher for new project
     val videoPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
     ) { uri: android.net.Uri? ->
-        uri?.let { onNavigateToEditor(null, it) }
+        uri?.let { 
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to take persistable uri permission")
+            }
+            onNavigateToEditor(null, it) 
+        }
     }
 
     Scaffold(
@@ -90,7 +103,7 @@ fun ProjectsScreen(
         },
         floatingActionButton = {
             ChopCutFab(
-                onClick = { videoPickerLauncher.launch("video/*") },
+                onClick = { videoPickerLauncher.launch(arrayOf("video/*")) },
                 icon = Icons.Default.Add,
                 contentDescription = "Novo Projeto"
             )

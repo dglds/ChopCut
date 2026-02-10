@@ -1,5 +1,6 @@
 package com.chopcut.ui.screen
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,6 +43,7 @@ import com.chopcut.ui.components.feedback.EmptyState
 import com.chopcut.ui.components.feedback.ErrorState
 import com.chopcut.ui.theme.ChopCutSpacing
 import com.chopcut.ui.theme.Primary
+import timber.log.Timber
 
 /**
  * Home screen - Main entry point for video editing
@@ -59,12 +62,23 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedUri by viewModel.selectedVideoUri.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     // Video picker launcher
     val videoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
-        uri?.let { viewModel.selectVideo(it) }
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to take persistable uri permission")
+            }
+            viewModel.selectVideo(it)
+        }
     }
 
     Scaffold(
@@ -139,7 +153,7 @@ fun HomeScreen(
 
                         ChopCutPrimaryButton(
                             text = "Selecionar Vídeo",
-                            onClick = { videoPickerLauncher.launch("video/*") },
+                            onClick = { videoPickerLauncher.launch(arrayOf("video/*")) },
                             modifier = Modifier.fillMaxWidth(),
                             icon = Icons.Default.VideoLibrary
                         )

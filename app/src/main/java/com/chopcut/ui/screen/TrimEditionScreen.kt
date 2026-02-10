@@ -1,12 +1,17 @@
 package com.chopcut.ui.screen
 
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,15 +55,53 @@ fun TrimEditionScreen(
     var waveformStyle by remember { mutableStateOf(com.chopcut.ui.components.WaveformStyle()) }
     
     val scope = rememberCoroutineScope()
+    
+    // Recovery Launcher
+    val recoveryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { newUri ->
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    newUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                // Update local state immediately to trigger reload
+                loadedVideoUri = newUri
+                
+                // Update project in background
+                if (projectId != null) {
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            val repo = ProjectRepository(context)
+                            val project = repo.getProject(projectId)
+                            if (project != null) {
+                                repo.updateProject(project.copy(sourceVideoUri = newUri.toString()))
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "Mídia atualizada!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Timber.e(e, "Failed to update project media")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to take permissions for recovery")
+            }
+        }
+    }
 
     LaunchedEffect(videoUri, projectId) {
         if (videoUri == Uri.EMPTY && projectId != null) {
             isLoading = true
             withContext(Dispatchers.IO) {
                 val repo = ProjectRepository(context)
-                val project = repo.getProject(projectId)
-                if (project != null) {
+                val result = repo.getProjectWithEdits(projectId)
+                if (result != null) {
+                    val (project, edits) = result
                     loadedVideoUri = Uri.parse(project.sourceVideoUri)
+                    viewModel.loadEdits(edits)
                 } else {
                     errorMessage = "Projeto não encontrado"
                 }
@@ -102,7 +145,7 @@ fun TrimEditionScreen(
                             // Waveform Settings Button
                             IconButton(onClick = { showWaveformConfig = !showWaveformConfig }) {
                                 Icon(
-                                    imageVector = androidx.compose.material.icons.Icons.Default.Settings,
+                                    imageVector = Icons.Filled.Settings,
                                     contentDescription = "Configurar Onda"
                                 )
                             }
@@ -202,6 +245,7 @@ fun TrimEditionScreen(
                         waveformStyle = waveformStyle,
                         onPositionChange = { viewModel.setCurrentPosition(it) },
                         onAddPosition = { viewModel.addPosition(state.currentPosition) },
+                        onRequestNewMedia = { recoveryLauncher.launch(arrayOf("video/*")) },
                         extraContent = {
                             RangeList(
                                 ranges = state.trimPosition.completeRanges,

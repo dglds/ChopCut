@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.nativeCanvas
@@ -106,7 +107,7 @@ fun WaveForm(
                     
                     val midX = (prevX + x) / 2
                     val midY = (prevY + y) / 2
-                    path.quadraticBezierTo(prevX, prevY, midX, midY)
+                    path.quadraticTo(prevX, prevY, midX, midY)
                  } else {
                      path.lineTo(x, y)
                  }
@@ -181,7 +182,7 @@ fun WaveForm(
                         
                         val midX = (prevX + x) / 2
                         val midY = (prevY + y) / 2
-                        mirrorPath.quadraticBezierTo(prevX, prevY, midX, midY)
+                        mirrorPath.quadraticTo(prevX, prevY, midX, midY)
                     } else {
                         mirrorPath.lineTo(x, y)
                     }
@@ -191,7 +192,11 @@ fun WaveForm(
             if (style.style == WaveformStyle.Style.Filled) {
                 mirrorPath.lineTo(0f, centerY)
                 mirrorPath.close()
-                drawPath(mirrorPath, style.color.copy(alpha = 0.3f), androidx.compose.ui.graphics.drawscope.Fill)
+                drawPath(
+                    path = mirrorPath, 
+                    color = style.color.copy(alpha = 0.3f), 
+                    style = Fill
+                )
             }
             drawPath(
                 path = mirrorPath,

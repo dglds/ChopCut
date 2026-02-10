@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.data.audio.WaveFormGenerator
+import com.chopcut.data.model.EditOperation
 import com.chopcut.ui.components.TrimPosition
 import com.chopcut.ui.components.TimelineEditorState
 import com.chopcut.ui.components.WaveformData
@@ -120,5 +121,15 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
 
     fun getCompleteRanges(): List<Pair<Long, Long>> {
         return _state.value.trimPosition.completeRanges
+    }
+
+    fun loadEdits(edits: List<EditOperation>) {
+        val trimEdits = edits.filterIsInstance<EditOperation.Trim>()
+        val positions = trimEdits.flatMap { listOf(it.startTime, it.endTime) }
+        val newTrimPosition = TrimPosition(positions = positions)
+        _state.update {
+            it.copy(trimPosition = newTrimPosition)
+        }
+        Timber.d("Timeline: Loaded ${trimEdits.size} edits -> $positions")
     }
 }

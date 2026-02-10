@@ -1,5 +1,6 @@
 package com.chopcut.ui.viewmodel
 
+import android.app.Application
 import app.cash.turbine.test
 import com.chopcut.ui.components.TrimPosition
 import junit.framework.TestCase.assertEquals
@@ -15,8 +16,10 @@ class TimelineViewModelTest {
 
     @Before
     fun setup() {
-        viewModel = TimelineViewModel()
+        viewModel = TimelineViewModel(TestApplication())
     }
+
+    private class TestApplication : Application()
 
     @Test
     fun `initial state should be empty`() = runTest {
