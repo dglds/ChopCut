@@ -104,7 +104,7 @@ dependencies {
 }
 
 // Cria nova task que envolve o installDebug
-tasks.register("installWithSound") {
+tasks.register("install") {
     group = "install"
     description = "Install debug APK with audio feedback"
     
@@ -115,6 +115,42 @@ tasks.register("installWithSound") {
             commandLine("beeep.sh", "-s")
             isIgnoreExitValue = true
         }
+
+        println("\n🔍 Monitorando Logs de Permissão (ProjectRepository, ProjectsScreen)...")
+        println("Pressione Ctrl+C para parar.\n")
+        
+        exec {
+            // Limpa logs antigos para facilitar a leitura
+            commandLine("adb", "logcat", "-c")
+            isIgnoreExitValue = true
+        }
+
+        exec {
+            // Filtra tags relevantes e silencia o resto (*:S)
+            // ProjectRepository: Debugando limpeza
+            // ProjectsScreen: Debugando user action
+            // TimelineEditor: Debugando erro de player
+            commandLine("adb", "logcat", "-v", "color", "ProjectRepository:V", "ProjectsScreen:V", "TimelineEditor:V", "*:S")
+        }
+    }
+}
+
+tasks.register("nukeCache") {
+    group = "cleanup"
+    description = "Deep clean project including build and .cxx directories"
+    dependsOn("clean")
+    
+    doLast {
+        // Delete root build directory
+        rootProject.buildDir.deleteRecursively()
+        
+        // Delete project build directory
+        project.buildDir.deleteRecursively()
+        
+        // Delete .cxx directory (native builds)
+        file(".cxx").deleteRecursively()
+        
+        println("Nuked cache! Build directories and .cxx removed.")
     }
 }
 

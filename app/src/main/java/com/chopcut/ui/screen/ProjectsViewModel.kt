@@ -26,6 +26,15 @@ class ProjectsViewModel(application: Application) : AndroidViewModel(application
 
     init {
         loadProjects()
+        
+        // Trigger permission cleanup to release unused URIs
+        viewModelScope.launch {
+            try {
+                repository.cleanupUnusedPermissions(application.contentResolver)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to run permission cleanup")
+            }
+        }
     }
 
     private fun loadProjects() {

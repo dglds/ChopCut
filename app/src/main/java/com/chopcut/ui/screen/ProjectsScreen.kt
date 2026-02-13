@@ -79,12 +79,31 @@ fun ProjectsScreen(
     ) { uri: android.net.Uri? ->
         uri?.let { 
             try {
-                context.contentResolver.takePersistableUriPermission(
-                    it,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or 
+                           Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                
+                // Force release first to clear any stale state
+                try {
+                    context.contentResolver.releasePersistableUriPermission(it, flags)
+                    Timber.d("Released stale permission for $it")
+                } catch (e: Exception) { 
+                    // Ignore, just trying to clear
+                }
+                
+                context.contentResolver.takePersistableUriPermission(it, flags)
+                Timber.d("Persisted permission taken for $it")
             } catch (e: Exception) {
-                Timber.e(e, "Failed to take persistable uri permission")
+                Timber.e(e, "Failed to take persistable uri permission for $it")
+                // Try with just Read permission if Write fails
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        it, 
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                    Timber.d("Persisted READ permission taken for $it (Write failed)")
+                } catch (e2: Exception) {
+                    Timber.e(e2, "Failed to take READ permission for $it")
+                }
             }
             onNavigateToEditor(null, it) 
         }

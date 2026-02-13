@@ -59,6 +59,67 @@ class ProjectRepository(context: Context) {
 
         }
 
+    suspend fun cleanupUnusedPermissions(contentResolver: android.content.ContentResolver) {
+        try {
+            val projects = projectDao.getAllProjectsList()
+            // Normalize URIs due to potential encoding differences
+            val usedUris = projects.mapNotNull { project ->
+                project.sourceVideoUri?.let { uriString ->
+                    try {
+                        setOf(uriString, android.net.Uri.decode(uriString))
+                    } catch (e: Exception) {
+                        setOf(uriString)
+                    }
+                }
+            }.flatten().toSet()
+            
+            val persistedPermissions = contentResolver.persistedUriPermissions
+            var releasedCount = 0
+            
+            Timber.i("DEBUG: Active Projects URIs: $usedUris")
+            Timber.i("DEBUG: Persisted Permissions: ${persistedPermissions.map { it.uri.toString() }}")
+            
+            for (permission in persistedPermissions) {
+                val uriString = permission.uri.toString()
+                val decodedUriString = try {
+                    android.net.Uri.decode(uriString)
+                } catch (e: Exception) {
+                    uriString
+                }
+
+                // Check if either raw or decoded URI is in use
+                val isUsed = uriString in usedUris || decodedUriString in usedUris
+                
+                // Add grace period: Don't delete permissions granted in the last 60 seconds
+                // This prevents race conditions where a user picks a file (New Project) 
+                // and the cleanup runs concurrently before the project is saved to DB.
+                val isRecent = (System.currentTimeMillis() - permission.persistedTime) < 60_000
+                
+                if (!isUsed) {
+                    if (isRecent) {
+                        Timber.i("Skipping cleanup for recent permission (<1m): $uriString")
+                        continue
+                    }
+
+                    try {
+                        contentResolver.releasePersistableUriPermission(
+                            permission.uri,
+                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or 
+                            android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        )
+                        releasedCount++
+                        Timber.d("Released unused permission for: $uriString")
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to release permission for: $uriString")
+                    }
+                } else {
+                    Timber.v("Keeping permission (Match): $uriString")
+                }
+            }
+            Timber.i("Permission cleanup finished. Released $releasedCount permissions.")
+        } catch (e: Exception) {
+            Timber.e(e, "Error during permission cleanup")
+        }
     }
 
-    
+    }
