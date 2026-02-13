@@ -21,8 +21,6 @@ import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.DevelopScreen
 import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.TrimEditionScreen
-import com.chopcut.ui.screen.ProjectsScreen
-import com.chopcut.ui.screen.SettingsScreen
 import com.chopcut.ui.theme.ChopCutTheme
 
 /**
@@ -30,10 +28,8 @@ import com.chopcut.ui.theme.ChopCutTheme
  *
  * Navigation structure:
  * - "onboarding" -> Onboarding screen (first run only)
- * - "projects" -> Projects list screen (start destination)
- * - "home" -> Home screen (legacy/test)
- * - "editor?videoUri={videoUri}&projectId={projectId}" -> Video editor screen
- * - "settings" -> Settings screen
+ * - "home" -> Home screen (start destination)
+ * - "editor?videoUri={videoUri}" -> Video editor screen
  * - "tests" -> Test screen with all test operations
  */
 class MainActivity : ComponentActivity() {
@@ -48,7 +44,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val context = LocalContext.current
                     val preferencesManager = remember { PreferencesManager(context) }
-                    val startDestination = if (preferencesManager.isFirstRun) "onboarding" else "projects"
+                    val startDestination = if (preferencesManager.isFirstRun) "onboarding" else "home"
                     val navController = rememberNavController()
 
                     NavHost(
@@ -60,27 +56,9 @@ class MainActivity : ComponentActivity() {
                             OnboardingScreen(
                                 onFinish = {
                                     preferencesManager.isFirstRun = false
-                                    navController.navigate("projects") {
+                                    navController.navigate("home") {
                                         popUpTo("onboarding") { inclusive = true }
                                     }
-                                }
-                            )
-                        }
-
-                        // ==================== PROJECTS SCREEN ====================
-                        composable("projects") {
-                            ProjectsScreen(
-                                onNavigateToEditor = { projectId, videoUri ->
-                                    val route = if (projectId != null) {
-                                        "editor?projectId=$projectId"
-                                    } else {
-                                        val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
-                                        "editor?videoUri=$encodedUri"
-                                    }
-                                    navController.navigate(route)
-                                },
-                                onNavigateToSettings = {
-                                    navController.navigate("settings")
                                 }
                             )
                         }
@@ -92,25 +70,17 @@ class MainActivity : ComponentActivity() {
                                     val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
                                     navController.navigate("editor?videoUri=$encodedUri")
                                 },
-                                onNavigateToSettings = {
-                                    navController.navigate("settings")
-                                },
                                 onNavigateToTests = {
-                                    navController.navigate("tests")
+                                    navController.navigate("develop")
                                 }
                             )
                         }
 
                         // ==================== EDITOR SCREEN ====================
                         composable(
-                            route = "editor?videoUri={videoUri}&projectId={projectId}",
+                            route = "editor?videoUri={videoUri}",
                             arguments = listOf(
                                 navArgument("videoUri") {
-                                    type = NavType.StringType
-                                    nullable = true
-                                    defaultValue = null
-                                },
-                                navArgument("projectId") {
                                     type = NavType.StringType
                                     nullable = true
                                     defaultValue = null
@@ -118,29 +88,15 @@ class MainActivity : ComponentActivity() {
                             )
                         ) { backStackEntry ->
                             val videoUriString = backStackEntry.arguments?.getString("videoUri")
-                            val projectId = backStackEntry.arguments?.getString("projectId")
-                            
+
                             val videoUri = videoUriString?.let { Uri.parse(it) }
 
                             TrimEditionScreen(
                                 videoUri = videoUri ?: Uri.EMPTY,
-                                projectId = projectId,
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }
 
-                        // ==================== SETTINGS SCREEN ====================
-                        composable("settings") {
-                            SettingsScreen(
-                                onNavigateBack = {
-                                    navController.popBackStack()
-                                },
-                                onNavigateToDevelop = {
-                                    navController.navigate("develop")
-                                }
-                            )
-                        }
-                        
                         // ==================== DEVELOP SCREEN (DEBUG) ====================
                         composable("develop") {
                             DevelopScreen(

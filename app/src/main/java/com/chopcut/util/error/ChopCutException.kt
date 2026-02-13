@@ -113,7 +113,7 @@ sealed class ChopCutException(
         class ConfigurationError(detail: String) : Codec(
             message = "Codec configuration failed: $detail",
             userMessage = "Erro ao configurar codificador",
-            recovery = RecoveryStrategy.ChangeExportSettings
+            recovery = RecoveryStrategy.Retry
         )
     }
 
@@ -309,7 +309,6 @@ sealed class RecoveryStrategy(
 
     // Codec recovery strategies
     data object ChangeCodec : RecoveryStrategy("Altere o codificador nas configurações")
-    data object ChangeExportSettings : RecoveryStrategy("Altere as configurações de exportação")
     data object RetryWithLowerQuality : RecoveryStrategy("Tente com qualidade menor", canRetry = true)
 
     // Export recovery strategies

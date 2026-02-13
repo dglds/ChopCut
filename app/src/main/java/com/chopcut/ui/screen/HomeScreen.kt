@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,14 +49,12 @@ import timber.log.Timber
  *
  * @param viewModel HomeViewModel
  * @param onNavigateToEditor Callback to navigate to editor screen
- * @param onNavigateToSettings Callback to navigate to settings screen
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
     onNavigateToEditor: (android.net.Uri) -> Unit = {},
-    onNavigateToSettings: () -> Unit = {},
     onNavigateToTests: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -90,12 +87,6 @@ fun HomeScreen(
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = "Testes"
-                        )
-                    }
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Configurações"
                         )
                     }
                 }

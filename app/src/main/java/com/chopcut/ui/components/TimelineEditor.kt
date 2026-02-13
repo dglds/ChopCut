@@ -77,6 +77,7 @@ fun TimelineEditor(
     onPositionChange: (Long) -> Unit,
         onAddPosition: () -> Unit,
         onRequestNewMedia: (() -> Unit)? = null,
+        onVideoDurationChange: ((Long) -> Unit)? = null,
         extraContent: @Composable () -> Unit = {},
         modifier: Modifier = Modifier
     ) {
@@ -86,7 +87,13 @@ fun TimelineEditor(
         var scrollOffsetPx by remember { mutableFloatStateOf(0f) }
         var videoDurationMs by remember { mutableLongStateOf(0L) }
         var isPlaying by remember { mutableStateOf(false) }
-    
+
+        LaunchedEffect(videoDurationMs) {
+            if (videoDurationMs > 0 && onVideoDurationChange != null) {
+                onVideoDurationChange(videoDurationMs)
+            }
+        }
+     
         // Thumbnails State
         val thumbnails = remember { androidx.compose.runtime.mutableStateMapOf<Long, android.graphics.Bitmap>() }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -136,8 +143,8 @@ fun TimelineEditor(
             trimPosition.isPositionInRange(currentTimeMs)
         }
     
-        var playerError by remember { mutableStateOf<String?>(null) }
-        var isSecurityError by remember { mutableStateOf(false) }
+        var playerError by remember(videoUri) { mutableStateOf<String?>(null) }
+        var isSecurityError by remember(videoUri) { mutableStateOf(false) }
     
         DisposableEffect(exoPlayer) {
             val listener = object : Player.Listener {
@@ -160,7 +167,7 @@ fun TimelineEditor(
                     
                     isSecurityError = isPermError
                     playerError = if (isPermError) {
-                        "Permissão do arquivo expirou."
+                        "Permissão do arquivo expirou. Toque em 'Re-Localizar' para corrigir."
                     } else {
                         "Erro ao reproduzir: ${error.message ?: "Desconhecido"}"
                     }
@@ -395,7 +402,9 @@ fun TimelineEditor(
                          Text(text = "❌", fontSize = 10.sp) 
                     }
                 } else if (waveformData.amplitudes.isNotEmpty()) {
-                     val waveformWidth = (videoDurationMs / 1000f) * pxPerSecond
+                     // Use audio duration for width to avoid stretching if extraction is partial
+                     val audioDurationMs = if (waveformData.durationMs > 0) waveformData.durationMs else videoDurationMs
+                     val waveformWidth = (audioDurationMs / 1000f) * pxPerSecond
                      val waveformStartOffset = centerOffset - currentScroll
                      
                      WaveForm(

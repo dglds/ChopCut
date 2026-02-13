@@ -103,34 +103,39 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// Cria nova task que envolve o installDebug
+// Instala e abre o app
 tasks.register("install") {
     group = "install"
-    description = "Install debug APK with audio feedback"
+    description = "Install debug APK and launch"
     
     dependsOn("installDebug")
     
     doLast {
         exec {
+            Thread.sleep(1000)
             commandLine("beeep.sh", "-s")
             isIgnoreExitValue = true
         }
 
-        println("\n🔍 Monitorando Logs de Permissão (ProjectRepository, ProjectsScreen)...")
-        println("Pressione Ctrl+C para parar.\n")
-        
+        println("⏳ Abrindo app (com.chopcut)...")
         exec {
-            // Limpa logs antigos para facilitar a leitura
-            commandLine("adb", "logcat", "-c")
+            commandLine("adb", "shell", "monkey", "-p", "com.chopcut", "-c", "android.intent.category.LAUNCHER", "1")
             isIgnoreExitValue = true
         }
+    }
+}
 
+// Apenas monitoramento de logs
+tasks.register("monitor") {
+    group = "install"
+    description = "Monitor audio and app logs in real-time"
+    
+    doLast {
+        println("⏳ Aguardando PID de com.chopcut...")
         exec {
-            // Filtra tags relevantes e silencia o resto (*:S)
-            // ProjectRepository: Debugando limpeza
-            // ProjectsScreen: Debugando user action
-            // TimelineEditor: Debugando erro de player
-            commandLine("adb", "logcat", "-v", "color", "ProjectRepository:V", "ProjectsScreen:V", "TimelineEditor:V", "*:S")
+            // Filtra logs apenas do processo do app de forma nativa (--pid)
+            // Foco TOTAL em Audio e Diagnóstico, sem timestamp (-v tag)
+            commandLine("sh", "-c", "export PID=\$(adb shell pidof -s com.chopcut); if [ -z \"\$PID\" ]; then echo 'App não rodando'; else echo \"Monitorando PID: \$PID (DEEP AUDIO DEBUG)\"; adb logcat --pid=\$PID -v color -v tag AudioDataExtractor:V WaveFormGenerator:V TimelineViewModel:V ExoPlayer:D MediaCodec:D MediaExtractor:D AndroidRuntime:E com.chopcut:V *:S; fi")
         }
     }
 }

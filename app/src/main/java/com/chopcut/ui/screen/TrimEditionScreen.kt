@@ -1,17 +1,12 @@
 package com.chopcut.ui.screen
 
-import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,119 +14,57 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.chopcut.data.model.EditOperation
-import com.chopcut.data.model.Project
-import com.chopcut.data.repository.ProjectRepository
+import com.chopcut.data.pipeline.CopyPipeline
+import com.chopcut.data.repository.VideoRepository
+import com.chopcut.data.model.TimeRange
 import com.chopcut.ui.components.TimelineEditor
-import com.chopcut.ui.components.ThumbnailUtils
 import com.chopcut.ui.components.trim.RangeList
 import com.chopcut.ui.components.trim.TrimControlPanel
 import com.chopcut.ui.components.feedback.ErrorState
-import com.chopcut.ui.components.feedback.LoadingState
 import com.chopcut.ui.theme.ChopCutSpacing
-import com.chopcut.ui.viewmodel.TimelineViewModel
+import com.chopcut.ui.screen.TrimViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrimEditionScreen(
     videoUri: Uri,
-    projectId: String? = null,
-    viewModel: TimelineViewModel = viewModel(),
+    viewModel: TrimViewModel = viewModel(),
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
-    var loadedVideoUri by remember { mutableStateOf<Uri?>(null) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var videoName by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
-    
-    // Waveform Config State
-    var showWaveformConfig by remember { mutableStateOf(false) }
-    var waveformStyle by remember { mutableStateOf(com.chopcut.ui.components.WaveformStyle()) }
-    
+
     val scope = rememberCoroutineScope()
-    
-    // Recovery Launcher
-    val recoveryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.let { newUri ->
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    newUri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-                // Update local state immediately to trigger reload
-                loadedVideoUri = newUri
-                
-                // Update project in background
-                if (projectId != null) {
-                    scope.launch(Dispatchers.IO) {
-                        try {
-                            val repo = ProjectRepository(context)
-                            val project = repo.getProject(projectId)
-                            if (project != null) {
-                                repo.updateProject(project.copy(sourceVideoUri = newUri.toString()))
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "Mídia atualizada!", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Timber.e(e, "Failed to update project media")
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to take permissions for recovery")
-            }
-        }
-    }
 
-    LaunchedEffect(videoUri, projectId) {
-        if (videoUri == Uri.EMPTY && projectId != null) {
-            isLoading = true
-            withContext(Dispatchers.IO) {
-                val repo = ProjectRepository(context)
-                val result = repo.getProjectWithEdits(projectId)
-                if (result != null) {
-                    val (project, edits) = result
-                    loadedVideoUri = Uri.parse(project.sourceVideoUri)
-                    viewModel.loadEdits(edits)
-                } else {
-                    errorMessage = "Projeto não encontrado"
-                }
-            }
-            isLoading = false
-        } else {
-            loadedVideoUri = videoUri
-        }
-    }
+    val videoRepository = remember { VideoRepository(context) }
+    val copyPipeline = remember { CopyPipeline(context, videoRepository) }
 
-    LaunchedEffect(loadedVideoUri) {
-        if (loadedVideoUri != null && loadedVideoUri != Uri.EMPTY) {
-            viewModel.loadWaveform(loadedVideoUri!!)
+    LaunchedEffect(videoUri) {
+        if (videoUri != Uri.EMPTY) {
+            viewModel.loadWaveform(videoUri)
         }
     }
 
     when {
-        isLoading -> {
-            LoadingState(modifier = Modifier.fillMaxSize())
-        }
-        errorMessage != null -> {
+        videoUri == Uri.EMPTY -> {
             ErrorState(
-                title = "Erro ao carregar",
-                message = errorMessage!!,
+                title = "Nenhum vídeo selecionado",
+                message = "Selecione um vídeo para começar a editar",
                 modifier = Modifier.fillMaxSize(),
                 actionLabel = "Voltar",
-                onAction = { /* TODO: Navigate back */ }
+                onAction = onNavigateBack
             )
         }
-        loadedVideoUri != null -> {
+        else -> {
             Scaffold(
                 topBar = {
                     TopAppBar(
@@ -142,80 +75,27 @@ fun TrimEditionScreen(
                             }
                         },
                         actions = {
-                            // Waveform Settings Button
-                            IconButton(onClick = { showWaveformConfig = !showWaveformConfig }) {
-                                Icon(
-                                    imageVector = Icons.Filled.Settings,
-                                    contentDescription = "Configurar Onda"
-                                )
-                            }
-                            
                             IconButton(
                                 onClick = {
-                                    scope.launch(Dispatchers.IO) {
-                                        isSaving = true
-                                        try {
-                                            val repo = ProjectRepository(context)
-
-                                            // Gerar thumbnail do primeiro frame
-                                            val thumbnailPath = try {
-                                                val bitmap = ThumbnailUtils.getThumbnail(
-                                                    context,
-                                                    loadedVideoUri!!,
-                                                    0L // Primeiro frame
-                                                )
-                                                if (bitmap != null) {
-                                                    // Salvar thumbnail em arquivo interno
-                                                    val thumbnailsDir = java.io.File(context.filesDir, "thumbnails")
-                                                    thumbnailsDir.mkdirs()
-                                                    val thumbnailFile = java.io.File(
-                                                        thumbnailsDir,
-                                                        "${System.currentTimeMillis()}_thumb.jpg"
-                                                    )
-                                                    java.io.FileOutputStream(thumbnailFile).use { out ->
-                                                        android.graphics.Bitmap.CompressFormat.JPEG.let { format ->
-                                                            bitmap.compress(format, 90, out)
-                                                        }
-                                                    }
-                                                    thumbnailFile.absolutePath
-                                                } else null
-                                            } catch (e: Exception) {
-                                                Timber.e(e, "Failed to generate thumbnail")
-                                                null
-                                            }
-
-                                            val project = Project(
-                                                id = projectId ?: java.util.UUID.randomUUID().toString(),
-                                                name = "Projeto ${java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}",
-                                                sourceVideoUri = loadedVideoUri.toString(),
-                                                duration = state.videoDurationMs,
-                                                thumbnail = thumbnailPath
-                                            )
-                                            val edits = state.trimPosition.completeRanges.map { (start, end) ->
-                                                EditOperation.Trim(start, end)
-                                            }
-                                            repo.saveProject(project, edits)
-                                            withContext(Dispatchers.Main) {
-                                                Toast.makeText(context, "Projeto salvo!", Toast.LENGTH_SHORT).show()
-                                            }
-                                        } catch (e: Exception) {
-                                            withContext(Dispatchers.Main) {
-                                                Toast.makeText(context, "Erro ao salvar: ${e.message}", Toast.LENGTH_SHORT).show()
-                                            }
-                                        } finally {
-                                            isSaving = false
-                                        }
+                                    val ranges = state.trimPosition.completeRanges
+                                    if (ranges.isEmpty()) {
+                                        Toast.makeText(
+                                            context,
+                                            "Adicione pelo menos um corte",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        return@IconButton
                                     }
+                                    val fileName = videoUri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')
+                                        ?: "video_${System.currentTimeMillis()}"
+                                    videoName = fileName
+                                    showSaveDialog = true
                                 },
                                 enabled = !isSaving
                             ) {
                                 Icon(
                                     if (isSaving) Icons.Default.Check else Icons.Default.Save,
-                                    contentDescription = "Salvar",
-                                    tint = if (isSaving)
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.onSurface
+                                    contentDescription = "Salvar"
                                 )
                             }
                         }
@@ -227,25 +107,18 @@ fun TrimEditionScreen(
                         .fillMaxSize()
                         .padding(paddingValues)
                 ) {
-                    if (showWaveformConfig) {
-                        com.chopcut.ui.components.WaveformConfigPanel(
-                            currentStyle = waveformStyle,
-                            onStyleChange = { waveformStyle = it },
-                            onApply = { showWaveformConfig = false }
-                        )
-                    }
-                    
                     TimelineEditor(
-                        videoUri = loadedVideoUri!!,
+                        videoUri = videoUri,
                         trimPosition = state.trimPosition,
                         currentPosition = state.currentPosition,
                         waveformData = state.waveformData,
                         isWaveformLoading = state.isWaveformLoading,
                         waveformError = state.waveformError,
-                        waveformStyle = waveformStyle,
+                        waveformStyle = com.chopcut.ui.components.WaveformStyle(),
                         onPositionChange = { viewModel.setCurrentPosition(it) },
                         onAddPosition = { viewModel.addPosition(state.currentPosition) },
-                        onRequestNewMedia = { recoveryLauncher.launch(arrayOf("video/*")) },
+                        onRequestNewMedia = { },
+                        onVideoDurationChange = { duration -> viewModel.setVideoDuration(duration) },
                         extraContent = {
                             RangeList(
                                 ranges = state.trimPosition.completeRanges,
@@ -274,14 +147,142 @@ fun TrimEditionScreen(
                 }
             }
         }
-        else -> {
-            ErrorState(
-                title = "Nenhum vídeo selecionado",
-                message = "Selecione um vídeo para começar a editar",
-                modifier = Modifier.fillMaxSize(),
-                actionLabel = "Voltar",
-                onAction = { /* TODO: Navigate back */ }
-            )
-        }
+    }
+
+    if (showSaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveDialog = false },
+            title = { Text("Salvar Vídeo") },
+            text = {
+                Column {
+                    Text("Nome do arquivo:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = videoName,
+                        onValueChange = { videoName = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Meu vídeo") }
+                    )
+                    if (isSaving) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Text("Salvando...")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (videoName.isBlank() || isSaving) {
+                            return@TextButton
+                        }
+
+                        scope.launch(Dispatchers.IO) {
+                            isSaving = true
+                            try {
+                                // Invert logic: completeRanges are ranges to REMOVE
+                                // We need to calculate the ranges to KEEP
+                                val trimRanges = state.trimPosition.completeRanges
+                                    .sortedBy { it.first }
+
+                                Timber.d("Original trim ranges to REMOVE: $trimRanges")
+
+                                val keepRanges = mutableListOf<Pair<Long, Long>>()
+                                var lastEndMs = 0L
+
+                                trimRanges.forEach { (start, end) ->
+                                    if (start > lastEndMs) {
+                                        keepRanges.add(lastEndMs to start)
+                                    }
+                                    lastEndMs = end
+                                }
+
+                                // Add final range if there's remaining video
+                                if (lastEndMs < state.videoDurationMs) {
+                                    keepRanges.add(lastEndMs to state.videoDurationMs)
+                                }
+
+                                Timber.d("Keep ranges to SAVE: $keepRanges")
+                                Timber.d("Video duration: ${state.videoDurationMs}ms")
+
+                                val rangesToSave = keepRanges
+                                    .map { (start, end) -> TimeRange(start, end) }
+
+                                Timber.d("Saving video with ${rangesToSave.size} keep ranges (removed ${trimRanges.size} ranges)")
+                                rangesToSave.forEachIndexed { idx, range ->
+                                    Timber.d("  Range $idx: ${range.startMs}ms - ${range.endMs}ms (${range.durationMs}ms)")
+                                }
+
+                                if (rangesToSave.isEmpty()) {
+                                    throw Exception("No ranges to save - video is empty")
+                                }
+
+                                val outputFile = videoRepository.createTempFile(".mp4")
+                                Timber.d("Temp file created: ${outputFile.absolutePath}")
+                                var trimmedFile: File? = null
+
+                                copyPipeline.trim(videoUri, rangesToSave)
+                                    .collect { result ->
+                                        result.getOrNull()?.let { file ->
+                                            trimmedFile = file
+                                            Timber.d("Trim result file: ${file.absolutePath}, size: ${file.length()} bytes")
+                                        }
+                                    }
+
+                                if (trimmedFile != null) {
+                                    Timber.d("Copying ${trimmedFile!!.length()} bytes to gallery...")
+                                    val finalUri = videoRepository.saveToGallery(trimmedFile!!, "$videoName.mp4")
+                                    outputFile.delete()
+                                    trimmedFile!!.delete()
+
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(
+                                            context,
+                                            if (finalUri != null) "Salvo em /ChopCut/" else "Erro ao salvar na galeria",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        showSaveDialog = false
+                                        onNavigateBack()
+                                    }
+                                } else {
+                                    throw Exception("Failed to trim video: No result")
+                                }
+                            } catch (e: Exception) {
+                                Timber.e(e, "Failed to save video")
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(
+                                        context,
+                                        "Erro: ${e.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            } finally {
+                                isSaving = false
+                            }
+                        }
+                    },
+                    enabled = videoName.isNotBlank() && !isSaving
+                ) {
+                    Text("Salvar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showSaveDialog = false },
+                    enabled = !isSaving
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
