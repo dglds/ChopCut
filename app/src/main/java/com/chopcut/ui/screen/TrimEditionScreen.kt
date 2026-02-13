@@ -189,12 +189,7 @@ fun TrimEditionScreen(
                         scope.launch(Dispatchers.IO) {
                             isSaving = true
                             try {
-                                // Invert logic: completeRanges are ranges to REMOVE
-                                // We need to calculate the ranges to KEEP
-                                val trimRanges = state.trimPosition.completeRanges
-                                    .sortedBy { it.first }
-
-                                Timber.d("Original trim ranges to REMOVE: $trimRanges")
+                                val trimRanges = state.trimPosition.completeRanges.sortedBy { it.first }
 
                                 val keepRanges = mutableListOf<Pair<Long, Long>>()
                                 var lastEndMs = 0L
@@ -206,40 +201,25 @@ fun TrimEditionScreen(
                                     lastEndMs = end
                                 }
 
-                                // Add final range if there's remaining video
                                 if (lastEndMs < state.videoDurationMs) {
                                     keepRanges.add(lastEndMs to state.videoDurationMs)
                                 }
 
-                                Timber.d("Keep ranges to SAVE: $keepRanges")
-                                Timber.d("Video duration: ${state.videoDurationMs}ms")
-
-                                val rangesToSave = keepRanges
-                                    .map { (start, end) -> TimeRange(start, end) }
-
-                                Timber.d("Saving video with ${rangesToSave.size} keep ranges (removed ${trimRanges.size} ranges)")
-                                rangesToSave.forEachIndexed { idx, range ->
-                                    Timber.d("  Range $idx: ${range.startMs}ms - ${range.endMs}ms (${range.durationMs}ms)")
-                                }
+                                val rangesToSave = keepRanges.map { (start, end) -> TimeRange(start, end) }
 
                                 if (rangesToSave.isEmpty()) {
                                     throw Exception("No ranges to save - video is empty")
                                 }
 
                                 val outputFile = videoRepository.createTempFile(".mp4")
-                                Timber.d("Temp file created: ${outputFile.absolutePath}")
                                 var trimmedFile: File? = null
 
                                 copyPipeline.trim(videoUri, rangesToSave)
                                     .collect { result ->
-                                        result.getOrNull()?.let { file ->
-                                            trimmedFile = file
-                                            Timber.d("Trim result file: ${file.absolutePath}, size: ${file.length()} bytes")
-                                        }
+                                        result.getOrNull()?.let { trimmedFile = it }
                                     }
 
                                 if (trimmedFile != null) {
-                                    Timber.d("Copying ${trimmedFile!!.length()} bytes to gallery...")
                                     val finalUri = videoRepository.saveToGallery(trimmedFile!!, "$videoName.mp4")
                                     outputFile.delete()
                                     trimmedFile!!.delete()

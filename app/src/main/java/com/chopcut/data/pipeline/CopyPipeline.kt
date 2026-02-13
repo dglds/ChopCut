@@ -42,121 +42,62 @@ class CopyPipeline(
             var muxer: MediaMuxer? = null
 
             try {
-                // Get video metadata
                 val metadata = videoRepository.getMetadata(uri)
                     ?: throw IllegalArgumentException("Unable to read video metadata")
 
-                Timber.d("Video metadata: ${metadata.width}x${metadata.height}, duration=${metadata.durationUs}us, hasAudio=${metadata.hasAudio}")
-
-                // Create extractors for video and audio separately
-                videoExtractor = MediaExtractor()
-                videoExtractor.setDataSource(context, uri, null)
-
+                videoExtractor = MediaExtractor().apply { setDataSource(context, uri, null) }
                 audioExtractor = if (metadata.hasAudio) {
                     MediaExtractor().apply { setDataSource(context, uri, null) }
-                } else {
-                    null
-                }
+                } else null
 
-                // Find tracks
                 val videoTrackIndex = findTrackIndex(videoExtractor, "video/")
-                val audioTrackIndex = if (audioExtractor != null) {
-                    findTrackIndex(audioExtractor, "audio/")
-                } else {
-                    -1
-                }
-
-                Timber.d("Track indices: video=$videoTrackIndex, audio=$audioTrackIndex")
+                val audioTrackIndex = audioExtractor?.let { findTrackIndex(it, "audio/") } ?: -1
 
                 if (videoTrackIndex < 0) {
                     throw IllegalArgumentException("No video track found")
                 }
 
-                // Get track formats
-                videoExtractor.selectTrack(videoTrackIndex)
                 val videoFormat = videoExtractor.getTrackFormat(videoTrackIndex)
-
-                Timber.d("Video format: ${videoFormat.toString()}")
-
                 var audioFormat: MediaFormat? = null
                 var audioTrackOutputIndex = -1
 
                 if (audioExtractor != null && audioTrackIndex >= 0 && metadata.hasAudio) {
-                    audioExtractor.selectTrack(audioTrackIndex)
                     audioFormat = audioExtractor.getTrackFormat(audioTrackIndex)
-                    Timber.d("Audio format: ${audioFormat.toString()}")
                 }
 
-                // Create muxer
                 muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-
-                // Add tracks to muxer
                 val videoTrackOutputIndex = muxer.addTrack(videoFormat)
-                Timber.d("Video track output index: $videoTrackOutputIndex")
-
                 if (audioFormat != null) {
                     audioTrackOutputIndex = muxer.addTrack(audioFormat)
-                    Timber.d("Audio track output index: $audioTrackOutputIndex")
                 }
 
                 muxer.start()
-                Timber.d("Muxer started")
 
-                // Calculate total duration to process
-                val totalDurationUs = ranges.sumOf { (it.endMs - it.startMs) * 1000 }
                 var processedDurationUs = 0L
-                var totalSamplesWritten = 0L
 
-                Timber.d("Processing ${ranges.size} ranges, total duration: ${totalDurationUs}us")
-
-                // Process each range
-                ranges.forEachIndexed { rangeIndex, range ->
-                    Timber.d("Processing range ${rangeIndex + 1}/${ranges.size}: ${range.startMs}ms - ${range.endMs}ms")
-
-                    val rangeDurationUs = (range.endMs - range.startMs) * 1000
+                ranges.forEach { range ->
                     val offsetUs = processedDurationUs
+                    val startUs = range.startMs * 1000
+                    val endUs = range.endMs * 1000
 
-                    // Process video track
-                    videoExtractor.unselectTrack(videoTrackIndex)
-                    videoExtractor.selectTrack(videoTrackIndex)
-                    var videoSamples = 0
-                    processTrack(
-                        extractor = videoExtractor,
-                        muxer = muxer,
-                        trackIndex = videoTrackIndex,
-                        outputTrackIndex = videoTrackOutputIndex,
-                        startUs = range.startMs * 1000,
-                        endUs = range.endMs * 1000,
-                        offsetUs = offsetUs,
-                        onProgress = { progress ->
-                            // Progress callback - could emit progress here
-                        }
-                    )
+                    videoExtractor.apply {
+                        unselectTrack(videoTrackIndex)
+                        selectTrack(videoTrackIndex)
+                    }
+                    processTrack(videoExtractor, muxer, videoTrackIndex, videoTrackOutputIndex, startUs, endUs, offsetUs) { }
 
-                    // Process audio track if exists
                     if (audioExtractor != null && audioTrackIndex >= 0 && audioTrackOutputIndex >= 0) {
-                        audioExtractor.unselectTrack(audioTrackIndex)
-                        audioExtractor.selectTrack(audioTrackIndex)
-                        processTrack(
-                            extractor = audioExtractor,
-                            muxer = muxer,
-                            trackIndex = audioTrackIndex,
-                            outputTrackIndex = audioTrackOutputIndex,
-                            startUs = range.startMs * 1000,
-                            endUs = range.endMs * 1000,
-                            offsetUs = offsetUs,
-                            onProgress = { }
-                        )
+                        audioExtractor.apply {
+                            unselectTrack(audioTrackIndex)
+                            selectTrack(audioTrackIndex)
+                        }
+                        processTrack(audioExtractor, muxer, audioTrackIndex, audioTrackOutputIndex, startUs, endUs, offsetUs) { }
                     }
 
-                    processedDurationUs += rangeDurationUs
-                    Timber.d("Completed range ${rangeIndex + 1}, processedDuration=${processedDurationUs}us")
+                    processedDurationUs += (range.endMs - range.startMs) * 1000
                 }
 
-                Timber.d("All ranges processed, stopping muxer...")
                 muxer.stop()
-                Timber.d("Muxer stopped, output file size: ${outputFile.length()} bytes")
-                Timber.d("Trim completed successfully: ${outputFile.absolutePath}")
                 emit(Result.success(outputFile))
 
             } finally {
@@ -322,18 +263,13 @@ class CopyPipeline(
         offsetUs: Long,
         onProgress: (Float) -> Unit
     ) {
-        // Seek to the closest sync frame (keyframe) at or before start time
         extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
         val actualStartUs = extractor.sampleTime
-
-        Timber.d("processTrack: requested start=$startUs, actual seek position=$actualStartUs")
 
         val buffer = MediaCodec.BufferInfo()
         val byteBuffer = java.nio.ByteBuffer.allocate(1024 * 1024)
 
-        var lastProgressUpdate = 0f
         var firstSampleWritten = false
-        var samplesWritten = 0
 
         while (true) {
             val sampleSize = extractor.readSampleData(byteBuffer, 0)
@@ -342,44 +278,25 @@ class CopyPipeline(
             val sampleTime = extractor.sampleTime
             if (sampleTime == -1L) break
 
-            // Check if we've reached the end of range
-            if (sampleTime >= endUs) {
-                break
-            }
+            if (sampleTime >= endUs) break
 
-            // Write samples from sync frame onwards (needed for proper decoding)
-            // but adjust presentation time to start from 0
             if (sampleTime >= actualStartUs) {
                 buffer.offset = 0
                 buffer.size = sampleSize
-
-                // Adjust presentation time: subtract actual start time and add offset
-                // This ensures that video starts at correct timestamp in sequence
                 buffer.presentationTimeUs = (sampleTime - actualStartUs) + offsetUs
-
-                // Preserve sync frame flag for first sample
                 buffer.flags = extractor.sampleFlags
+
                 if (!firstSampleWritten) {
-                    // Ensure first frame is marked as sync frame
                     buffer.flags = buffer.flags or MediaCodec.BUFFER_FLAG_KEY_FRAME
                     firstSampleWritten = true
                 }
 
                 muxer.writeSampleData(outputTrackIndex, byteBuffer, buffer)
-                samplesWritten++
-
-                // Update progress
-                val progress = ((sampleTime - actualStartUs).toFloat() / (endUs - actualStartUs).toFloat())
-                if (progress - lastProgressUpdate > 0.01f) { // Update every1%
-                    onProgress(progress.coerceIn(0f, 1f))
-                    lastProgressUpdate = progress
-                }
             }
 
             extractor.advance()
         }
 
-        Timber.d("processTrack: Wrote $samplesWritten samples, range=[$startUs, $endUs), offset=$offsetUs")
         onProgress(1f)
     }
 

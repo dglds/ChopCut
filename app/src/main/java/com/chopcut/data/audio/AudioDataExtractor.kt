@@ -61,33 +61,19 @@ class AudioDataExtractor(
             val durationUs = format.getLong(MediaFormat.KEY_DURATION)
             val expectedDurationMs = durationUs / 1000
 
-            Timber.d("Audio format: mime=$mime, sampleRate=$sampleRate, channels=$channelCount, durationMs=$expectedDurationMs")
-
-            // Create decoder
-            val decoder = MediaCodec.createDecoderByType(mime)
-            decoder.configure(format, null, null, 0)
-            decoder.start()
-
-            // Downsampling configuration optimized for timeline visualization
-            // Dynamic target rate based on video duration to balance speed vs quality
             val targetSampleRate = when {
                 expectedDurationMs < 30000 -> 25
                 expectedDurationMs < 120000 -> 20
                 else -> 15
             }
-            // Accumulate RAW samples (including all channels) per point
             val samplesPerPoint = ((sampleRate * channelCount) / targetSampleRate).coerceAtLeast(1)
-
             val estimatedPoints = (expectedDurationMs / 1000 * targetSampleRate).toInt()
-            Timber.d("Downsampling: Target ${targetSampleRate}Hz, compress factor $samplesPerPoint, est. points $estimatedPoints")
 
-            // Use a much smaller list
             val pcmData = java.util.ArrayList<Float>(estimatedPoints + 1000)
 
             val bufferInfo = MediaCodec.BufferInfo()
-            val timeoutUs = 100000L // 100ms
+            val timeoutUs = 100000L
 
-            // Read and decode
             var outputDone = false
             var inputDone = false
             var tryAgainCount = 0
@@ -95,13 +81,14 @@ class AudioDataExtractor(
 
             var lastLoggedProgress = -1
 
-            // Downsampling state
             var currentMaxAmp = 0f
             var samplesAccumulated = 0
-
-            // Reusable buffer to reduce allocations
             var reusableShortArray: ShortArray? = null
-            
+
+            val decoder = MediaCodec.createDecoderByType(mime).apply {
+                configure(format, null, null, 0)
+                start()
+            }
             while (!outputDone) {
                 if (!inputDone) {
                     val inputBufferIndex = decoder.dequeueInputBuffer(timeoutUs)

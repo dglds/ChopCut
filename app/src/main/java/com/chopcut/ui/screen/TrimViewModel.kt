@@ -27,11 +27,9 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         waveformCache.clear()
-        Timber.d("TrimViewModel CLEARED!")
     }
 
     fun loadWaveform(uri: Uri) {
-        Timber.d("TrimViewModel loadWaveform called")
         viewModelScope.launch(Dispatchers.IO) {
             _state.update { it.copy(isWaveformLoading = true, waveformError = null) }
             try {
@@ -46,9 +44,8 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
                     durationMs = rawData.durationMs
                 )
                 _state.update { it.copy(waveformData = waveformData, isWaveformLoading = false) }
-                Timber.d("Waveform loaded: ${amplitudes.size} bars")
             } catch (e: Exception) {
-                Timber.e(e, "TrimViewModel: Failed to extract waveform")
+                Timber.e(e, "Failed to extract waveform")
                 _state.update { it.copy(waveformData = WaveformData.empty(), isWaveformLoading = false, waveformError = e.message) }
             }
         }
@@ -57,14 +54,9 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
     fun addPosition(pos: Long) {
         val current = _state.value.trimPosition
         if (pos in current.positions) {
-            Timber.d("TrimViewModel: posição $pos já existe na lista")
             return
         }
-        val newPosition = current.withPosition(pos)
-        Timber.d("TrimViewModel: addPosition $pos -> ${newPosition.positions}")
-        _state.update {
-            it.copy(trimPosition = newPosition)
-        }
+        _state.update { it.copy(trimPosition = current.withPosition(pos)) }
     }
 
     fun setCurrentPosition(pos: Long) {
@@ -92,7 +84,6 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clear() {
         _state.value = TrimEditorState()
-        Timber.d("TrimViewModel: estado limpo")
     }
 
     fun getCompleteRanges(): List<Pair<Long, Long>> {
