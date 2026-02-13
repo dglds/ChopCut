@@ -127,9 +127,23 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
         val trimEdits = edits.filterIsInstance<EditOperation.Trim>()
         val positions = trimEdits.flatMap { listOf(it.startTime, it.endTime) }
         val newTrimPosition = TrimPosition(positions = positions)
+
+        // Load filter if exists
+        val filterEdit = edits.filterIsInstance<EditOperation.Filter>().firstOrNull()
+        
         _state.update {
-            it.copy(trimPosition = newTrimPosition)
+            it.copy(
+                trimPosition = newTrimPosition,
+                currentFilter = filterEdit,
+                currentSpeed = filterEdit?.intensity ?: 1.0f
+            )
         }
-        Timber.d("Timeline: Loaded ${trimEdits.size} edits -> $positions")
+        Timber.d("Timeline: Loaded ${trimEdits.size} edits -> $positions, Filter: ${filterEdit?.filterType}")
+    }
+
+    fun setFilter(filter: com.chopcut.data.model.FilterType, intensity: Float = 1.0f) {
+        _state.update {
+            it.copy(currentFilter = com.chopcut.data.model.EditOperation.Filter(filter, intensity))
+        }
     }
 }
