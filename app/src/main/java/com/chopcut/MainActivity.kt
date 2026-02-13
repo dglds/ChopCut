@@ -120,10 +120,7 @@ class MainActivity : ComponentActivity() {
                             val videoUriString = backStackEntry.arguments?.getString("videoUri")
                             val projectId = backStackEntry.arguments?.getString("projectId")
                             
-                            val decodedUri = videoUriString?.let {
-                                java.net.URLDecoder.decode(it, "UTF-8")
-                            }
-                            val videoUri = decodedUri?.let { Uri.parse(it) }
+                            val videoUri = videoUriString?.let { Uri.parse(it) }
 
                             TrimEditionScreen(
                                 videoUri = videoUri ?: Uri.EMPTY,
