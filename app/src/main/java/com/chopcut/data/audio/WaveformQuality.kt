@@ -44,31 +44,16 @@ sealed class WaveformQuality(val displayName: String, val barsPerSecond: Float) 
 
     /**
      * Calcula o número ideal de barras baseado na duração
-     * Limitado para não sobrecarregar a renderização
+     * Sem limites absolutos - apenas pela duração e largura da tela
      */
     fun calculateBarCount(durationMs: Long, screenWidthDp: Float = 400f): Int {
         val durationSeconds = durationMs / 1000f
         val totalBars = (durationSeconds * barsPerSecond).toInt()
         
-        // Limita baseado na largura da tela (~4dp por barra)
+        // Apenas limita baseado na largura da tela (~4dp por barra)
         val maxBarsByWidth = (screenWidthDp / 4f).toInt()
         
-        // Limites absolutos por qualidade
-        val minBars = when (this) {
-            Minimal -> 20
-            Low -> 50
-            Medium -> 100
-            High -> 150
-        }
-        
-        val maxBars = when (this) {
-            Minimal -> 200
-            Low -> 400
-            Medium -> 800
-            High -> 1200
-        }
-        
-        return minOf(totalBars, maxBarsByWidth).coerceIn(minBars, maxBars)
+        return minOf(totalBars, maxBarsByWidth)
     }
 
     companion object {

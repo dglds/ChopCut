@@ -314,9 +314,18 @@ fun TrimEditionScreen(
                         items(WaveformQuality.AllValues) { quality ->
                             AssistChip(
                                 onClick = {
-                                    viewModel.setWaveformQuality(quality)
-                                    viewModel.loadWaveform(videoUri)
-                                    showQualityDialog = false
+                                    try {
+                                        viewModel.setWaveformQuality(quality)
+                                        viewModel.loadWaveform(videoUri)
+                                        showQualityDialog = false
+                                    } catch (e: Exception) {
+                                        Timber.e(e, "Error changing waveform quality")
+                                        Toast.makeText(
+                                            context,
+                                            "Erro ao mudar qualidade: ${e.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                                 },
                                 label = { Text(quality.displayName) },
                                 modifier = Modifier.fillMaxWidth()

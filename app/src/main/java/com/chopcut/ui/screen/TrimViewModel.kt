@@ -42,11 +42,17 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
             _state.update { it.copy(isWaveformLoading = true, waveformError = null) }
             try {
                 val rawData = audioDataExtractor.extractRawPcmData(uri)
+                
+                val threshold = 0.05f
+                val silenceHeight = 0.02f
+                
                 val amplitudes = WaveFormGenerator.generateWaveform(
                     pcmSamples = rawData.pcmSamples,
                     durationMs = rawData.durationMs,
                     quality = waveformQuality,
-                    screenWidthDp = 400f
+                    screenWidthDp = 400f,
+                    threshold = threshold,
+                    silenceHeight = silenceHeight
                 )
                 val waveformData = WaveformData(
                     amplitudes = amplitudes,

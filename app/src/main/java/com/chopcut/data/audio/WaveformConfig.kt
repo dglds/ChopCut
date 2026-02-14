@@ -7,7 +7,7 @@ data class WaveformConfig(
     val sensitivityMultiplier: Float = 1.0f,
     val useMedian: Boolean = true,
     val silenceHeight: Float = 0.02f,
-    val targetBarCount: Int = 600,
+    val targetBarCount: Int = 400,
     val preset: WaveformPreset = WaveformPreset.Medium
 ) {
     companion object {
@@ -18,28 +18,28 @@ data class WaveformConfig(
                 samplingRate = 200,
                 minThreshold = 0.03f,
                 sensitivityMultiplier = 1.5f,
-                targetBarCount = 200,
+                targetBarCount = 100,
                 preset = preset
             )
             WaveformPreset.Low -> WaveformConfig(
                 samplingRate = 150,
                 minThreshold = 0.04f,
                 sensitivityMultiplier = 1.2f,
-                targetBarCount = 400,
+                targetBarCount = 200,
                 preset = preset
             )
             WaveformPreset.Medium -> WaveformConfig(
                 samplingRate = 100,
                 minThreshold = 0.05f,
                 sensitivityMultiplier = 1.0f,
-                targetBarCount = 600,
+                targetBarCount = 400,
                 preset = preset
             )
             WaveformPreset.High -> WaveformConfig(
                 samplingRate = 50,
                 minThreshold = 0.05f,
                 sensitivityMultiplier = 0.8f,
-                targetBarCount = 800,
+                targetBarCount = 600,
                 preset = preset
             )
             WaveformPreset.Custom -> WaveformConfig(preset = preset)
