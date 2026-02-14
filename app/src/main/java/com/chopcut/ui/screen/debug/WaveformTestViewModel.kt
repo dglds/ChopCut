@@ -42,8 +42,8 @@ class WaveformTestViewModel(application: Application) : AndroidViewModel(applica
     private val _state = MutableStateFlow(WaveformTestUiState())
     val state: StateFlow<WaveformTestUiState> = _state.asStateFlow()
     
-    private val waveformCache = WaveformCache()
-    private val audioDataExtractor = AudioDataExtractor(application, waveformCache)
+    // Sem cache para testes - sempre reextrai
+    private val audioDataExtractor = AudioDataExtractor(application, null)
     
     private var baselineUri: Uri? = null
     private var baselineConfig: WaveformConfig? = null
