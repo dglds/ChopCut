@@ -18,7 +18,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.chopcut.data.local.PreferencesManager
 import com.chopcut.ui.onboarding.OnboardingScreen
-import com.chopcut.ui.screen.DevelopScreen
 import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.TrimEditionScreen
 import com.chopcut.ui.theme.ChopCutTheme
@@ -30,7 +29,6 @@ import com.chopcut.ui.theme.ChopCutTheme
  * - "onboarding" -> Onboarding screen (first run only)
  * - "home" -> Home screen (start destination)
  * - "editor?videoUri={videoUri}" -> Video editor screen
- * - "tests" -> Test screen with all test operations
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,9 +67,6 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToEditor = { videoUri ->
                                     val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
                                     navController.navigate("editor?videoUri=$encodedUri")
-                                },
-                                onNavigateToTests = {
-                                    navController.navigate("develop")
                                 }
                             )
                         }
@@ -96,16 +91,6 @@ class MainActivity : ComponentActivity() {
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }
-
-                        // ==================== DEVELOP SCREEN (DEBUG) ====================
-                        composable("develop") {
-                            DevelopScreen(
-                                onNavigateBack = {
-                                    navController.popBackStack()
-                                }
-                            )
-                        }
-
                     }
                 }
             }
