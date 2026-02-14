@@ -17,3 +17,4 @@ local.properties
 prompt.txt
 .claude/skills/ui-ux-pro-max/scripts/__pycache__/
 .vscode/
+/logs/

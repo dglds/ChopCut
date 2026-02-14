@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons.Outlined
+import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -32,20 +33,35 @@ import com.chopcut.ui.theme.primaryColor
  *
  * @param modifier Modificador
  * @param color Cor do indicador (padrão: primary)
+ * @param message Mensagem opcional para exibir
  */
 @Composable
 fun LoadingState(
     modifier: Modifier = Modifier,
-    color: androidx.compose.ui.graphics.Color = primaryColor()
+    color: androidx.compose.ui.graphics.Color = primaryColor(),
+    message: String? = null
 ) {
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        CircularProgressIndicator(
-            color = color,
-            modifier = Modifier.size(48.dp)
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator(
+                color = color,
+                modifier = Modifier.size(48.dp)
+            )
+            if (message != null) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = message,
+                    style = ChopCutTypography.bodyMedium,
+                    color = OnSurface.copy(alpha = 0.7f)
+                )
+            }
+        }
     }
 }
 
@@ -191,4 +207,67 @@ fun InlineLoading(
         strokeWidth = 2.dp,
         color = primaryColor()
     )
+}
+
+/**
+ * Estado de sucesso
+ *
+ * Usado para exibir mensagens de sucesso com opção de ação
+ *
+ * @param icon Ícone de sucesso (padrão: check_circle)
+ * @param title Título do sucesso
+ * @param message Mensagem descritiva
+ * @param actionLabel Texto da ação (padrão: "OK")
+ * @param onAction Ação ao clicar no botão
+ * @param modifier Modificador
+ */
+@Composable
+fun SuccessState(
+    icon: ImageVector = Outlined.CheckCircleOutline,
+    title: String,
+    message: String,
+    modifier: Modifier = Modifier,
+    actionLabel: String = "OK",
+    onAction: () -> Unit
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = com.chopcut.ui.theme.SuccessDark,
+                modifier = Modifier.size(64.dp)
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = title,
+                style = ChopCutTypography.titleMedium,
+                color = OnSurface
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = message,
+                style = ChopCutTypography.bodyMedium,
+                color = OnSurface.copy(alpha = 0.7f)
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            com.chopcut.ui.components.buttons.ChopCutPrimaryButton(
+                text = actionLabel,
+                onClick = onAction
+            )
+        }
+    }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -55,7 +56,8 @@ import timber.log.Timber
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
     onNavigateToEditor: (android.net.Uri) -> Unit = {},
-    onNavigateToTests: () -> Unit = {}
+    onNavigateToTests: () -> Unit = {},
+    onNavigateToPreferences: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedUri by viewModel.selectedVideoUri.collectAsStateWithLifecycle()
@@ -83,6 +85,12 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text("ChopCut") },
                 actions = {
+                    IconButton(onClick = onNavigateToPreferences) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Preferências"
+                        )
+                    }
                     IconButton(onClick = onNavigateToTests) {
                         Icon(
                             imageVector = Icons.Default.Info,

@@ -40,7 +40,6 @@ fun TrimEditionScreen(
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     var showSaveDialog by remember { mutableStateOf(false) }
-    var videoName by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
@@ -86,9 +85,6 @@ fun TrimEditionScreen(
                                         ).show()
                                         return@IconButton
                                     }
-                                    val fileName = videoUri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')
-                                        ?: "video_${System.currentTimeMillis()}"
-                                    videoName = fileName
                                     showSaveDialog = true
                                 },
                                 enabled = !isSaving
@@ -155,17 +151,7 @@ fun TrimEditionScreen(
             title = { Text("Salvar Vídeo") },
             text = {
                 Column {
-                    Text("Nome do arquivo:")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = videoName,
-                        onValueChange = { videoName = it },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Meu vídeo") }
-                    )
                     if (isSaving) {
-                        Spacer(modifier = Modifier.height(16.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -176,13 +162,15 @@ fun TrimEditionScreen(
                             )
                             Text("Salvando...")
                         }
+                    } else {
+                        Text("Deseja salvar o vídeo editado?")
                     }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (videoName.isBlank() || isSaving) {
+                        if (isSaving) {
                             return@TextButton
                         }
 
@@ -190,6 +178,9 @@ fun TrimEditionScreen(
                             isSaving = true
                             try {
                                 val trimRanges = state.trimPosition.completeRanges.sortedBy { it.first }
+
+                                Timber.d("Trim ranges: $trimRanges")
+                                Timber.d("Video duration: ${state.videoDurationMs}")
 
                                 val keepRanges = mutableListOf<Pair<Long, Long>>()
                                 var lastEndMs = 0L
@@ -207,20 +198,31 @@ fun TrimEditionScreen(
 
                                 val rangesToSave = keepRanges.map { (start, end) -> TimeRange(start, end) }
 
+                                Timber.d("Keep ranges to save: $rangesToSave")
+
                                 if (rangesToSave.isEmpty()) {
                                     throw Exception("No ranges to save - video is empty")
                                 }
 
                                 val outputFile = videoRepository.createTempFile(".mp4")
+                                Timber.d("Output file: ${outputFile.absolutePath}")
+
                                 var trimmedFile: File? = null
 
                                 copyPipeline.trim(videoUri, rangesToSave)
                                     .collect { result ->
+                                        Timber.d("CopyPipeline result: $result")
                                         result.getOrNull()?.let { trimmedFile = it }
                                     }
 
+                                Timber.d("Trimmed file after collect: $trimmedFile")
+
                                 if (trimmedFile != null) {
-                                    val finalUri = videoRepository.saveToGallery(trimmedFile!!, "$videoName.mp4")
+                                    Timber.d("Trimmed file exists: ${trimmedFile!!.exists()}, size: ${trimmedFile!!.length()}")
+                                    val fileName = videoUri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')
+                                        ?: "video_${System.currentTimeMillis()}"
+                                    val finalUri = videoRepository.saveToGallery(trimmedFile!!, "ChopCut_$fileName.mp4")
+                                    Timber.d("Final URI: $finalUri")
                                     outputFile.delete()
                                     trimmedFile!!.delete()
 
@@ -234,6 +236,7 @@ fun TrimEditionScreen(
                                         onNavigateBack()
                                     }
                                 } else {
+                                    Timber.e("Trimmed file is null after collect")
                                     throw Exception("Failed to trim video: No result")
                                 }
                             } catch (e: Exception) {
@@ -244,13 +247,13 @@ fun TrimEditionScreen(
                                         "Erro: ${e.message}",
                                         Toast.LENGTH_LONG
                                     ).show()
-                                }
+                                    }
                             } finally {
                                 isSaving = false
                             }
                         }
                     },
-                    enabled = videoName.isNotBlank() && !isSaving
+                    enabled = !isSaving
                 ) {
                     Text("Salvar")
                 }

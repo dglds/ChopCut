@@ -406,4 +406,40 @@ class VideoRepository(
             null
         }
     }
+
+    /**
+     * Delete all videos saved in Movies/ChopCut folder
+     */
+    suspend fun deleteSavedVideos(): Int = withContext(Dispatchers.IO) {
+        var deletedCount = 0
+
+        try {
+            val moviesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
+            val chopCutDir = File(moviesDir, "ChopCut")
+
+            if (chopCutDir.exists() && chopCutDir.isDirectory) {
+                val files = chopCutDir.listFiles()
+                files?.forEach { file ->
+                    if (file.isFile && file.delete()) {
+                        deletedCount++
+                        Timber.d("Deleted video: ${file.name}")
+                    }
+                }
+
+                if (deletedCount > 0) {
+                    android.media.MediaScannerConnection.scanFile(
+                        context,
+                        chopCutDir.listFiles()?.map { it.absolutePath }?.toTypedArray(),
+                        null,
+                        null
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error deleting saved videos")
+            throw e
+        }
+
+        deletedCount
+    }
 }

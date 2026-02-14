@@ -19,6 +19,7 @@ import androidx.navigation.navArgument
 import com.chopcut.data.local.PreferencesManager
 import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.HomeScreen
+import com.chopcut.ui.screen.PreferencesScreen
 import com.chopcut.ui.screen.TrimEditionScreen
 import com.chopcut.ui.theme.ChopCutTheme
 
@@ -67,7 +68,17 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToEditor = { videoUri ->
                                     val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
                                     navController.navigate("editor?videoUri=$encodedUri")
+                                },
+                                onNavigateToPreferences = {
+                                    navController.navigate("preferences")
                                 }
+                            )
+                        }
+
+                        // ==================== PREFERENCES SCREEN ====================
+                        composable("preferences") {
+                            PreferencesScreen(
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 

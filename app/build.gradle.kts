@@ -103,70 +103,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// Instala e abre o app
-tasks.register("install") {
-    group = "install"
-    description = "Install debug APK and launch"
-    
-    dependsOn("installDebug")
-    
-    doLast {
-        exec {
-            Thread.sleep(1000)
-            commandLine("beeep.sh", "-s")
-            isIgnoreExitValue = true
-        }
 
-        println("⏳ Abrindo app (com.chopcut)...")
-        exec {
-            commandLine("adb", "shell", "monkey", "-p", "com.chopcut", "-c", "android.intent.category.LAUNCHER", "1")
-            isIgnoreExitValue = true
-        }
-    }
-}
 
-// Apenas monitoramento de logs
-tasks.register("monitor") {
-    group = "install"
-    description = "Monitor audio and app logs in real-time"
-    
-    doLast {
-        println("⏳ Aguardando PID de com.chopcut...")
-        exec {
-            // Filtra logs apenas do processo do app de forma nativa (--pid)
-            // Foco TOTAL em Audio e Diagnóstico, sem timestamp (-v tag)
-            commandLine("sh", "-c", "export PID=\$(adb shell pidof -s com.chopcut); if [ -z \"\$PID\" ]; then echo 'App não rodando'; else echo \"Monitorando PID: \$PID (DEEP AUDIO DEBUG)\"; adb logcat --pid=\$PID -v color -v tag AudioDataExtractor:V WaveFormGenerator:V TimelineViewModel:V ExoPlayer:D MediaCodec:D MediaExtractor:D AndroidRuntime:E com.chopcut:V *:S; fi")
-        }
-    }
-}
 
-tasks.register("nukeCache") {
-    group = "cleanup"
-    description = "Deep clean project including build and .cxx directories"
-    dependsOn("clean")
-    
-    doLast {
-        // Delete root build directory
-        rootProject.buildDir.deleteRecursively()
-        
-        // Delete project build directory
-        project.buildDir.deleteRecursively()
-        
-        // Delete .cxx directory (native builds)
-        file(".cxx").deleteRecursively()
-        
-        println("Nuked cache! Build directories and .cxx removed.")
-    }
-}
 
-// Listener para falhas
-gradle.addBuildListener(object : BuildListener {
-    override fun settingsEvaluated(settings: Settings) {}
-    override fun projectsLoaded(gradle: Gradle) {}
-    override fun projectsEvaluated(gradle: Gradle) {}
-    override fun buildFinished(result: BuildResult) {
-        if (result.failure != null) {
-            Runtime.getRuntime().exec(arrayOf("beeep.sh", "-e"))
-        }
-    }
-})
