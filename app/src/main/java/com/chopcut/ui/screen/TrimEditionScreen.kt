@@ -337,11 +337,7 @@ fun TrimEditionScreen(
         WaveformTestDialog(
             videoUri = videoUri,
             viewModel = testViewModel,
-            onDismiss = { showTestDialog = false },
-            onReload = {
-                showTestDialog = false
-                viewModel.loadWaveform(videoUri)
-            }
+            onDismiss = { showTestDialog = false }
         )
     }
 }

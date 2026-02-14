@@ -36,8 +36,7 @@ import com.chopcut.ui.theme.ChopCutSpacing
 fun WaveformTestDialog(
     videoUri: android.net.Uri,
     viewModel: WaveformTestViewModel,
-    onDismiss: () -> Unit = {},
-    onReload: () -> Unit = {}
+    onDismiss: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
     
@@ -96,23 +95,12 @@ fun WaveformTestDialog(
             }
         },
         confirmButton = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xs)
+            OutlinedButton(
+                onClick = { viewModel.regenerate(videoUri) },
+                enabled = !state.isLoading
             ) {
-                OutlinedButton(
-                    onClick = { viewModel.regenerate(videoUri) },
-                    enabled = !state.isLoading
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.width(16.dp))
-                    Text("Regenerar")
-                }
-                
-                OutlinedButton(
-                    onClick = onReload,
-                    enabled = !state.isLoading
-                ) {
-                    Text("Recarregar")
-                }
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.width(16.dp))
+                Text("Regenerar")
             }
         },
         dismissButton = {
