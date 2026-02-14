@@ -6,28 +6,38 @@ package com.chopcut.data.audio
  */
 object WaveFormGenerator {
 
-    /**
-     * Downsample raw PCM samples to waveform bars
-     * Applies threshold: bars below threshold get minimum height
-     * 
-     * @param pcmSamples Normalized 0.0-1.0
-     * @param barCount Number of waveform bars to generate
-     * @param quality Quality setting for processing (optional)
-     * @param threshold Threshold value (bars below get min height)
-     * @param silenceHeight Minimum height for bars below threshold
-     */
+    private fun calculateDynamicSilenceHeight(samples: FloatArray, threshold: Float): Float {
+        if (samples.isEmpty()) return 0.15f
+
+        val samplesBelowThreshold = samples.filter { it <= threshold }
+
+        if (samplesBelowThreshold.isEmpty()) {
+            return 0.15f
+        }
+
+        val sorted = samplesBelowThreshold.sorted()
+        val bottomTwentyPercentIndex = (sorted.size * 0.2f).toInt()
+        val bottomSamples = sorted.take(bottomTwentyPercentIndex.coerceAtLeast(1))
+
+        val averageSilence = bottomSamples.average().toFloat()
+
+        return (averageSilence * 1.5f).coerceIn(0.1f, 0.25f)
+    }
+
     fun generateWaveform(
         pcmSamples: FloatArray,
         barCount: Int,
         quality: WaveformQuality = WaveformQuality.Medium,
         threshold: Float = 0.05f,
-        silenceHeight: Float = 0.02f
+        silenceHeight: Float? = null
     ): List<Float> {
         if (pcmSamples.isEmpty()) return emptyList()
 
         val maxBars = barCount.coerceIn(10, quality.calculateBarCount(Long.MAX_VALUE, 1000f))
         val samplesPerBar = maxOf(1, pcmSamples.size / maxBars)
         val downsampled = mutableListOf<Float>()
+
+        val dynamicSilenceHeight = calculateDynamicSilenceHeight(pcmSamples, threshold)
 
         var currentChunkMax = 0f
         var samplesInChunk = 0
@@ -48,7 +58,7 @@ object WaveFormGenerator {
                 if (chunkHasPico) {
                     downsampled.add(currentChunkMax)
                 } else {
-                    downsampled.add(silenceHeight)
+                    downsampled.add(silenceHeight ?: dynamicSilenceHeight)
                 }
                 currentChunkMax = 0f
                 samplesInChunk = 0
@@ -60,7 +70,7 @@ object WaveFormGenerator {
             if (chunkHasPico) {
                 downsampled.add(currentChunkMax)
             } else {
-                downsampled.add(silenceHeight)
+                downsampled.add(silenceHeight ?: dynamicSilenceHeight)
             }
         }
 
@@ -83,7 +93,7 @@ object WaveFormGenerator {
         quality: WaveformQuality,
         screenWidthDp: Float = 400f,
         threshold: Float = 0.05f,
-        silenceHeight: Float = 0.02f
+        silenceHeight: Float? = null
     ): List<Float> {
         val barCount = quality.calculateBarCount(durationMs, screenWidthDp)
         return generateWaveform(pcmSamples, barCount, quality, threshold, silenceHeight)

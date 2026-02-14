@@ -6,7 +6,6 @@ data class WaveformConfig(
     val maxThreshold: Float = 0.2f,
     val sensitivityMultiplier: Float = 1.0f,
     val useMedian: Boolean = true,
-    val silenceHeight: Float = 0.02f,
     val targetBarCount: Int = 400,
     val preset: WaveformPreset = WaveformPreset.Medium
 ) {

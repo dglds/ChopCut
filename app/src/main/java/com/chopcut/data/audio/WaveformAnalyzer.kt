@@ -62,6 +62,7 @@ object WaveformAnalyzer {
     ): Pair<FloatArray, Int> {
         val result = FloatArray(samples.size)
         var skippedCount = 0
+        val silenceHeight = 0.15f  // Valor padrão
         
         for (i in samples.indices) {
             val absSample = abs(samples[i])
@@ -69,7 +70,7 @@ object WaveformAnalyzer {
             if (absSample > threshold) {
                 result[i] = absSample
             } else {
-                result[i] = config.silenceHeight
+                result[i] = silenceHeight
                 skippedCount++
             }
         }
@@ -90,6 +91,7 @@ object WaveformAnalyzer {
         
         val bars = mutableListOf<Float>()
         var barsWithPicos = 0
+        val silenceHeight = 0.15f  // Valor padrão
         
         for (i in 0 until effectiveBarCount) {
             val startIndex = i * samplesPerBar
@@ -112,7 +114,7 @@ object WaveformAnalyzer {
                 bars.add(maxInChunk)
                 barsWithPicos++
             } else {
-                bars.add(config.silenceHeight)
+                bars.add(silenceHeight)
             }
         }
         

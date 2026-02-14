@@ -148,8 +148,8 @@ private fun ConfigSection(
         ConfigRow("Threshold", "${(config.minThreshold * 100).toInt()}% - ${(config.maxThreshold * 100).toInt()}%")
         ConfigRow("Sensibilidade", "${config.sensitivityMultiplier}x")
         ConfigRow("Usar Mediana", if (config.useMedian) "Sim" else "Não")
-        ConfigRow("Altura Silêncio", "${(config.silenceHeight * 100).toInt()}%")
         ConfigRow("Barras Alvo", config.targetBarCount.toString())
+        ConfigRow("Altura Silêncio", "Dinâmica (adaptada ao vídeo)")
     }
 }
 

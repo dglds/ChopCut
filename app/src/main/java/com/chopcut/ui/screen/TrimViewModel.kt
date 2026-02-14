@@ -23,13 +23,12 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
     val state: StateFlow<TrimEditorState> = _state.asStateFlow()
 
     private var waveformQuality: WaveformQuality = WaveformQuality.Medium
-
-    private val waveformCache = com.chopcut.data.audio.WaveformCache()
-    private val audioDataExtractor = AudioDataExtractor(application, waveformCache)
-
+    
+    // Cache desabilitado temporariamente para testes de threshold
+    private val audioDataExtractor = AudioDataExtractor(application, null)
+    
     override fun onCleared() {
         super.onCleared()
-        waveformCache.clear()
     }
 
     fun setWaveformQuality(quality: WaveformQuality) {
@@ -44,7 +43,7 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
                 val rawData = audioDataExtractor.extractRawPcmData(uri)
                 
                 val threshold = 0.05f
-                val silenceHeight = 0.02f
+                val silenceHeight: Float? = null  // Dinâmico - calculado a partir das samples mais baixas
                 
                 val amplitudes = WaveFormGenerator.generateWaveform(
                     pcmSamples = rawData.pcmSamples,
