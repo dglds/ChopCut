@@ -66,8 +66,13 @@ class AudioDataExtractor(
                 expectedDurationMs < 120000 -> 20
                 else -> 15
             }
-            val samplesPerPoint = ((sampleRate * channelCount) / targetSampleRate).coerceAtLeast(1)
-            val estimatedPoints = (expectedDurationMs / 1000 * targetSampleRate).toInt()
+            val qualityBasedSampleRate = if (waveformCache != null) {
+                waveformCache.get(cacheKey)?.sampleRate ?: targetSampleRate
+            } else targetSampleRate
+            
+            val effectiveTargetSampleRate = minOf(targetSampleRate, qualityBasedSampleRate)
+            val samplesPerPoint = ((sampleRate * channelCount) / effectiveTargetSampleRate).coerceAtLeast(1)
+            val estimatedPoints = (expectedDurationMs / 1000 * effectiveTargetSampleRate).toInt()
 
             val pcmData = java.util.ArrayList<Float>(estimatedPoints + 1000)
 
@@ -78,6 +83,7 @@ class AudioDataExtractor(
             var inputDone = false
             var tryAgainCount = 0
             val maxTryAgain = 200
+            var needsEosSent = false
 
             var lastLoggedProgress = -1
 
@@ -90,39 +96,48 @@ class AudioDataExtractor(
                 start()
             }
             while (!outputDone) {
+                if (needsEosSent) {
+                    val eosBufferIndex = decoder.dequeueInputBuffer(timeoutUs)
+                    if (eosBufferIndex >= 0) {
+                        decoder.queueInputBuffer(eosBufferIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        needsEosSent = false
+                        Timber.v("EOS sent via separate buffer")
+                        continue
+                    }
+                }
+
                 if (!inputDone) {
                     val inputBufferIndex = decoder.dequeueInputBuffer(timeoutUs)
                     if (inputBufferIndex >= 0) {
                         val inputBuffer = decoder.getInputBuffer(inputBufferIndex)
-                        val sampleSize = extractor.readSampleData(inputBuffer!!, 0)
+                        if (inputBuffer != null) {
+                            val sampleSize = extractor.readSampleData(inputBuffer, 0)
 
-                        if (sampleSize < 0) {
-                            decoder.queueInputBuffer(inputBufferIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                            inputDone = true
-                            Timber.v("Input EOS reached at ${extractor.sampleTime / 1000}ms")
-                        } else {
-                            val presentationTimeUs = extractor.sampleTime
-                            decoder.queueInputBuffer(inputBufferIndex, 0, sampleSize, presentationTimeUs, 0)
-                            
-                            val advanced = extractor.advance()
-                            if (!advanced) {
-                                Timber.w("Extractor could not advance at ${presentationTimeUs / 1000}ms")
+                            if (sampleSize < 0) {
                                 decoder.queueInputBuffer(inputBufferIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                                 inputDone = true
-                            }
-                            
-                            // Log progress every 10%
-                            if (expectedDurationMs > 0) {
-                                val progress = (presentationTimeUs / 1000 * 10 / expectedDurationMs).toInt()
-                                if (progress > lastLoggedProgress) {
-                                    Timber.v("Extraction progress: ${progress * 10}%")
-                                    lastLoggedProgress = progress
+                                Timber.v("Input EOS reached at ${extractor.sampleTime / 1000}ms")
+                            } else {
+                                val presentationTimeUs = extractor.sampleTime
+                                decoder.queueInputBuffer(inputBufferIndex, 0, sampleSize, presentationTimeUs, 0)
+
+                                val advanced = extractor.advance()
+                                if (!advanced) {
+                                    Timber.w("Extractor could not advance at ${presentationTimeUs / 1000}ms")
+                                    needsEosSent = true
+                                    inputDone = true
+                                }
+
+                                // Log progress every 10%
+                                if (expectedDurationMs > 0) {
+                                    val progress = (presentationTimeUs / 1000 * 10 / expectedDurationMs).toInt()
+                                    if (progress > lastLoggedProgress) {
+                                        Timber.v("Extraction progress: ${progress * 10}%")
+                                        lastLoggedProgress = progress
+                                    }
                                 }
                             }
                         }
-                    } else {
-                         // Input buffer full, wait for output to drain
-                         // Timber.v("Input buffer full, waiting...")
                     }
                 }
 
@@ -130,46 +145,48 @@ class AudioDataExtractor(
                 when {
                     outputBufferIndex >= 0 -> {
                         tryAgainCount = 0
-                        val outputBuffer = decoder.getOutputBuffer(outputBufferIndex)!!
-                        val size = bufferInfo.size
+                        val outputBuffer = decoder.getOutputBuffer(outputBufferIndex)
+                        if (outputBuffer != null) {
+                            val size = bufferInfo.size
 
-                        if (size > 0) {
-                            val pcmDataShortArray = reusableShortArray?.let {
-                                if (it.size >= size / 2) it else ShortArray(size / 2)
-                            } ?: ShortArray(size / 2)
-                            reusableShortArray = pcmDataShortArray
+                            if (size > 0) {
+                                val pcmDataShortArray = reusableShortArray?.let {
+                                    if (it.size >= size / 2) it else ShortArray(size / 2)
+                                } ?: ShortArray(size / 2)
+                                reusableShortArray = pcmDataShortArray
 
-                            outputBuffer.position(bufferInfo.offset)
-                            outputBuffer.asShortBuffer().get(pcmDataShortArray)
+                                outputBuffer.position(bufferInfo.offset)
+                                outputBuffer.asShortBuffer().get(pcmDataShortArray)
 
-                            // Process samples for downsampling immediately
-                            for (sample in pcmDataShortArray) {
-                                val normalized = kotlin.math.abs(sample.toInt()).toFloat() / 32768f
+                                // Process samples for downsampling immediately
+                                for (sample in pcmDataShortArray) {
+                                    val normalized = kotlin.math.abs(sample.toInt()).toFloat() / 32768f
 
-                                if (normalized > currentMaxAmp) {
-                                    currentMaxAmp = normalized
+                                    if (normalized > currentMaxAmp) {
+                                        currentMaxAmp = normalized
+                                    }
+                                    samplesAccumulated++
+
+                                    if (samplesAccumulated >= samplesPerPoint) {
+                                        pcmData.add(currentMaxAmp)
+                                        currentMaxAmp = 0f
+                                        samplesAccumulated = 0
+                                    }
                                 }
-                                samplesAccumulated++
 
-                                if (samplesAccumulated >= samplesPerPoint) {
-                                    pcmData.add(currentMaxAmp)
-                                    currentMaxAmp = 0f
-                                    samplesAccumulated = 0
-                                }
-                            }
-
-                            // Force add remaining samples when output buffer contains the final data
-                            if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                                if (samplesAccumulated > 0) {
-                                    pcmData.add(currentMaxAmp)
-                                    currentMaxAmp = 0f
-                                    samplesAccumulated = 0
+                                // Force add remaining samples when output buffer contains the final data
+                                if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                                    if (samplesAccumulated > 0) {
+                                        pcmData.add(currentMaxAmp)
+                                        currentMaxAmp = 0f
+                                        samplesAccumulated = 0
+                                    }
                                 }
                             }
                         }
 
                         decoder.releaseOutputBuffer(outputBufferIndex, false)
-                        
+
                         if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
                             outputDone = true
                             Timber.v("Output EOS reached")

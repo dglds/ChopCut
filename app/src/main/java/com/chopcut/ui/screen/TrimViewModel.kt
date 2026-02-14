@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.data.audio.WaveFormGenerator
+import com.chopcut.data.audio.WaveformQuality
 import com.chopcut.ui.components.TrimPosition
 import com.chopcut.ui.components.WaveformData
 import kotlinx.coroutines.Dispatchers
@@ -21,12 +22,19 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(TrimEditorState())
     val state: StateFlow<TrimEditorState> = _state.asStateFlow()
 
+    private var waveformQuality: WaveformQuality = WaveformQuality.Medium
+
     private val waveformCache = com.chopcut.data.audio.WaveformCache()
     private val audioDataExtractor = AudioDataExtractor(application, waveformCache)
 
     override fun onCleared() {
         super.onCleared()
         waveformCache.clear()
+    }
+
+    fun setWaveformQuality(quality: WaveformQuality) {
+        waveformQuality = quality
+        Timber.d("Waveform quality set to: ${quality.displayName}")
     }
 
     fun loadWaveform(uri: Uri) {
@@ -36,7 +44,9 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
                 val rawData = audioDataExtractor.extractRawPcmData(uri)
                 val amplitudes = WaveFormGenerator.generateWaveform(
                     pcmSamples = rawData.pcmSamples,
-                    barCount = 100
+                    durationMs = rawData.durationMs,
+                    quality = waveformQuality,
+                    screenWidthDp = 400f
                 )
                 val waveformData = WaveformData(
                     amplitudes = amplitudes,

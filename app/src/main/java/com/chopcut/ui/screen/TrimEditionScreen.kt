@@ -3,10 +3,14 @@ package com.chopcut.ui.screen
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.chopcut.data.audio.WaveformQuality
 import com.chopcut.data.pipeline.CopyPipeline
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.data.model.TimeRange
@@ -23,6 +28,10 @@ import com.chopcut.ui.components.trim.TrimControlPanel
 import com.chopcut.ui.components.feedback.ErrorState
 import com.chopcut.ui.theme.ChopCutSpacing
 import com.chopcut.ui.screen.TrimViewModel
+import com.chopcut.ui.screen.debug.WaveformTestDialog
+import com.chopcut.ui.screen.debug.WaveformTestViewModel
+import com.chopcut.ui.components.WaveformData
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -40,12 +49,19 @@ fun TrimEditionScreen(
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     var showSaveDialog by remember { mutableStateOf(false) }
+    var showQualityDialog by remember { mutableStateOf(false) }
+    var showTestDialog by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
     val videoRepository = remember { VideoRepository(context) }
     val copyPipeline = remember { CopyPipeline(context, videoRepository) }
+    val testViewModel = remember { 
+        WaveformTestViewModel(
+            context.applicationContext as android.app.Application
+        ) 
+    }
 
     LaunchedEffect(videoUri) {
         if (videoUri != Uri.EMPTY) {
@@ -74,6 +90,21 @@ fun TrimEditionScreen(
                             }
                         },
                         actions = {
+                            IconButton(
+                                onClick = { showTestDialog = true },
+                                enabled = !isSaving
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Science,
+                                    contentDescription = "Testar WaveForm"
+                                )
+                            }
+                            IconButton(
+                                onClick = { showQualityDialog = true },
+                                enabled = !isSaving
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Qualidade Waveform")
+                            }
                             IconButton(
                                 onClick = {
                                     val ranges = state.trimPosition.completeRanges
@@ -265,6 +296,51 @@ fun TrimEditionScreen(
                 ) {
                     Text("Cancelar")
                 }
+            }
+        )
+    }
+
+    if (showQualityDialog) {
+        AlertDialog(
+            onDismissRequest = { showQualityDialog = false },
+            title = { Text("Qualidade do Waveform") },
+            text = {
+                Column {
+                    Text("Selecione a qualidade para regerar o waveform:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(WaveformQuality.AllValues) { quality ->
+                            AssistChip(
+                                onClick = {
+                                    viewModel.setWaveformQuality(quality)
+                                    viewModel.loadWaveform(videoUri)
+                                    showQualityDialog = false
+                                },
+                                label = { Text(quality.displayName) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showQualityDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showTestDialog) {
+        WaveformTestDialog(
+            videoUri = videoUri,
+            viewModel = testViewModel,
+            onDismiss = { showTestDialog = false },
+            onReload = {
+                showTestDialog = false
+                viewModel.loadWaveform(videoUri)
             }
         )
     }
