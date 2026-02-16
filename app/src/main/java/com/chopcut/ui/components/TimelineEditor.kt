@@ -50,10 +50,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.size
+import com.chopcut.ui.components.AudioWaveForms
+import com.chopcut.ui.components.AudioWaveFormsConfig
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -74,6 +78,9 @@ fun TimelineEditor(
     isWaveformLoading: Boolean = false,
     waveformError: String? = null,
     waveformStyle: WaveformStyle = WaveformStyle(),
+    // Novos parâmetros para AudioWaveForms
+    audioWaveformsAmplitudes: List<Float> = emptyList(),
+    isAudioWaveformsLoading: Boolean = false,
     onPositionChange: (Long) -> Unit,
         onAddPosition: () -> Unit,
         onRequestNewMedia: (() -> Unit)? = null,
@@ -388,8 +395,20 @@ fun TimelineEditor(
             ) {
                 val currentScroll = scrollOffsetPx
 
-                // WAVEFORM LAYER (Bottom)
-                if (isWaveformLoading) {
+                // WAVEFORM LAYER (Bottom) - AudioWaveForms
+                if (isAudioWaveformsLoading) {
+                    Box(modifier = Modifier.align(Alignment.BottomCenter).height(waveformHeightDp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                         androidx.compose.material3.CircularProgressIndicator(
+                             modifier = Modifier.size(20.dp),
+                             color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                             strokeWidth = 2.dp
+                         )
+                    }
+                } else if (audioWaveformsAmplitudes.isNotEmpty()) {
+                     // Marca que temos dados de audio waveforms para desenhar no Canvas
+                     Box(modifier = Modifier.align(Alignment.BottomCenter).height(waveformHeightDp).fillMaxWidth()) {}
+                } else if (isWaveformLoading) {
+                    // Fallback para waveform antigo durante carregamento
                     Box(modifier = Modifier.align(Alignment.BottomCenter).height(waveformHeightDp).fillMaxWidth(), contentAlignment = Alignment.Center) {
                          androidx.compose.material3.CircularProgressIndicator(
                              modifier = Modifier.size(20.dp),
@@ -399,24 +418,24 @@ fun TimelineEditor(
                     }
                 } else if (waveformError != null) {
                      Box(modifier = Modifier.align(Alignment.BottomCenter).height(waveformHeightDp).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                         Text(text = "❌", fontSize = 10.sp) 
+                         Text(text = "❌", fontSize = 10.sp)
                     }
                 } else if (waveformData.amplitudes.isNotEmpty()) {
-                     // Use audio duration for width to avoid stretching if extraction is partial
+                     // Fallback para waveform antigo
                      val audioDurationMs = if (waveformData.durationMs > 0) waveformData.durationMs else videoDurationMs
                      val waveformWidth = (audioDurationMs / 1000f) * pxPerSecond
                      val waveformStartOffset = centerOffset - currentScroll
-                     
+
                      WaveForm(
                          amplitudes = waveformData.amplitudes,
                          modifier = Modifier
                              .height(waveformHeightDp)
-                             .align(Alignment.BottomStart) // Align to bottom
+                             .align(Alignment.BottomStart)
                              .width(with(density) { waveformWidth.toDp() })
                              .graphicsLayer {
                                  translationX = waveformStartOffset
                              },
-                         maxAmp = 1.0f, // Normalize
+                         maxAmp = 1.0f,
                          style = waveformStyle
                      )
                 }
@@ -439,7 +458,7 @@ fun TimelineEditor(
 
                     // DRAW THUMBNAILS
                     // Draw thumbnails below ruler, above waveform
-                     val thumbnailHeight = thumbnailsHeightDp.toPx()
+                     val thumbnailHeightPx = thumbnailsHeightDp.toPx()
                      val thumbnailTop = rulerHeight
                      val thumbnailWidth = pxPerSecond // 1 second width
                      
@@ -447,7 +466,7 @@ fun TimelineEditor(
                      drawContext.canvas.save()
                      val clipEnd = centerOffset + (videoDurationMs / 1000f * pxPerSecond) - currentScroll
                      // Limit clip rect to thumbnail area
-                     drawContext.canvas.clipRect(0f, thumbnailTop, clipEnd, thumbnailTop + thumbnailHeight)
+                     drawContext.canvas.clipRect(0f, thumbnailTop, clipEnd, thumbnailTop + thumbnailHeightPx)
                      
                      for (i in startTickIndex..endTickIndex) {
                          // We only draw thumbnails at integer seconds (0, 1, 2...)
@@ -463,14 +482,14 @@ fun TimelineEditor(
                                      drawIntoCanvas { canvas ->
                                          // Implement CenterCrop logic to avoid distortion
                                          val viewWidth = thumbnailWidth
-                                         val viewHeight = thumbnailHeight
+                                         val viewHeight = thumbnailHeightPx
                                          val bmpWidth = bmp.width.toFloat()
                                          val bmpHeight = bmp.height.toFloat()
-                                         
+
                                          val scale: Float
                                          var dx = 0f
                                          var dy = 0f
-                                         
+
                                          // Calculate scale to cover the destination area (CenterCrop)
                                          if (bmpWidth * viewHeight > viewWidth * bmpHeight) {
                                              scale = viewHeight / bmpHeight
@@ -493,7 +512,45 @@ fun TimelineEditor(
                          }
                      }
                      drawContext.canvas.restore()
-                     
+
+                     // DRAW AUDIO WAVEFORMS (sincronizado com thumbnails)
+                     if (audioWaveformsAmplitudes.isNotEmpty()) {
+                         val waveformWidth = (videoDurationMs / 1000f) * pxPerSecond
+                         val waveformStartX = centerOffset - currentScroll
+                         val waveformHeightPx = waveformHeightDp.toPx()
+                         val waveformTopY = rulerHeight + thumbnailHeightPx // Logo abaixo das thumbnails
+
+                         android.util.Log.d("TimelineEditor", "Drawing AudioWaveforms: ${audioWaveformsAmplitudes.size} bars, startX=$waveformStartX, width=$waveformWidth")
+
+                         val barSlotWidth = waveformWidth / audioWaveformsAmplitudes.size.coerceAtLeast(1)
+                         val barWidthPx = (barSlotWidth * 0.8f).coerceAtLeast(1f)
+
+                         // Clip para não desenhar fora da área
+                         drawContext.canvas.save()
+                         val clipEnd = centerOffset + (videoDurationMs / 1000f * pxPerSecond) - currentScroll
+                         drawContext.canvas.clipRect(0f, waveformTopY, clipEnd, waveformTopY + waveformHeightPx)
+
+                         audioWaveformsAmplitudes.forEachIndexed { index, amplitude ->
+                             val x = waveformStartX + (index * barSlotWidth)
+
+                             // Só desenhar se estiver visível
+                             if (x + barSlotWidth >= 0f && x <= size.width) {
+                                 val normalizedAmp = amplitude.coerceAtLeast(0.01f).coerceAtMost(1.0f)
+                                 val barHeight = normalizedAmp * waveformHeightPx
+
+                                 // Desenhar barra centralizada verticalmente na área do waveform
+                                 val y = waveformTopY + (waveformHeightPx - barHeight) / 2f
+
+                                 drawRect(
+                                     color = Color(0xFF00D9FF),
+                                     topLeft = androidx.compose.ui.geometry.Offset(x + (barSlotWidth - barWidthPx) / 2, y),
+                                     size = androidx.compose.ui.geometry.Size(barWidthPx, barHeight)
+                                 )
+                             }
+                         }
+                         drawContext.canvas.restore()
+                     }
+
                      // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.
 
                     for (i in startTickIndex..endTickIndex) {

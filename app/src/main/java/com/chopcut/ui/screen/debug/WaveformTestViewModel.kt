@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chopcut.data.audio.AudioDataExtractor
-import com.chopcut.data.audio.WaveformCache
 import com.chopcut.data.audio.WaveformConfig
 import com.chopcut.data.audio.WaveformPreset
 import com.chopcut.ui.components.WaveformData
@@ -38,12 +37,11 @@ data class WaveformTestUiState(
 )
 
 class WaveformTestViewModel(application: Application) : AndroidViewModel(application) {
-    
+
     private val _state = MutableStateFlow(WaveformTestUiState())
     val state: StateFlow<WaveformTestUiState> = _state.asStateFlow()
-    
-    // Sem cache para testes - sempre reextrai
-    private val audioDataExtractor = AudioDataExtractor(application, null)
+
+    private val audioDataExtractor = AudioDataExtractor(application)
     
     private var baselineUri: Uri? = null
     private var baselineConfig: WaveformConfig? = null

@@ -23,9 +23,8 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
     val state: StateFlow<TrimEditorState> = _state.asStateFlow()
 
     private var waveformQuality: WaveformQuality = WaveformQuality.Medium
-    
-    // Cache desabilitado temporariamente para testes de threshold
-    private val audioDataExtractor = AudioDataExtractor(application, null)
+
+    private val audioDataExtractor = AudioDataExtractor(application)
     
     override fun onCleared() {
         super.onCleared()
@@ -38,13 +37,22 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadWaveform(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
+            Timber.d("TrimViewModel: loadWaveform START - uri=$uri")
             _state.update { it.copy(isWaveformLoading = true, waveformError = null) }
             try {
-                val rawData = audioDataExtractor.extractRawPcmData(uri)
-                
+                // Usar targetBarCount baseado na qualidade atual
+                val barCount = waveformQuality.calculateBarCount(
+                    durationMs = 0,  // Será obtido do rawData
+                    screenWidthDp = 400f
+                )
+                Timber.d("TrimViewModel: calculated barCount=$barCount for quality=${waveformQuality.displayName}")
+
+                val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = barCount)
+                Timber.d("TrimViewModel: rawData received - samples=${rawData.pcmSamples.size}, duration=${rawData.durationMs}ms, sampleRate=${rawData.sampleRate}")
+
                 val threshold = 0.05f
                 val silenceHeight: Float? = null  // Dinâmico - calculado a partir das samples mais baixas
-                
+
                 val amplitudes = WaveFormGenerator.generateWaveform(
                     pcmSamples = rawData.pcmSamples,
                     durationMs = rawData.durationMs,
@@ -62,6 +70,29 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 Timber.e(e, "Failed to extract waveform")
                 _state.update { it.copy(waveformData = WaveformData.empty(), isWaveformLoading = false, waveformError = e.message) }
+            }
+        }
+    }
+
+    fun loadAudioWaveforms(uri: Uri, targetBarCount: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            Timber.d("TrimViewModel: loadAudioWaveforms START - uri=$uri, targetBarCount=$targetBarCount")
+            _state.update { it.copy(isAudioWaveformsLoading = true, audioWaveformsAmplitudes = emptyList()) }
+            try {
+                val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = targetBarCount)
+                Timber.d("TrimViewModel: AudioWaveforms rawData received - samples=${rawData.pcmSamples.size}, duration=${rawData.durationMs}ms")
+
+                // Armazenar as amplitudes diretamente (já processadas pelo AudioDataExtractor)
+                val amplitudesList = rawData.pcmSamples.toList()
+                Timber.d("TrimViewModel: Converted to List - ${amplitudesList.size} amplitudes")
+                _state.update { it.copy(
+                    audioWaveformsAmplitudes = amplitudesList,
+                    isAudioWaveformsLoading = false
+                ) }
+                Timber.d("TrimViewModel: AudioWaveforms loaded - state updated with ${amplitudesList.size} bars")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to extract audio waveforms")
+                _state.update { it.copy(audioWaveformsAmplitudes = emptyList(), isAudioWaveformsLoading = false) }
             }
         }
     }

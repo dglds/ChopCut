@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chopcut.data.audio.WaveformQuality
 import com.chopcut.data.pipeline.CopyPipeline
 import com.chopcut.data.repository.VideoRepository
@@ -30,7 +31,8 @@ import com.chopcut.ui.theme.ChopCutSpacing
 import com.chopcut.ui.screen.TrimViewModel
 import com.chopcut.ui.screen.debug.WaveformTestDialog
 import com.chopcut.ui.screen.debug.WaveformTestViewModel
-import com.chopcut.ui.components.WaveformData
+import com.chopcut.ui.components.AudioWaveForms
+import com.chopcut.ui.components.AudioWaveFormsConfig
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -57,15 +59,39 @@ fun TrimEditionScreen(
 
     val videoRepository = remember { VideoRepository(context) }
     val copyPipeline = remember { CopyPipeline(context, videoRepository) }
-    val testViewModel = remember { 
+    val testViewModel = remember {
         WaveformTestViewModel(
             context.applicationContext as android.app.Application
-        ) 
+        )
+    }
+
+    // Calcular número de barras baseado na duração do vídeo
+    // Aproximadamente 1 barra por 100ms de vídeo (ajustável conforme preferência)
+    val targetBarCount = remember(state.videoDurationMs) {
+        if (state.videoDurationMs > 0) {
+            // Para vídeos curtos (< 30s): mais barras para detalhe
+            // Para vídeos longos: menos barras para performance
+            when {
+                state.videoDurationMs < 30000 -> (state.videoDurationMs / 50).toInt().coerceAtLeast(100)
+                state.videoDurationMs < 120000 -> (state.videoDurationMs / 100).toInt().coerceAtLeast(200)
+                else -> (state.videoDurationMs / 200).toInt().coerceAtLeast(300).coerceAtMost(800)
+            }
+        } else {
+            300 // valor padrão antes de conhecer a duração
+        }
     }
 
     LaunchedEffect(videoUri) {
         if (videoUri != Uri.EMPTY) {
             viewModel.loadWaveform(videoUri)
+        }
+    }
+
+    // Carregar AudioWaveForms quando tivermos a duração do vídeo
+    LaunchedEffect(state.videoDurationMs) {
+        if (videoUri != Uri.EMPTY && state.videoDurationMs > 0) {
+            Timber.d("TrimEditionScreen: LaunchedEffect triggered - videoDurationMs=${state.videoDurationMs}, targetBarCount=$targetBarCount")
+            viewModel.loadAudioWaveforms(videoUri, targetBarCount)
         }
     }
 
@@ -142,6 +168,9 @@ fun TrimEditionScreen(
                         isWaveformLoading = state.isWaveformLoading,
                         waveformError = state.waveformError,
                         waveformStyle = com.chopcut.ui.components.WaveformStyle(),
+                        // Novos parâmetros para AudioWaveForms - agora do state
+                        audioWaveformsAmplitudes = state.audioWaveformsAmplitudes,
+                        isAudioWaveformsLoading = state.isAudioWaveformsLoading,
                         onPositionChange = { viewModel.setCurrentPosition(it) },
                         onAddPosition = { viewModel.addPosition(state.currentPosition) },
                         onRequestNewMedia = { },

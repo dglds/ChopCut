@@ -12,7 +12,10 @@ data class TrimEditorState(
     val videoDurationMs: Long = 0L,
     val waveformData: WaveformData = WaveformData.empty(),
     val isWaveformLoading: Boolean = false,
-    val waveformError: String? = null
+    val waveformError: String? = null,
+    // Novos campos para AudioWaveForms
+    val audioWaveformsAmplitudes: List<Float> = emptyList(),
+    val isAudioWaveformsLoading: Boolean = false
 ) {
     val totalTrimmedMs: Long
         get() = trimPosition.completeRanges.sumOf { it.second - it.first }
