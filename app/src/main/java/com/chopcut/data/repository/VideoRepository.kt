@@ -408,38 +408,181 @@ class VideoRepository(
     }
 
     /**
-     * Delete all videos saved in Movies/ChopCut folder
+     * Delete all videos saved by ChopCut (Movies/ChopCut, DCIM/ChopCut, and MediaStore entries)
+     * Uses MediaStore to ensure all videos are deleted, including those in scoped storage
      */
     suspend fun deleteSavedVideos(): Int = withContext(Dispatchers.IO) {
         var deletedCount = 0
 
         try {
-            val moviesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
-            val chopCutDir = File(moviesDir, "ChopCut")
+            // Strategy: Delete all video files (.mp4) in ChopCut directories via MediaStore
+            // This works for all Android versions and handles scoped storage properly
+            deletedCount = deleteAllVideosInChopCutDirectories()
 
-            if (chopCutDir.exists() && chopCutDir.isDirectory) {
-                val files = chopCutDir.listFiles()
-                files?.forEach { file ->
-                    if (file.isFile && file.delete()) {
-                        deletedCount++
-                        Timber.d("Deleted video: ${file.name}")
-                    }
-                }
-
-                if (deletedCount > 0) {
-                    android.media.MediaScannerConnection.scanFile(
-                        context,
-                        chopCutDir.listFiles()?.map { it.absolutePath }?.toTypedArray(),
-                        null,
-                        null
-                    )
-                }
-            }
+            Timber.d("Total videos deleted: $deletedCount")
         } catch (e: Exception) {
             Timber.e(e, "Error deleting saved videos")
             throw e
         }
 
         deletedCount
+    }
+
+    /**
+     * Delete all videos in ChopCut directories by:
+     * 1. Finding all .mp4 files in ChopCut folders
+     * 2. For each file, finding and deleting its MediaStore entry
+     * 3. Trying to delete the physical file as fallback
+     */
+    private fun deleteAllVideosInChopCutDirectories(): Int {
+        var deletedCount = 0
+        val deletedFiles = mutableSetOf<String>()
+
+        // Known directories where ChopCut saves videos
+        val directories = listOf(
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "ChopCut"),
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "ChopCut"),
+            File(Environment.getExternalStorageDirectory(), "ChopCut")
+        )
+
+        directories.forEach { dir ->
+            Timber.d("Checking directory: ${dir.absolutePath}, exists: ${dir.exists()}")
+
+            if (dir.exists() && dir.isDirectory) {
+                try {
+                    val files = dir.listFiles()
+                    Timber.d("Found ${files?.size ?: 0} files in ${dir.absolutePath}")
+
+                    files?.forEach { file ->
+                        // Only process video files
+                        if (file.isFile && file.extension.lowercase() == "mp4") {
+                            var deleted = false
+
+                            // CRÍTICO: Scan file first to ensure it's registered in MediaStore
+                            // This is necessary for files that might not be in MediaStore yet
+                            scanFileToMediaStore(file)
+
+                            // Method 1: Try to delete via MediaStore (most reliable)
+                            deleted = deleteViaMediaStore(file)
+
+                            // Method 2: Fallback to direct deletion
+                            if (!deleted) {
+                                deleted = deletePhysicalFile(file)
+                            }
+
+                            if (deleted) {
+                                deletedCount++
+                                deletedFiles.add(file.name)
+                                Timber.d("Successfully deleted: ${file.name}")
+                            } else {
+                                Timber.w("Failed to delete: ${file.name}")
+                            }
+                        }
+                    }
+
+                    // Try to delete the directory if empty
+                    if (dir.listFiles()?.isEmpty() == true) {
+                        dir.delete()
+                        Timber.d("Deleted empty directory: ${dir.absolutePath}")
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Error deleting files in directory: ${dir.absolutePath}")
+                }
+            }
+        }
+
+        Timber.d("Deleted files: ${deletedFiles.joinToString()}")
+        return deletedCount
+    }
+
+    /**
+     * Scan a file to MediaStore to ensure it's registered before deletion
+     * This is necessary for files that might not be indexed yet
+     */
+    private fun scanFileToMediaStore(file: File) {
+        try {
+            android.media.MediaScannerConnection.scanFile(
+                context,
+                arrayOf(file.absolutePath),
+                arrayOf("video/mp4")
+            ) { path, uri ->
+                if (uri != null) {
+                    Timber.d("Scanned file to MediaStore: ${file.name}, URI: $uri")
+                } else {
+                    Timber.w("Failed to scan file to MediaStore: ${file.name}")
+                }
+            }
+
+            // Give MediaStore a moment to process
+            Thread.sleep(100)
+        } catch (e: Exception) {
+            Timber.w(e, "Error scanning file to MediaStore: ${file.name}")
+        }
+    }
+
+    /**
+     * Delete a video file via MediaStore API (proper way for Android 10+)
+     */
+    private fun deleteViaMediaStore(file: File): Boolean {
+        try {
+            // Query MediaStore for this specific file
+            val projection = arrayOf(MediaStore.Video.Media._ID)
+            val selection = "${MediaStore.Video.Media.DATA} = ?"
+            val selectionArgs = arrayOf(file.absolutePath)
+
+            val cursor = contentResolver.query(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                null
+            )
+
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Video.Media._ID))
+                    val videoUri = android.net.Uri.withAppendedPath(
+                        MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                        id.toString()
+                    )
+
+                    // Delete via ContentResolver
+                    val rowsDeleted = contentResolver.delete(videoUri, null, null)
+                    Timber.d("MediaStore deletion: ${file.name}, rows: $rowsDeleted")
+                    return rowsDeleted > 0
+                }
+            }
+
+            Timber.w("File not found in MediaStore: ${file.absolutePath}")
+            return false
+        } catch (e: Exception) {
+            Timber.w(e, "Error deleting via MediaStore: ${file.name}")
+            return false
+        }
+    }
+
+    /**
+     * Delete a video file directly from filesystem (fallback)
+     */
+    private fun deletePhysicalFile(file: File): Boolean {
+        return try {
+            val deleted = file.delete()
+            if (deleted) {
+                Timber.d("Direct deletion successful: ${file.name}")
+                // Notify MediaStore about the deletion
+                android.media.MediaScannerConnection.scanFile(
+                    context,
+                    arrayOf(file.absolutePath),
+                    null,
+                    null
+                )
+            } else {
+                Timber.w("Direct deletion failed: ${file.name}")
+            }
+            deleted
+        } catch (e: Exception) {
+            Timber.w(e, "Error deleting physical file: ${file.name}")
+            false
+        }
     }
 }

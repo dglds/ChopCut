@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chopcut.data.audio.WaveformQuality
-import com.chopcut.data.pipeline.CopyPipeline
+import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.data.model.TimeRange
 import com.chopcut.ui.components.TimelineEditor
@@ -58,7 +58,7 @@ fun TrimEditionScreen(
     val scope = rememberCoroutineScope()
 
     val videoRepository = remember { VideoRepository(context) }
-    val copyPipeline = remember { CopyPipeline(context, videoRepository) }
+    val transformerPipeline = remember { TransformerPipeline(context, videoRepository) }
     val testViewModel = remember {
         WaveformTestViewModel(
             context.applicationContext as android.app.Application
@@ -268,20 +268,40 @@ fun TrimEditionScreen(
                                 Timber.d("Output file: ${outputFile.absolutePath}")
 
                                 var trimmedFile: File? = null
+                                var trimError: Throwable? = null
 
-                                copyPipeline.trim(videoUri, rangesToSave)
+                                transformerPipeline.trim(videoUri, rangesToSave)
                                     .collect { result ->
-                                        Timber.d("CopyPipeline result: $result")
+                                        Timber.d("TransformerPipeline result: $result")
                                         result.getOrNull()?.let { trimmedFile = it }
+                                        result.exceptionOrNull()?.let { trimError = it }
                                     }
 
                                 Timber.d("Trimmed file after collect: $trimmedFile")
+                                trimError?.let {
+                                    Timber.e(it, "TransformerPipeline trim error details")
+                                    it.stackTrace.forEach { stackTraceElement ->
+                                        Timber.d("  at $stackTraceElement")
+                                    }
+                                }
 
                                 if (trimmedFile != null) {
                                     Timber.d("Trimmed file exists: ${trimmedFile!!.exists()}, size: ${trimmedFile!!.length()}")
-                                    val fileName = videoUri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')
-                                        ?: "video_${System.currentTimeMillis()}"
-                                    val finalUri = videoRepository.saveToGallery(trimmedFile!!, "ChopCut_$fileName.mp4")
+
+                                    // Extract clean filename from URI
+                                    val originalFileName = videoUri.lastPathSegment
+                                        ?.substringAfterLast('/')
+                                        ?.substringBeforeLast('.')
+                                        ?.take(30) // Limit length
+                                        ?.replace(Regex("[^a-zA-Z0-9_-]"), "_") // Remove special chars
+                                        ?: "ChopCut"
+
+                                    // Add timestamp to avoid overwrites
+                                    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
+                                        .format(java.util.Date())
+                                    val fileName = "${originalFileName}_$timestamp"
+
+                                    val finalUri = videoRepository.saveToGallery(trimmedFile!!, "$fileName.mp4")
                                     Timber.d("Final URI: $finalUri")
                                     outputFile.delete()
                                     trimmedFile!!.delete()

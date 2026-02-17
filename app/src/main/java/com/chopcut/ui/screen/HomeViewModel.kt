@@ -10,7 +10,7 @@ import com.chopcut.ui.components.WaveformData
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.data.model.TimeRange
 import com.chopcut.data.model.VideoInfo
-import com.chopcut.data.pipeline.CopyPipeline
+import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.util.DispatcherProvider
 import com.chopcut.util.error.ErrorHandler
 import com.chopcut.util.error.safeExecuteSuspend
@@ -23,7 +23,7 @@ import timber.log.Timber
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val videoRepository = VideoRepository(application)
-    private val copyPipeline = CopyPipeline(application, videoRepository)
+    private val transformerPipeline = TransformerPipeline(application, videoRepository)
     private val audioDataExtractor = AudioDataExtractor(application)
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Initial)
@@ -90,7 +90,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val range = TimeRange(startMs = 0, endMs = 5000)
 
-                copyPipeline.trim(uri, listOf(range))
+                transformerPipeline.trim(uri, listOf(range))
                     .collect { result ->
                         result.onSuccess { file ->
                             Timber.d("Trim completed: ${file.absolutePath}")
