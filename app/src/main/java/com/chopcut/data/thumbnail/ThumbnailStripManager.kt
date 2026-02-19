@@ -72,9 +72,9 @@ class ThumbnailStripManager(
             val strip = Bitmap.createBitmap(stripWidth, thumbHeight, Bitmap.Config.RGB_565)
             val canvas = Canvas(strip)
 
-            // Extrair 1.5x maior para CenterCrop de qualidade
-            val extractWidth = (thumbWidth * 1.5f).toInt()
-            val extractHeight = (thumbHeight * 1.5f).toInt()
+            // Extrair 0.5x (metade) para performance extrema (downsampling agressivo)
+            val extractWidth = (thumbWidth * 0.5f).toInt()
+            val extractHeight = (thumbHeight * 0.5f).toInt()
             val dstAspect = thumbWidth.toFloat() / thumbHeight
 
             for (frameIdx in 0 until framesInSegment) {
