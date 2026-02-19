@@ -50,14 +50,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.size
 import com.chopcut.ui.components.AudioWaveForms
-import com.chopcut.ui.components.AudioWaveFormsConfig
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -67,6 +65,15 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import com.chopcut.data.thumbnail.ThumbnailStripManager
+import com.chopcut.data.thumbnail.ThumbnailStripManager.Companion.SEGMENT_SECONDS
+import kotlinx.coroutines.NonCancellable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -86,7 +93,9 @@ fun TimelineEditor(
         onRequestNewMedia: (() -> Unit)? = null,
         onVideoDurationChange: ((Long) -> Unit)? = null,
         extraContent: @Composable () -> Unit = {},
-        modifier: Modifier = Modifier
+        modifier: Modifier = Modifier,
+        // ⚠️ Flag para desativar waveform temporariamente
+        showWaveform: Boolean = false
     ) {
         val context = androidx.compose.ui.platform.LocalContext.current
         val density = LocalDensity.current
@@ -101,40 +110,109 @@ fun TimelineEditor(
             }
         }
      
-        // Thumbnails State
-        val thumbnails = remember { androidx.compose.runtime.mutableStateMapOf<Long, android.graphics.Bitmap>() }
+        // Strip-based Thumbnails State
+        // Dimensões density-aware: match exato do display = pixel-perfect, sem distorção
+        val thumbWidth = remember(density) { with(density) { 60.dp.roundToPx() } }
+        val thumbHeight = remember(density) { with(density) { 40.dp.roundToPx() } }
+        val stripManager = remember(thumbWidth, thumbHeight) {
+            ThumbnailStripManager(context, thumbWidth, thumbHeight)
+        }
+        val strips = remember { androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>() }
+        val loadingStrips = remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
-        
-        // Fetch thumbnails based on scroll
+
+        // Máximo de strips em memória (15 × ~432KB RGB_565 ≈ 6.5MB)
+        val maxStrips = 15
+
+        // STRIP LOADING: Carregar segmentos visíveis + adjacentes por prioridade
+        // IMPORTANTE: usa scope.launch (não launch) para que as coroutines
+        // sobrevivam ao restart do LaunchedEffect quando scrollOffsetPx muda
         LaunchedEffect(scrollOffsetPx, videoDurationMs) {
             if (videoDurationMs == 0L) return@LaunchedEffect
-            
-            val visibleDurationPx = with(density) { 
-                // Assuming screen width roughly, or the timeline width. 
-                // Better to fetch a bit more than visible.
-                1000.dp.toPx() 
-            }
-            
-            val startTimeSec = (scrollOffsetPx / pxPerSecond).toLong()
-            val endTimeSec = ((scrollOffsetPx + visibleDurationPx) / pxPerSecond).toLong()
-            
-            for (sec in startTimeSec..endTimeSec) {
-                val timeMs = sec * 1000
-                if (timeMs > videoDurationMs) break
-                if (!thumbnails.containsKey(timeMs)) {
-                    launch(Dispatchers.IO) {
-                        val bmp = ThumbnailUtils.getThumbnail(context, videoUri, timeMs)
-                        if (bmp != null) {
-                            // Update state on Main thread to ensure proper recomposition and safety
-                            withContext(Dispatchers.Main) {
-                                thumbnails[timeMs] = bmp
+
+            val totalSegments = stripManager.getSegmentCount(videoDurationMs)
+            val currentSecond = (scrollOffsetPx / pxPerSecond).toInt().coerceAtLeast(0)
+            val visibleSegment = currentSecond / SEGMENT_SECONDS
+
+            val segmentsToLoad = listOf(
+                visibleSegment,       // prioridade 1: visível agora
+                visibleSegment - 1,   // prioridade 2: anterior
+                visibleSegment + 1,   // prioridade 3: próximo
+                visibleSegment - 2,   // prioridade 4: pre-fetch
+                visibleSegment + 2
+            ).filter { it in 0 until totalSegments }
+             .filter { !strips.containsKey(it) && loadingStrips[it] != true }
+
+            segmentsToLoad.forEach { segIdx ->
+                loadingStrips[segIdx] = true
+                // scope.launch sobrevive ao restart do LaunchedEffect
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        val strip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs)
+                        withContext(Dispatchers.Main) {
+                            if (strip != null) {
+                                strips[segIdx] = strip
                             }
+                            // LRU eviction: remover strip mais distante do visível
+                            while (strips.size > maxStrips) {
+                                val currSeg = (scrollOffsetPx / pxPerSecond).toInt().coerceAtLeast(0) / SEGMENT_SECONDS
+                                val toEvict = strips.keys
+                                    .maxByOrNull { kotlin.math.abs(it - currSeg) }
+                                    ?: break
+                                strips.remove(toEvict)?.let { bmp ->
+                                    if (!bmp.isRecycled) bmp.recycle()
+                                }
+                            }
+                        }
+                    } finally {
+                        // Garantir cleanup mesmo se cancelada/exception
+                        withContext(Dispatchers.Main + NonCancellable) {
+                            loadingStrips.remove(segIdx)
                         }
                     }
                 }
             }
         }
-    
+
+        // BACKGROUND LOADING: Pré-carregar até maxStrips segmentos sequencialmente
+        LaunchedEffect(videoUri, videoDurationMs) {
+            if (videoDurationMs == 0L) return@LaunchedEffect
+            val totalSegments = stripManager.getSegmentCount(videoDurationMs)
+            val toPreload = minOf(totalSegments, maxStrips)
+
+            android.util.Log.d("ThumbnailStrip", "Background: $totalSegments segments, pre-loading $toPreload")
+
+            for (segIdx in 0 until toPreload) {
+                // Parar se já atingiu o limite (scroll-based pode ter preenchido)
+                if (strips.size >= maxStrips) break
+                if (!strips.containsKey(segIdx) && loadingStrips[segIdx] != true) {
+                    loadingStrips[segIdx] = true
+                    try {
+                        val strip = withContext(Dispatchers.IO) {
+                            stripManager.extractSegment(videoUri, segIdx, videoDurationMs)
+                        }
+                        if (strip != null) strips[segIdx] = strip
+                    } finally {
+                        loadingStrips.remove(segIdx)
+                    }
+                }
+            }
+
+            android.util.Log.d("ThumbnailStrip", "Background: Complete (${strips.size} strips loaded)")
+        }
+
+        // Animação de spinner para thumbnails carregando
+        val infiniteTransition = rememberInfiniteTransition(label = "thumbnailSpinner")
+        val spinnerAngle by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "spinnerRotation"
+        )
+
         val exoPlayer = remember(videoUri) {
             ExoPlayer.Builder(context).build().apply {
                 setMediaItem(MediaItem.fromUri(videoUri))
@@ -229,6 +307,16 @@ fun TimelineEditor(
             }
         }
     
+        // Cleanup: reciclar strips quando o composable sai da composição
+        DisposableEffect(videoUri) {
+            onDispose {
+                strips.values.forEach { bitmap ->
+                    if (!bitmap.isRecycled) bitmap.recycle()
+                }
+                strips.clear()
+            }
+        }
+
         Column(
             modifier = modifier
                 .fillMaxSize()
@@ -396,7 +484,9 @@ fun TimelineEditor(
                 val currentScroll = scrollOffsetPx
 
                 // WAVEFORM LAYER (Bottom) - AudioWaveForms
-                if (isAudioWaveformsLoading) {
+                // ⚠️ TEMPORARIAMENTE DESATIVADO para testes de thumbnail
+                if (showWaveform) {
+                    if (isAudioWaveformsLoading) {
                     Box(modifier = Modifier.align(Alignment.BottomCenter).height(waveformHeightDp).fillMaxWidth(), contentAlignment = Alignment.Center) {
                          androidx.compose.material3.CircularProgressIndicator(
                              modifier = Modifier.size(20.dp),
@@ -439,6 +529,7 @@ fun TimelineEditor(
                          style = waveformStyle
                      )
                 }
+                } // Fim do if (showWaveform) - Waveform desativada temporariamente
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val textPaint = android.graphics.Paint().apply {
@@ -456,65 +547,80 @@ fun TimelineEditor(
 
                     val rulerTopY = 0f
 
-                    // DRAW THUMBNAILS
-                    // Draw thumbnails below ruler, above waveform
+                    // DRAW THUMBNAIL STRIPS
                      val thumbnailHeightPx = thumbnailsHeightDp.toPx()
                      val thumbnailTop = rulerHeight
-                     val thumbnailWidth = pxPerSecond // 1 second width
-                     
-                     // Clip the thumbnails to the video duration so they don't overshoot visually
+                     val thumbW = stripManager.thumbWidth.toFloat()
+                     val thumbH = stripManager.thumbHeight.toFloat()
+
+                     // Pré-alocar objetos fora do draw loop (zero allocations por frame)
+                     val srcRect = android.graphics.Rect()
+                     val dstRect = android.graphics.Rect()
+                     // Paint com bilinear filtering para render suave da strip→tela
+                     val renderPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+
+                     // Clip para não ultrapassar a duração do vídeo
                      drawContext.canvas.save()
                      val clipEnd = centerOffset + (videoDurationMs / 1000f * pxPerSecond) - currentScroll
-                     // Limit clip rect to thumbnail area
                      drawContext.canvas.clipRect(0f, thumbnailTop, clipEnd, thumbnailTop + thumbnailHeightPx)
-                     
-                     for (i in startTickIndex..endTickIndex) {
-                         // We only draw thumbnails at integer seconds (0, 1, 2...)
-                         // Mapping tick index (0.1s) to second
-                         if (i % 10 == 0) {
-                             val second = i / 10
-                             val timeMs = second * 1000L
-                             
-                             if (timeMs in 0 until videoDurationMs) {
-                                 val x = centerOffset + (second * pxPerSecond) - currentScroll
-                                 
-                                 thumbnails[timeMs]?.let { bmp ->
-                                     drawIntoCanvas { canvas ->
-                                         // Implement CenterCrop logic to avoid distortion
-                                         val viewWidth = thumbnailWidth
-                                         val viewHeight = thumbnailHeightPx
-                                         val bmpWidth = bmp.width.toFloat()
-                                         val bmpHeight = bmp.height.toFloat()
 
-                                         val scale: Float
-                                         var dx = 0f
-                                         var dy = 0f
+                     // Range de segundos visíveis na tela
+                     val startSecond = ((currentScroll - centerOffset) / pxPerSecond).toInt().coerceAtLeast(0)
+                     val endSecond = ((currentScroll - centerOffset + timelineWidth) / pxPerSecond).toInt()
 
-                                         // Calculate scale to cover the destination area (CenterCrop)
-                                         if (bmpWidth * viewHeight > viewWidth * bmpHeight) {
-                                             scale = viewHeight / bmpHeight
-                                             dx = (viewWidth - bmpWidth * scale) * 0.5f
-                                         } else {
-                                             scale = viewWidth / bmpWidth
-                                             dy = (viewHeight - bmpHeight * scale) * 0.5f
-                                         }
-                                         
-                                         canvas.save()
-                                         canvas.translate(x, thumbnailTop)
-                                         canvas.clipRect(0f, 0f, viewWidth, viewHeight)
-                                         canvas.translate(dx, dy)
-                                         canvas.scale(scale, scale)
-                                         canvas.nativeCanvas.drawBitmap(bmp, 0f, 0f, null)
-                                         canvas.restore()
-                                     }
-                                 }
+                     // Paint para spinner (pré-alocado)
+                     val arcPaint = android.graphics.Paint().apply {
+                         color = android.graphics.Color.parseColor("#64B5F6")
+                         style = android.graphics.Paint.Style.STROKE
+                         strokeWidth = 3f
+                         isAntiAlias = true
+                         strokeCap = android.graphics.Paint.Cap.ROUND
+                     }
+                     val arcRect = android.graphics.RectF()
+
+                     for (sec in startSecond..endSecond) {
+                         val timeMs = sec * 1000L
+                         if (timeMs >= videoDurationMs) break
+
+                         val segIdx = sec / SEGMENT_SECONDS
+                         val frameInStrip = sec % SEGMENT_SECONDS
+                         val x = centerOffset + (sec * pxPerSecond) - currentScroll
+
+                         val strip = strips[segIdx]
+                         if (strip != null && !strip.isRecycled) {
+                             // Recortar o frame correto da strip (1:1 pixel mapping)
+                             srcRect.set(
+                                 (frameInStrip * thumbW).toInt(), 0,
+                                 ((frameInStrip + 1) * thumbW).toInt(), thumbH.toInt()
+                             )
+                             dstRect.set(
+                                 x.toInt(), thumbnailTop.toInt(),
+                                 (x + pxPerSecond).toInt(), (thumbnailTop + thumbnailHeightPx).toInt()
+                             )
+                             drawIntoCanvas { canvas ->
+                                 canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
+                             }
+                         } else {
+                             // Strip não carregada - fundo escuro + spinner animado
+                             drawRect(
+                                 color = Color(0xFF1A1A1A),
+                                 topLeft = Offset(x, thumbnailTop),
+                                 size = Size(pxPerSecond, thumbnailHeightPx)
+                             )
+                             drawIntoCanvas { canvas ->
+                                 val cx = x + pxPerSecond / 2
+                                 val cy = thumbnailTop + thumbnailHeightPx / 2
+                                 val r = 8.dp.toPx()
+                                 arcRect.set(cx - r, cy - r, cx + r, cy + r)
+                                 canvas.nativeCanvas.drawArc(arcRect, spinnerAngle, 270f, false, arcPaint)
                              }
                          }
                      }
                      drawContext.canvas.restore()
 
                      // DRAW AUDIO WAVEFORMS (sincronizado com thumbnails)
-                     if (audioWaveformsAmplitudes.isNotEmpty()) {
+                     // ⚠️ TEMPORARIAMENTE DESATIVADO para testes de thumbnail
+                     if (showWaveform && audioWaveformsAmplitudes.isNotEmpty()) {
                          val waveformWidth = (videoDurationMs / 1000f) * pxPerSecond
                          val waveformStartX = centerOffset - currentScroll
                          val waveformHeightPx = waveformHeightDp.toPx()
@@ -527,8 +633,8 @@ fun TimelineEditor(
 
                          // Clip para não desenhar fora da área
                          drawContext.canvas.save()
-                         val clipEnd = centerOffset + (videoDurationMs / 1000f * pxPerSecond) - currentScroll
-                         drawContext.canvas.clipRect(0f, waveformTopY, clipEnd, waveformTopY + waveformHeightPx)
+                         val waveformClipEnd = centerOffset + (videoDurationMs / 1000f * pxPerSecond) - currentScroll
+                         drawContext.canvas.clipRect(0f, waveformTopY, waveformClipEnd, waveformTopY + waveformHeightPx)
 
                          audioWaveformsAmplitudes.forEachIndexed { index, amplitude ->
                              val x = waveformStartX + (index * barSlotWidth)
