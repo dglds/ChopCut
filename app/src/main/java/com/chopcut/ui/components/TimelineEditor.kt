@@ -460,7 +460,7 @@ fun TimelineEditor(
             val timelineWidth = constraints.maxWidth.toFloat()
             val centerOffset = timelineWidth / 2f
             val durationPx = (videoDurationMs / 1000f) * pxPerSecond
-            val rulerHeight = with(density) { 24.dp.toPx() }
+            val rulerHeight = with(density) { 30.dp.toPx() }
             val waveformHeightDp = 36.dp
             val thumbnailsHeightDp = 40.dp
             
@@ -565,25 +565,32 @@ fun TimelineEditor(
                     }
                 }
 
-                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    val textPaint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.parseColor("#BDBDBD")
-                        textSize = 10.dp.toPx()
+                // Paint para timestamps da régua (pré-alocado, fora do draw loop)
+                val timestampPaint = remember {
+                    android.graphics.Paint().apply {
+                        color = android.graphics.Color.parseColor("#808080")
+                        textSize = with(density) { 8.dp.toPx() }
                         textAlign = android.graphics.Paint.Align.CENTER
-                        typeface = android.graphics.Typeface.DEFAULT
+                        typeface = android.graphics.Typeface.MONOSPACE
                         isAntiAlias = true
+                        letterSpacing = 0.03f
                     }
+                }
 
-                    val tickSpacing = pxPerSecond / 10f
-                    val startTickIndex = (scrollOffsetPx / tickSpacing).toInt() - (centerOffset / tickSpacing).toInt() - 2
-                    val endTickIndex = startTickIndex + (timelineWidth / tickSpacing).toInt() + 4
+                 Canvas(modifier = Modifier.fillMaxSize()) {
+                    // Régua: ticks a cada 1s, timestamps a cada 5s
+                    val tickSpacingSeconds = 1f
+                    val tickSpacingPx = pxPerSecond * tickSpacingSeconds
+                    val startTickIndex = ((currentScroll - centerOffset) / tickSpacingPx).toInt() - 1
+                    val endTickIndex = ((currentScroll - centerOffset + timelineWidth) / tickSpacingPx).toInt() + 2
 
 
                     val rulerTopY = 0f
+                    val rulerThumbGap = 8.dp.toPx()
 
                     // DRAW THUMBNAIL STRIPS
                      val thumbnailHeightPx = thumbnailsHeightDp.toPx()
-                     val thumbnailTop = rulerHeight
+                     val thumbnailTop = rulerHeight + rulerThumbGap
                      val thumbW = stripManager.thumbWidth.toFloat()
                      val thumbH = stripManager.thumbHeight.toFloat()
 
@@ -649,7 +656,7 @@ fun TimelineEditor(
                          val waveformWidth = (videoDurationMs / 1000f) * pxPerSecond
                          val waveformStartX = centerOffset - currentScroll
                          val waveformHeightPx = waveformHeightDp.toPx()
-                         val waveformTopY = rulerHeight + thumbnailHeightPx // Logo abaixo das thumbnails
+                         val waveformTopY = thumbnailTop + thumbnailHeightPx // Logo abaixo das thumbnails
 
                          android.util.Log.d("TimelineEditor", "Drawing AudioWaveforms: ${audioWaveformsAmplitudes.size} bars, startX=$waveformStartX, width=$waveformWidth")
 
@@ -684,38 +691,57 @@ fun TimelineEditor(
 
                      // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.
 
+                    // Layout da régua: texto no topo, ticks embaixo apontando para as thumbs
+                    val tickZoneTop = 14.dp.toPx()
+                    val tickZoneHeight = rulerHeight - tickZoneTop
+
                     for (i in startTickIndex..endTickIndex) {
-                        val tickTimeSec = i * 0.1f
-                        if (tickTimeSec < 0 || tickTimeSec > videoDurationMs / 1000f) continue
+                        val tickTimeSec = i * tickSpacingSeconds
+                        if (tickTimeSec < 0f || tickTimeSec > videoDurationMs / 1000f) continue
 
                         val x = centerOffset + (tickTimeSec * pxPerSecond) - currentScroll
-                        
-                        val isSecond = i % 10 == 0
-                        val isHalfSecond = i % 5 == 0 && !isSecond
-                        
-                        val tickHeight = when {
-                            isSecond -> (size.height - rulerTopY) * 0.5f
-                            isHalfSecond -> (size.height - rulerTopY) * 0.35f
-                            else -> (size.height - rulerTopY) * 0.2f
-                        }
-                        
-                        
-                        // Ticks White
-                        val tickColor = Color.White
-                        val stroke = if (isSecond) 2.dp.toPx() else 1.dp.toPx()
-                        
-                        // Ticks drawn in the top ruler area
-                        val tickStartY = 0f
-                        val tickEndY = tickHeight.coerceAtMost(rulerHeight)
+                        if (x < -20f || x > size.width + 20f) continue
 
-                        drawLine(
-                            tickColor,
-                            Offset(x, tickStartY),
-                            Offset(x, tickEndY),
-                            stroke
+                        // Hierarquia de 3 níveis: 10s (super), 5s (major), 1s (minor)
+                        val isTenSecond = (i % 10 == 0)
+                        val isFiveSecond = (i % 5 == 0) && !isTenSecond
+
+                        val dotRadius = when {
+                            isTenSecond -> 3.dp.toPx()
+                            isFiveSecond -> 2.dp.toPx()
+                            else -> 1.2.dp.toPx()
+                        }
+
+                        val dotAlpha = when {
+                            isTenSecond -> 0.9f
+                            isFiveSecond -> 0.50f
+                            else -> 0.22f
+                        }
+
+                        val dotY = tickZoneTop + tickZoneHeight * 0.45f
+
+                        // Bolinhas com hierarquia de tamanho
+                        drawCircle(
+                            color = Color.White.copy(alpha = dotAlpha),
+                            radius = dotRadius,
+                            center = Offset(x, dotY)
                         )
-                        
-                        // TEXT REMOVED per user request
+
+                        // Timestamp acima dos ticks (zona de texto no topo da régua)
+                        if (isFiveSecond || isTenSecond) {
+                            val totalSec = tickTimeSec.toInt()
+                            val min = totalSec / 60
+                            val sec = totalSec % 60
+                            val label = String.format("%d:%02d", min, sec)
+                            drawIntoCanvas { canvas ->
+                                canvas.nativeCanvas.drawText(
+                                    label,
+                                    x,
+                                    tickZoneTop - 3.dp.toPx(),
+                                    timestampPaint
+                                )
+                            }
+                        }
                     }
 
                     trimPosition.completeRanges.forEach { (start, end) ->
