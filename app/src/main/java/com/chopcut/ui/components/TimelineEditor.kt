@@ -523,15 +523,18 @@ fun TimelineEditor(
           BoxWithConstraints(
               modifier = Modifier
                   .fillMaxWidth()
-                  .height(96.dp) // Adjusted to remove vertical space
+                  .height(150.dp)
                   .background(Color(0xFF2A2A2A)) // Fundo Cinza
+                  .border(1.dp, Color(0xFF404040))
           ) {
               val timelineWidth = constraints.maxWidth.toFloat()
               val centerOffset = timelineWidth / 2f
               val durationPx = (videoDurationMs / 1000f) * pxPerSecond
+
+              // Alturas calculadas dinamicamente
               val rulerHeight = with(density) { 44.dp.toPx() }
               val waveformHeightDp = 36.dp
-              val thumbnailsHeightDp = 42.dp
+              val thumbnailsHeightDp = 48.dp
             
             val scrollableState = androidx.compose.foundation.gestures.rememberScrollableState { delta ->
                 // PAUSE ON MANIPULATION
@@ -685,37 +688,40 @@ fun TimelineEditor(
                          // Cull check: Pular se fora da tela (redundante com start/endSecond mas bom pra garantir)
                          if (x > size.width || x + pxPerSecond < 0) continue
 
-                         val strip = strips[segIdx]
-                         if (strip != null && !strip.isRecycled) {
-                             // Recortar o frame correto da strip (1:1 pixel mapping)
-                             srcRect.set(
-                                 (frameInStrip * thumbW).toInt(), 0,
-                                 ((frameInStrip + 1) * thumbW).toInt(), thumbH.toInt()
-                             )
-                             dstRect.set(
-                                 x.toInt(), thumbnailTop.toInt(),
-                                 (x + pxPerSecond).toInt(), (thumbnailTop + thumbnailHeightPx).toInt()
-                             )
-                             drawIntoCanvas { canvas ->
-                                 canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
-                             }
-                         } else {
-                             // Strip não carregada - fundo escuro + spinner animado
-                             drawIntoCanvas { canvas ->
-                                 // Draw BG
-                                 canvas.nativeCanvas.drawRect(
-                                     x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
-                                     bgPaint
-                                 )
-                                 
-                                 // Draw Spinner
-                                 val cx = x + pxPerSecond / 2
-                                 val cy = thumbnailTop + thumbnailHeightPx / 2
-                                 val r = 8.dp.toPx()
-                                 arcRect.set(cx - r, cy - r, cx + r, cy + r)
-                                 canvas.nativeCanvas.drawArc(arcRect, spinnerAngle, 270f, false, arcPaint)
-                             }
-                         }
+                          val strip = strips[segIdx]
+                          if (strip != null && !strip.isRecycled) {
+                              // Recortar o frame correto da strip (mantendo aspect ratio 1:1)
+                              srcRect.set(
+                                  (frameInStrip * thumbW).toInt(), 0,
+                                  ((frameInStrip + 1) * thumbW).toInt(), thumbH.toInt()
+                              )
+                              // Manter largura original do thumb para evitar distorção
+                              val thumbDisplayWidth = thumbW
+                              val thumbDisplayHeight = thumbW * (thumbH / thumbW) // Mantém aspect ratio
+                              dstRect.set(
+                                  x.toInt(), thumbnailTop.toInt(),
+                                  (x + thumbDisplayWidth).toInt(), (thumbnailTop + thumbH.toInt()).toInt()
+                              )
+                              drawIntoCanvas { canvas ->
+                                  canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
+                              }
+                          } else {
+                              // Strip não carregada - fundo escuro + spinner animado
+                              drawIntoCanvas { canvas ->
+                                  // Draw BG
+                                  canvas.nativeCanvas.drawRect(
+                                      x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
+                                      bgPaint
+                                  )
+
+                                  // Draw Spinner
+                                  val cx = x + pxPerSecond / 2
+                                  val cy = thumbnailTop + thumbnailHeightPx / 2
+                                  val r = 8.dp.toPx()
+                                  arcRect.set(cx - r, cy - r, cx + r, cy + r)
+                                  canvas.nativeCanvas.drawArc(arcRect, spinnerAngle, 270f, false, arcPaint)
+                              }
+                          }
                      }
                      drawContext.canvas.restore()
 
@@ -758,7 +764,7 @@ fun TimelineEditor(
                          drawContext.canvas.restore()
                      }
 
-                       // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.
+                        // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.
 
                    // Layout da régua: texto no topo, ticks embaixo apontando para as thumbs
                         val tickZoneTop = 20.dp.toPx()
@@ -821,37 +827,38 @@ fun TimelineEditor(
                           }
                       }
 
-                     trimPosition.completeRanges.forEach { (start, end) ->
-                         val startX = centerOffset + (start / 1000f) * pxPerSecond - currentScroll
-                         val endX = centerOffset + (end / 1000f) * pxPerSecond - currentScroll
-                         if (endX >= 0 && startX <= size.width) {
-                             val rangeY = 14.dp.toPx()
-                             val isActive = currentTimeMs >= start && currentTimeMs <= end
+                      // DRAW RANGES (at the top border, above everything)
+                      trimPosition.completeRanges.forEach { (start, end) ->
+                          val startX = centerOffset + (start / 1000f) * pxPerSecond - currentScroll
+                          val endX = centerOffset + (end / 1000f) * pxPerSecond - currentScroll
+                          if (endX >= 0 && startX <= size.width) {
+                              val rangeY = 4.dp.toPx()
+                              val isActive = currentTimeMs >= start && currentTimeMs <= end
 
-                             val rangeColor = if (isActive) Color.Red else Color(0xFFE91E63)
+                              val rangeColor = if (isActive) Color.Red else Color(0xFFE91E63)
 
-                             drawLine(rangeColor, Offset(startX, rangeY), Offset(endX, rangeY), 8.dp.toPx())
-                         }
-                     }
+                              drawLine(rangeColor, Offset(startX, rangeY), Offset(endX, rangeY), 8.dp.toPx())
+                          }
+                      }
 
-                     if (trimPosition.isDraftMode) {
-                         trimPosition.draftPosition?.let { startPos ->
-                             val startX = centerOffset + (startPos / 1000f) * pxPerSecond - currentScroll
-                             val playheadX = centerOffset
-                             val minX = minOf(startX, playheadX)
-                             val maxX = maxOf(startX, playheadX)
+                      if (trimPosition.isDraftMode) {
+                          trimPosition.draftPosition?.let { startPos ->
+                              val startX = centerOffset + (startPos / 1000f) * pxPerSecond - currentScroll
+                              val playheadX = centerOffset
+                              val minX = minOf(startX, playheadX)
+                              val maxX = maxOf(startX, playheadX)
 
-                             val rangeY = 14.dp.toPx()
-                             drawLine(Color(0xFFFF9800), Offset(minX, rangeY), Offset(maxX, rangeY), 8.dp.toPx())
-                         }
-                     }
+                              val rangeY = 4.dp.toPx()
+                              drawLine(Color(0xFFFF9800), Offset(minX, rangeY), Offset(maxX, rangeY), 8.dp.toPx())
+                          }
+                      }
 
-                    drawLine(
-                        Color(0xFF64B5F6),
-                        Offset(centerOffset, 0f),
-                        Offset(centerOffset, size.height),
-                        strokeWidth = 2.dp.toPx()
-                    )
+                     drawLine(
+                         Color(0xFF64B5F6),
+                         Offset(centerOffset, 0f),
+                         Offset(centerOffset, size.height),
+                         strokeWidth = 2.dp.toPx()
+                     )
 
                     val gradientWidth = 60.dp.toPx()
                     // Left Gradient (Matching BG)
