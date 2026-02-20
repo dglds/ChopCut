@@ -330,9 +330,9 @@ fun TimelineEditor(
             Text(
                 text = fileName,
                 color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(vertical = 8.dp)
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(vertical = 12.dp)
             )
 
             // 1. VIDEO PREVIEW
@@ -456,8 +456,22 @@ fun TimelineEditor(
                     .fillMaxHeight()
                     .fillMaxWidth(progress)
                     .background(Color(0xFF64B5F6))
-            )
-        }
+             )
+         }
+
+        // 2.5. CURRENT TIME DISPLAY (Outside timeline container, below video)
+        Text(
+            text = String.format("%02d:%02d.%03d",
+                (currentTimeMs / 60000),
+                (currentTimeMs % 60000) / 1000,
+                (currentTimeMs % 1000)),
+            color = if (isInsideRange) Color.Red else Color.White,
+            fontSize = 24.sp,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.sp,
+            modifier = Modifier.padding(vertical = 12.dp)
+        )
 
         // 3. TIMELINE RULER (Moved up, Gray BG, Pause on Scroll)
         Spacer(modifier = Modifier.height(10.dp))
@@ -705,22 +719,7 @@ fun TimelineEditor(
                      val tickZoneTop = 30.dp.toPx()
                      val tickZoneHeight = rulerHeight - tickZoneTop
 
-                     // Draw current time label above playhead
-                     val timeLabelY = tickZoneTop - 8.dp.toPx()
-                     val timeMin = (currentTimeMs / 60000)
-                     val timeSec = (currentTimeMs % 60000) / 1000
-                     val timeMs = (currentTimeMs % 1000)
-                     val timeLabel = String.format("%02d:%02d.%03d", timeMin, timeSec, timeMs)
-                     drawIntoCanvas { canvas ->
-                         canvas.nativeCanvas.drawText(
-                             timeLabel,
-                             centerOffset,
-                             timeLabelY,
-                             timestampPaint
-                         )
-                     }
-
-                    for (i in startTickIndex..endTickIndex) {
+                     for (i in startTickIndex..endTickIndex) {
                         val tickTimeSec = i * tickSpacingSeconds
                         if (tickTimeSec < 0f || tickTimeSec > videoDurationMs / 1000f) continue
 
@@ -823,30 +822,8 @@ fun TimelineEditor(
                         size = Size(gradientWidth, size.height)
                     )
                 }
-            }
-        }
-
-        // 4. TIME DISPLAY
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-        ) {
-            Text(
-                text = String.format("%02d:%02d.%03d",
-                    (currentTimeMs / 60000),
-                    (currentTimeMs % 60000) / 1000,
-                    (currentTimeMs % 1000)),
-                color = if (isInsideRange) Color.Red else Color.White,
-                fontSize = 20.sp,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                fontWeight = FontWeight.Normal,
-                letterSpacing = 0.sp
-            )
-        }
-
-
+             }
+         }
 
         Spacer(modifier = Modifier.height(10.dp))
 
