@@ -35,6 +35,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
 import com.chopcut.ui.components.atoms.formatDuration
+import com.chopcut.ui.theme.ChopCutMonoFont
 import com.chopcut.ui.theme.ChopCutSpacing
 import com.chopcut.ui.theme.Playhead
 import com.chopcut.ui.theme.SelectionOverlay
@@ -88,11 +89,13 @@ fun VideoTimeline(
         ) {
             Text(
                 text = "0:00",
-                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                fontFamily = ChopCutMonoFont
             )
             Text(
                 text = formatDuration(durationMs),
-                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                fontFamily = ChopCutMonoFont
             )
         }
 
@@ -187,16 +190,19 @@ fun VideoTimeline(
         ) {
             Text(
                 text = "Início: ${formatDuration(trimStart)}",
-                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                fontFamily = ChopCutMonoFont
             )
             Text(
                 text = "Duração: ${formatDuration(trimEnd - trimStart)}",
                 style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                fontFamily = ChopCutMonoFont,
                 color = Playhead
             )
             Text(
                 text = "Fim: ${formatDuration(trimEnd)}",
-                style = androidx.compose.material3.MaterialTheme.typography.labelSmall
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                fontFamily = ChopCutMonoFont
             )
         }
     }
