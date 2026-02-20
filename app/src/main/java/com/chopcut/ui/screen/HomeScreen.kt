@@ -20,6 +20,9 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Delete
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +31,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import com.chopcut.ui.components.gallery.BottomSheetGallery
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -64,21 +71,36 @@ fun HomeScreen(
     val context = LocalContext.current
 
     // Video picker launcher
-    val videoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.let {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    it,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to take persistable uri permission")
-            }
-            viewModel.selectVideo(it)
+    // State for permission handling and gallery sheet
+    var showGallery by remember { mutableStateOf(false) }
+    var hasPermission by remember { mutableStateOf(false) }
+
+    // Permission Launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        hasPermission = isGranted
+        if (isGranted) {
+            showGallery = true
+        } else {
+            // Show rationale or error (simplified for now)
+            Timber.w("Permission denied for gallery access")
         }
     }
+
+    // Check initial permission status (simplified)
+    /*
+    LaunchedEffect(Unit) {
+        val permission = if (android.os.Build.VERSION.SDK_INT >= 33) {
+            android.Manifest.permission.READ_MEDIA_VIDEO
+        } else {
+            android.Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        val result = androidx.core.content.ContextCompat.checkSelfPermission(context, permission)
+        hasPermission = result == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+    */
+
 
     Scaffold(
         topBar = {
@@ -151,8 +173,15 @@ fun HomeScreen(
                         Spacer(Modifier.height(ChopCutSpacing.md))
 
                         ChopCutPrimaryButton(
-                            text = "Selecionar Vídeo",
-                            onClick = { videoPickerLauncher.launch(arrayOf("video/*")) },
+                            text = "Selecionar Vídeo (Galeria Pro)",
+                            onClick = {
+                                val permission = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                    android.Manifest.permission.READ_MEDIA_VIDEO
+                                } else {
+                                    android.Manifest.permission.READ_EXTERNAL_STORAGE
+                                }
+                                permissionLauncher.launch(permission)
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             icon = Icons.Default.VideoLibrary
                         )
@@ -221,6 +250,23 @@ fun HomeScreen(
                 }
             }
 
+            // Maintenance / Debug
+            item {
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                val snackbarHostState = androidx.compose.material3.SnackbarHostState()
+                
+                ChopCutSecondaryButton(
+                    text = "Limpar Cache de Thumbnails",
+                    onClick = {
+                        scope.launch(Dispatchers.IO) {
+                           com.chopcut.data.thumbnail.ThumbnailStripManager.clearCache(context)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = Icons.Default.Delete
+                )
+            }
+
             // Status Messages
             when (uiState) {
                 is HomeUiState.Error -> {
@@ -235,9 +281,19 @@ fun HomeScreen(
                 }
                 else -> {}
             }
+            }
         }
+
+        if (showGallery) {
+             BottomSheetGallery(
+                 onDismiss = { showGallery = false },
+                 onVideoSelected = { uri ->
+                     showGallery = false
+                     viewModel.selectVideo(uri)
+                 }
+             )
+         }
     }
-}
 
 @Composable
 private fun FeatureItem(icon: String, title: String, description: String) {

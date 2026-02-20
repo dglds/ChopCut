@@ -7,9 +7,17 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.util.Size
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
+import java.io.FileOutputStream
+import java.security.MessageDigest
+import kotlin.coroutines.coroutineContext
 
 /**
  * Gerenciador de strips segmentadas de thumbnails para o timeline.
@@ -35,6 +43,26 @@ class ThumbnailStripManager(
     companion object {
         /** Número de thumbnails (segundos) por strip */
         const val SEGMENT_SECONDS = 10
+        
+        /** Limite de concorrência global para não saturar hardware decoders (3-4 é seguro para maioria dos devices) */
+        private val extractSemaphore = Semaphore(3)
+
+        /**
+         * Limpa todo o cache de thumbnails do disco.
+         * Deve ser chamado em background (IO).
+         */
+        fun clearCache(context: Context) {
+            try {
+                val cacheDir = File(context.cacheDir, "thumbs_v1")
+                if (cacheDir.exists()) {
+                    cacheDir.deleteRecursively()
+                    cacheDir.mkdirs() // Recriar pasta vazia
+                    Timber.d("ThumbnailStrip: Cache cleared successfully")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "ThumbnailStrip: Failed to clear cache")
+            }
+        }
     }
 
     /** Paint com interpolação bilinear para CenterCrop de qualidade */
@@ -57,80 +85,93 @@ class ThumbnailStripManager(
         segmentIndex: Int,
         durationMs: Long
     ): Bitmap? = withContext(Dispatchers.IO) {
-        val startSec = segmentIndex * SEGMENT_SECONDS
-        val totalSeconds = ((durationMs + 999) / 1000).toInt()
-        if (startSec >= totalSeconds) return@withContext null
+        // Fail-fast se o job já foi cancelado
+        coroutineContext.ensureActive()
 
-        val framesInSegment = minOf(SEGMENT_SECONDS, totalSeconds - startSec)
+        extractSemaphore.withPermit {
+            // Verificar novamente após adquirir permissão (pode ter demorado na fila)
+            coroutineContext.ensureActive()
 
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(context, uri)
+            val startSec = segmentIndex * SEGMENT_SECONDS
+            val totalSeconds = ((durationMs + 999) / 1000).toInt()
+            if (startSec >= totalSeconds) return@withPermit null
 
-            // Strip RGB_565: metade da memória de ARGB_8888
-            val stripWidth = thumbWidth * framesInSegment
-            val strip = Bitmap.createBitmap(stripWidth, thumbHeight, Bitmap.Config.RGB_565)
-            val canvas = Canvas(strip)
+            val framesInSegment = minOf(SEGMENT_SECONDS, totalSeconds - startSec)
 
-            // Extrair 0.5x (metade) para performance extrema (downsampling agressivo)
-            val extractWidth = (thumbWidth * 0.5f).toInt()
-            val extractHeight = (thumbHeight * 0.5f).toInt()
-            val dstAspect = thumbWidth.toFloat() / thumbHeight
-
-            for (frameIdx in 0 until framesInSegment) {
-                val sec = startSec + frameIdx
-                val positionUs = sec * 1_000_000L
-
-                try {
-                    val source = retriever.getScaledFrameAtTime(
-                        positionUs,
-                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        extractWidth,
-                        extractHeight
-                    )
-
-                    if (source != null) {
-                        // CenterCrop: recortar parte central mantendo aspecto
-                        val srcW = source.width
-                        val srcH = source.height
-                        val srcAspect = srcW.toFloat() / srcH
-
-                        val cropW: Int
-                        val cropH: Int
-                        if (srcAspect > dstAspect) {
-                            cropH = srcH
-                            cropW = (srcH * dstAspect).toInt()
-                        } else {
-                            cropW = srcW
-                            cropH = (srcW / dstAspect).toInt()
-                        }
-
-                        val cropX = (srcW - cropW) / 2
-                        val cropY = (srcH - cropH) / 2
-
-                        val srcRect = Rect(cropX, cropY, cropX + cropW, cropY + cropH)
-                        val dstX = frameIdx * thumbWidth
-                        val dstRect = Rect(dstX, 0, dstX + thumbWidth, thumbHeight)
-
-                        // cropPaint com bilinear filtering = qualidade suave
-                        canvas.drawBitmap(source, srcRect, dstRect, cropPaint)
-                        source.recycle()
-                    }
-                } catch (e: Exception) {
-                    Timber.w(e, "ThumbnailStrip: Failed to extract frame at sec=$sec")
-                }
-            }
-
-            Timber.d("ThumbnailStrip: Segment $segmentIndex ($framesInSegment frames, ${stripWidth}x$thumbHeight, RGB_565)")
-            strip
-        } catch (e: Exception) {
-            Timber.e(e, "ThumbnailStrip: Fatal error extracting segment $segmentIndex")
-            null
-        } finally {
+            val retriever = MediaMetadataRetriever()
             try {
-                retriever.release()
+                retriever.setDataSource(context, uri)
+                
+                coroutineContext.ensureActive()
+
+                // Strip RGB_565: metade da memória de ARGB_8888
+                val stripWidth = thumbWidth * framesInSegment
+                val strip = Bitmap.createBitmap(stripWidth, thumbHeight, Bitmap.Config.RGB_565)
+                val canvas = Canvas(strip)
+
+                // Extrair 1.0x (nativo) para melhor qualidade (equilíbrio)
+                val extractWidth = thumbWidth
+                val extractHeight = thumbHeight
+                val dstAspect = thumbWidth.toFloat() / thumbHeight
+
+                for (frameIdx in 0 until framesInSegment) {
+                    coroutineContext.ensureActive() // Responsividade ao cancelamento
+
+                    val sec = startSec + frameIdx
+                    val positionUs = sec * 1_000_000L
+
+                    try {
+                        val source = retriever.getScaledFrameAtTime(
+                            positionUs,
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                            extractWidth,
+                            extractHeight
+                        )
+
+                        if (source != null) {
+                            // CenterCrop
+                            val srcW = source.width
+                            val srcH = source.height
+                            val srcAspect = srcW.toFloat() / srcH
+
+                            val cropW: Int
+                            val cropH: Int
+                            if (srcAspect > dstAspect) {
+                                cropH = srcH
+                                cropW = (srcH * dstAspect).toInt()
+                            } else {
+                                cropW = srcW
+                                cropH = (srcW / dstAspect).toInt()
+                            }
+
+                            val cropX = (srcW - cropW) / 2
+                            val cropY = (srcH - cropH) / 2
+
+                            val srcRect = Rect(cropX, cropY, cropX + cropW, cropY + cropH)
+                            val dstX = frameIdx * thumbWidth
+                            val dstRect = Rect(dstX, 0, dstX + thumbWidth, thumbHeight)
+
+                            canvas.drawBitmap(source, srcRect, dstRect, cropPaint)
+                            source.recycle()
+                        }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        Timber.w(e, "ThumbnailStrip: Failed to extract frame at sec=$sec")
+                    }
+                }
+
+                Timber.d("ThumbnailStrip: Segment $segmentIndex ($framesInSegment frames, ${stripWidth}x$thumbHeight, RGB_565)")
+                strip
             } catch (e: Exception) {
-                Timber.e(e, "ThumbnailStrip: Error releasing retriever")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Timber.e(e, "ThumbnailStrip: Fatal error extracting segment $segmentIndex")
+                null
+            } finally {
+                try {
+                    retriever.release()
+                } catch (e: Exception) {
+                    Timber.e(e, "ThumbnailStrip: Error releasing retriever")
+                }
             }
         }
     }

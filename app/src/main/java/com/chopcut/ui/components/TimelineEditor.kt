@@ -121,8 +121,9 @@ fun TimelineEditor(
         val loadingStrips = remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-        // Máximo de strips em memória (15 × ~432KB RGB_565 ≈ 6.5MB)
-        val maxStrips = 15
+        // Máximo de strips em memória (100 × ~432KB RGB_565 ≈ 42MB)
+        // Suficiente para ~16 minutos de timeline sem eviction
+        val maxStrips = 100
 
         // STRIP LOADING: Carregar segmentos visíveis + adjacentes por prioridade
         // IMPORTANTE: usa scope.launch (não launch) para que as coroutines
@@ -529,9 +530,42 @@ fun TimelineEditor(
                          style = waveformStyle
                      )
                 }
-                } // Fim do if (showWaveform) - Waveform desativada temporariamente
+                } // Fim do if (showWaveform)
 
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                // PAINT ALLOCATIONS MOVED OUTSIDE LOOP (Optimization)
+                // Pré-alocar objetos fora do draw loop (zero allocations por frame durante scroll)
+                val srcRect = remember { android.graphics.Rect() } // Remember para sobreviver a recomposições
+                val dstRect = remember { android.graphics.Rect() }
+
+                // Paint com bilinear filtering para render suave da strip→tela
+                val renderPaint = remember {
+                   android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+                       isAntiAlias = true
+                       isDither = true
+                   }
+                }
+
+                // Paint para spinner (pré-alocado)
+                val arcPaint = remember {
+                    android.graphics.Paint().apply {
+                        color = android.graphics.Color.parseColor("#64B5F6")
+                        style = android.graphics.Paint.Style.STROKE
+                        strokeWidth = 3f * 2.625f // 3dp approx in px, hardcoded for now or pass density
+                        isAntiAlias = true
+                        strokeCap = android.graphics.Paint.Cap.ROUND
+                    }
+                }
+                val arcRect = remember { android.graphics.RectF() }
+
+                // Paint para BG placeholder
+                val bgPaint = remember {
+                    android.graphics.Paint().apply {
+                       color = android.graphics.Color.parseColor("#1A1A1A")
+                       style = android.graphics.Paint.Style.FILL
+                    }
+                }
+
+                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val textPaint = android.graphics.Paint().apply {
                         color = android.graphics.Color.parseColor("#BDBDBD")
                         textSize = 10.dp.toPx()
@@ -543,7 +577,7 @@ fun TimelineEditor(
                     val tickSpacing = pxPerSecond / 10f
                     val startTickIndex = (scrollOffsetPx / tickSpacing).toInt() - (centerOffset / tickSpacing).toInt() - 2
                     val endTickIndex = startTickIndex + (timelineWidth / tickSpacing).toInt() + 4
-                    
+
 
                     val rulerTopY = 0f
 
@@ -553,11 +587,6 @@ fun TimelineEditor(
                      val thumbW = stripManager.thumbWidth.toFloat()
                      val thumbH = stripManager.thumbHeight.toFloat()
 
-                     // Pré-alocar objetos fora do draw loop (zero allocations por frame)
-                     val srcRect = android.graphics.Rect()
-                     val dstRect = android.graphics.Rect()
-                     // Paint com bilinear filtering para render suave da strip→tela
-                     val renderPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
 
                      // Clip para não ultrapassar a duração do vídeo
                      drawContext.canvas.save()
@@ -565,18 +594,9 @@ fun TimelineEditor(
                      drawContext.canvas.clipRect(0f, thumbnailTop, clipEnd, thumbnailTop + thumbnailHeightPx)
 
                      // Range de segundos visíveis na tela
+                     // Otimização: calcular apenas os visíveis + buffer pequeno (segurança visual)
                      val startSecond = ((currentScroll - centerOffset) / pxPerSecond).toInt().coerceAtLeast(0)
-                     val endSecond = ((currentScroll - centerOffset + timelineWidth) / pxPerSecond).toInt()
-
-                     // Paint para spinner (pré-alocado)
-                     val arcPaint = android.graphics.Paint().apply {
-                         color = android.graphics.Color.parseColor("#64B5F6")
-                         style = android.graphics.Paint.Style.STROKE
-                         strokeWidth = 3f
-                         isAntiAlias = true
-                         strokeCap = android.graphics.Paint.Cap.ROUND
-                     }
-                     val arcRect = android.graphics.RectF()
+                     val endSecond = ((currentScroll - centerOffset + timelineWidth) / pxPerSecond).toInt() + 1 // +1 buffer
 
                      for (sec in startSecond..endSecond) {
                          val timeMs = sec * 1000L
@@ -585,6 +605,9 @@ fun TimelineEditor(
                          val segIdx = sec / SEGMENT_SECONDS
                          val frameInStrip = sec % SEGMENT_SECONDS
                          val x = centerOffset + (sec * pxPerSecond) - currentScroll
+
+                         // Cull check: Pular se fora da tela (redundante com start/endSecond mas bom pra garantir)
+                         if (x > size.width || x + pxPerSecond < 0) continue
 
                          val strip = strips[segIdx]
                          if (strip != null && !strip.isRecycled) {
@@ -602,12 +625,14 @@ fun TimelineEditor(
                              }
                          } else {
                              // Strip não carregada - fundo escuro + spinner animado
-                             drawRect(
-                                 color = Color(0xFF1A1A1A),
-                                 topLeft = Offset(x, thumbnailTop),
-                                 size = Size(pxPerSecond, thumbnailHeightPx)
-                             )
                              drawIntoCanvas { canvas ->
+                                 // Draw BG
+                                 canvas.nativeCanvas.drawRect(
+                                     x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
+                                     bgPaint
+                                 )
+                                 
+                                 // Draw Spinner
                                  val cx = x + pxPerSecond / 2
                                  val cy = thumbnailTop + thumbnailHeightPx / 2
                                  val r = 8.dp.toPx()

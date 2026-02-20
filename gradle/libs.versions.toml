@@ -53,6 +53,7 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+coil-compose = { module = "io.coil-kt:coil-compose", version = "2.5.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

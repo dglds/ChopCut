@@ -98,7 +98,8 @@ fun ChopCutSecondaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    icon: ImageVector? = null
 ) {
     Button(
         onClick = onClick,
@@ -118,6 +119,14 @@ fun ChopCutSecondaryButton(
             )
         )
     ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+        }
         Text(
             text = text,
             style = ChopCutTypography.labelLarge
