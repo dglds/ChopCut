@@ -779,23 +779,20 @@ fun TimelineEditor(
                           val x = centerOffset + (tickTimeSec * pxPerSecond) - currentScroll
                           if (x < -20f || x > size.width + 20f) continue
 
-                          // Hierarquia de 3 níveis: 5s (G), 1s (M), 0.1s (P)
+                          // Hierarquia de 2 níveis: 1s (M), 0.1s (P)
                           val totalSec = (tickTimeSec * 10).toInt() // Multiplicar por 10 para converter 0.1s para int
-                          val isFiveSecond = (totalSec % 50 == 0)
-                          val isSecond = (totalSec % 10 == 0) && !isFiveSecond
-                          val isDecim = !isSecond && !isFiveSecond
+                          val isSecond = (totalSec % 10 == 0)
+                          val isDecim = !isSecond
 
-                          // Alturas proporcionais: G=0.8, M=0.5, P=0.25
+                          // Alturas proporcionais: M=0.6, P=0.3
                           val tickHeightRatio = when {
-                              isFiveSecond -> 0.8f
-                              isSecond -> 0.5f
-                              else -> 0.25f
+                              isSecond -> 0.6f
+                              else -> 0.3f
                           }
 
                           val tickAlpha = when {
-                              isFiveSecond -> 0.8f
-                              isSecond -> 0.5f
-                              else -> 0.25f
+                              isSecond -> 0.6f
+                              else -> 0.3f
                           }
 
                           val tickHeight = tickZoneHeight * tickHeightRatio * 0.95f
