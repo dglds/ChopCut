@@ -54,6 +54,7 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 coil-compose = { module = "io.coil-kt:coil-compose", version = "2.5.0" }
+coil-video = { module = "io.coil-kt:coil-video", version = "2.5.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

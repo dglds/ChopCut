@@ -15,6 +15,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_IS_FIRST_RUN = "is_first_run"
         private const val KEY_THEME_MODE = "theme_mode" // 0=System, 1=Light, 2=Dark
         private const val KEY_THUMBNAIL_CACHE_ENABLED = "thumbnail_cache_enabled" // Cache de thumbnails
+        private const val KEY_GALLERY_SORT_ORDER = "gallery_sort_order"
     }
 
     /**
@@ -37,4 +38,11 @@ class PreferencesManager(context: Context) {
     var thumbnailCacheEnabled: Boolean
         get() = prefs.getBoolean(KEY_THUMBNAIL_CACHE_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_THUMBNAIL_CACHE_ENABLED, value).apply()
+
+    /**
+     * Ordenação da galeria de vídeos (persiste entre sessões)
+     */
+    var gallerySortOrder: String
+        get() = prefs.getString(KEY_GALLERY_SORT_ORDER, "SIZE_DESC") ?: "SIZE_DESC"
+        set(value) = prefs.edit().putString(KEY_GALLERY_SORT_ORDER, value).apply()
 }

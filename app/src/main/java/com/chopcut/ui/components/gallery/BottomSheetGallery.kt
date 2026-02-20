@@ -6,10 +6,12 @@ import android.provider.MediaStore
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,8 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -36,7 +41,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.ImageLoader
 import coil.compose.rememberAsyncImagePainter
+import coil.decode.VideoFrameDecoder
+import coil.request.ImageRequest
+import com.chopcut.data.local.PreferencesManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -48,6 +57,20 @@ data class GalleryVideo(
     val sizeBytes: Long
 )
 
+enum class GallerySortOrder(val label: String, val column: String, val direction: String) {
+    SIZE_DESC("Maior", MediaStore.Video.Media.SIZE, "DESC"),
+    SIZE_ASC("Menor", MediaStore.Video.Media.SIZE, "ASC"),
+    DATE_DESC("Recente", MediaStore.Video.Media.DATE_ADDED, "DESC"),
+    DATE_ASC("Antigo", MediaStore.Video.Media.DATE_ADDED, "ASC");
+
+    fun toSortClause(): String = "$column $direction"
+
+    companion object {
+        fun fromKey(key: String): GallerySortOrder =
+            entries.find { it.name == key } ?: SIZE_DESC
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomSheetGallery(
@@ -56,10 +79,23 @@ fun BottomSheetGallery(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
+    val preferencesManager = remember { PreferencesManager(context) }
     var videos by remember { mutableStateOf<List<GalleryVideo>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var currentSort by remember {
+        mutableStateOf(GallerySortOrder.fromKey(preferencesManager.gallerySortOrder))
+    }
 
-    LaunchedEffect(Unit) {
+    val imageLoader = remember {
+        ImageLoader.Builder(context)
+            .components {
+                add(VideoFrameDecoder.Factory())
+            }
+            .build()
+    }
+
+    LaunchedEffect(currentSort) {
+        isLoading = true
         withContext(Dispatchers.IO) {
             val videoList = mutableListOf<GalleryVideo>()
             val projection = arrayOf(
@@ -67,8 +103,7 @@ fun BottomSheetGallery(
                 MediaStore.Video.Media.DURATION,
                 MediaStore.Video.Media.SIZE
             )
-            // ORDENAÇÃO: SIZE DESC (Maiores Primeiro)
-            val sortOrder = "${MediaStore.Video.Media.SIZE} DESC"
+            val sortOrder = currentSort.toSortClause()
 
             val query = context.contentResolver.query(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
@@ -104,7 +139,7 @@ fun BottomSheetGallery(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        dragHandle = null // Custom drag handle or none for max space
+        dragHandle = null
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(top = 16.dp)
@@ -114,6 +149,25 @@ fun BottomSheetGallery(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                GallerySortOrder.entries.forEach { sort ->
+                    FilterChip(
+                        selected = currentSort == sort,
+                        onClick = {
+                            currentSort = sort
+                            preferencesManager.gallerySortOrder = sort.name
+                        },
+                        label = { Text(sort.label, fontSize = 13.sp) }
+                    )
+                }
+            }
 
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -131,7 +185,7 @@ fun BottomSheetGallery(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(videos) { video ->
-                        VideoGridItem(video, onVideoSelected)
+                        VideoGridItem(video, imageLoader, onVideoSelected)
                     }
                 }
             }
@@ -140,7 +194,8 @@ fun BottomSheetGallery(
 }
 
 @Composable
-fun VideoGridItem(video: GalleryVideo, onClick: (Uri) -> Unit) {
+fun VideoGridItem(video: GalleryVideo, imageLoader: ImageLoader, onClick: (Uri) -> Unit) {
+    val context = LocalContext.current
     Box(
         modifier = Modifier
             .aspectRatio(1f)
@@ -148,18 +203,24 @@ fun VideoGridItem(video: GalleryVideo, onClick: (Uri) -> Unit) {
             .clickable { onClick(video.uri) }
     ) {
         Image(
-            painter = rememberAsyncImagePainter(video.uri),
+            painter = rememberAsyncImagePainter(
+                model = ImageRequest.Builder(context)
+                    .data(video.uri)
+                    .crossfade(true)
+                    .build(),
+                imageLoader = imageLoader
+            ),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
-        
+
         // Duration Badge
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(4.dp)
-                .background(Color.Black.copy(alpha = 0.7f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
                 .padding(horizontal = 4.dp, vertical = 2.dp)
         ) {
             Text(
@@ -174,7 +235,7 @@ fun VideoGridItem(video: GalleryVideo, onClick: (Uri) -> Unit) {
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(4.dp)
-                .background(Color.Black.copy(alpha = 0.7f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
                 .padding(horizontal = 4.dp, vertical = 2.dp)
         ) {
             Text(
