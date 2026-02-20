@@ -326,7 +326,23 @@ fun TimelineEditor(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Video Filename with metadata
-            val fileName = videoUri.lastPathSegment?.substringAfterLast('/') ?: "unknown"
+            val fileName = try {
+                context.contentResolver.query(
+                    videoUri,
+                    arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        cursor.getString(cursor.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME))
+                    } else {
+                        null
+                    }
+                } ?: videoUri.lastPathSegment?.substringAfterLast('/')
+            } catch (e: Exception) {
+                videoUri.lastPathSegment?.substringAfterLast('/')
+            } ?: "unknown"
 
             // Get file size
             val fileSizeBytes = try {
@@ -357,7 +373,10 @@ fun TimelineEditor(
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Start
             )
 
             // 1. VIDEO PREVIEW
