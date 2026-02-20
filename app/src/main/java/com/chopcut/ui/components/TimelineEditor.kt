@@ -325,6 +325,16 @@ fun TimelineEditor(
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Video Filename
+            val fileName = videoUri.lastPathSegment?.substringAfterLast('/') ?: "unknown"
+            Text(
+                text = fileName,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
             // 1. VIDEO PREVIEW
             Box(
                 modifier = Modifier
@@ -565,17 +575,17 @@ fun TimelineEditor(
                     }
                 }
 
-                // Paint para timestamps da régua (pré-alocado, fora do draw loop)
-                val timestampPaint = remember {
-                    android.graphics.Paint().apply {
-                        color = android.graphics.Color.parseColor("#808080")
-                        textSize = with(density) { 8.dp.toPx() }
-                        textAlign = android.graphics.Paint.Align.CENTER
-                        typeface = android.graphics.Typeface.MONOSPACE
-                        isAntiAlias = true
-                        letterSpacing = 0.03f
-                    }
-                }
+                 // Paint para timestamps da régua (pré-alocado, fora do draw loop)
+                 val timestampPaint = remember {
+                     android.graphics.Paint().apply {
+                         color = android.graphics.Color.parseColor("#808080")
+                         textSize = with(density) { 8.dp.toPx() }
+                         textAlign = android.graphics.Paint.Align.CENTER
+                         typeface = android.graphics.Typeface.MONOSPACE
+                         isAntiAlias = true
+                         letterSpacing = 0.03f
+                     }
+                 }
 
                  Canvas(modifier = Modifier.fillMaxSize()) {
                     // Régua: ticks a cada 1s, timestamps a cada 5s
@@ -691,9 +701,24 @@ fun TimelineEditor(
 
                      // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.
 
-                    // Layout da régua: texto no topo, ticks embaixo apontando para as thumbs
-                    val tickZoneTop = 14.dp.toPx()
-                    val tickZoneHeight = rulerHeight - tickZoneTop
+                 // Layout da régua: texto no topo, ticks embaixo apontando para as thumbs
+                     val tickZoneTop = 30.dp.toPx()
+                     val tickZoneHeight = rulerHeight - tickZoneTop
+
+                     // Draw current time label above playhead
+                     val timeLabelY = tickZoneTop - 8.dp.toPx()
+                     val timeMin = (currentTimeMs / 60000)
+                     val timeSec = (currentTimeMs % 60000) / 1000
+                     val timeMs = (currentTimeMs % 1000)
+                     val timeLabel = String.format("%02d:%02d.%03d", timeMin, timeSec, timeMs)
+                     drawIntoCanvas { canvas ->
+                         canvas.nativeCanvas.drawText(
+                             timeLabel,
+                             centerOffset,
+                             timeLabelY,
+                             timestampPaint
+                         )
+                     }
 
                     for (i in startTickIndex..endTickIndex) {
                         val tickTimeSec = i * tickSpacingSeconds
@@ -744,30 +769,30 @@ fun TimelineEditor(
                         }
                     }
 
-                    trimPosition.completeRanges.forEach { (start, end) ->
-                        val startX = centerOffset + (start / 1000f) * pxPerSecond - currentScroll
-                        val endX = centerOffset + (end / 1000f) * pxPerSecond - currentScroll
-                        if (endX >= 0 && startX <= size.width) {
-                            val rangeY = 4.dp.toPx()
-                            val isActive = currentTimeMs >= start && currentTimeMs <= end
-                            
-                            val rangeColor = if (isActive) Color.Red else Color(0xFFE91E63)
-                            
-                            drawLine(rangeColor, Offset(startX, rangeY), Offset(endX, rangeY), 8.dp.toPx())
-                        }
-                    }
+                     trimPosition.completeRanges.forEach { (start, end) ->
+                         val startX = centerOffset + (start / 1000f) * pxPerSecond - currentScroll
+                         val endX = centerOffset + (end / 1000f) * pxPerSecond - currentScroll
+                         if (endX >= 0 && startX <= size.width) {
+                             val rangeY = 14.dp.toPx()
+                             val isActive = currentTimeMs >= start && currentTimeMs <= end
 
-                    if (trimPosition.isDraftMode) {
-                        trimPosition.draftPosition?.let { startPos ->
-                            val startX = centerOffset + (startPos / 1000f) * pxPerSecond - currentScroll
-                            val playheadX = centerOffset
-                            val minX = minOf(startX, playheadX)
-                            val maxX = maxOf(startX, playheadX)
-                            
-                            val rangeY = 4.dp.toPx()
-                            drawLine(Color(0xFFFF9800), Offset(minX, rangeY), Offset(maxX, rangeY), 8.dp.toPx())
-                        }
-                    }
+                             val rangeColor = if (isActive) Color.Red else Color(0xFFE91E63)
+
+                             drawLine(rangeColor, Offset(startX, rangeY), Offset(endX, rangeY), 8.dp.toPx())
+                         }
+                     }
+
+                     if (trimPosition.isDraftMode) {
+                         trimPosition.draftPosition?.let { startPos ->
+                             val startX = centerOffset + (startPos / 1000f) * pxPerSecond - currentScroll
+                             val playheadX = centerOffset
+                             val minX = minOf(startX, playheadX)
+                             val maxX = maxOf(startX, playheadX)
+
+                             val rangeY = 14.dp.toPx()
+                             drawLine(Color(0xFFFF9800), Offset(minX, rangeY), Offset(maxX, rangeY), 8.dp.toPx())
+                         }
+                     }
 
                     drawLine(
                         Color(0xFF64B5F6),
@@ -809,14 +834,15 @@ fun TimelineEditor(
                 .padding(vertical = 8.dp)
         ) {
             Text(
-                text = String.format("%02d:%02d.%02d", 
-                    currentTimeMs / 60000, 
-                    (currentTimeMs % 60000) / 1000, 
-                    (currentTimeMs % 1000) / 10),
+                text = String.format("%02d:%02d.%03d",
+                    (currentTimeMs / 60000),
+                    (currentTimeMs % 60000) / 1000,
+                    (currentTimeMs % 1000)),
                 color = if (isInsideRange) Color.Red else Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Light,
-                letterSpacing = 2.sp
+                fontSize = 20.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                fontWeight = FontWeight.Normal,
+                letterSpacing = 0.sp
             )
         }
 
