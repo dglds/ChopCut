@@ -325,12 +325,37 @@ fun TimelineEditor(
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Video Filename
+            // Video Filename with metadata
             val fileName = videoUri.lastPathSegment?.substringAfterLast('/') ?: "unknown"
+
+            // Get file size
+            val fileSizeBytes = try {
+                context.contentResolver.openFileDescriptor(videoUri, "r")?.use { pfd ->
+                    pfd.statSize
+                } ?: 0L
+            } catch (e: Exception) {
+                0L
+            }
+
+            // Format file size
+            val fileSizeFormatted = when {
+                fileSizeBytes >= 1024 * 1024 * 1024 -> String.format("%.2f GB", fileSizeBytes / (1024.0 * 1024.0 * 1024.0))
+                fileSizeBytes >= 1024 * 1024 -> String.format("%.2f MB", fileSizeBytes / (1024.0 * 1024.0))
+                fileSizeBytes >= 1024 -> String.format("%.2f KB", fileSizeBytes / 1024.0)
+                else -> "$fileSizeBytes B"
+            }
+
+            // Format total duration
+            val totalDurationMin = videoDurationMs / 60000
+            val totalDurationSec = (videoDurationMs % 60000) / 1000
+            val totalDurationFormatted = String.format("%d:%02d", totalDurationMin, totalDurationSec)
+
+            val fileInfo = "$fileName · $fileSizeFormatted · $totalDurationFormatted"
+
             Text(
-                text = fileName,
+                text = fileInfo,
                 color = Color.White,
-                fontSize = 18.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(vertical = 12.dp)
             )
@@ -461,10 +486,10 @@ fun TimelineEditor(
 
         // 2.5. CURRENT TIME DISPLAY (Outside timeline container, below video)
         Text(
-            text = String.format("%02d:%02d.%03d",
+            text = String.format("%02d:%02d:%02d",
                 (currentTimeMs / 60000),
                 (currentTimeMs % 60000) / 1000,
-                (currentTimeMs % 1000)),
+                (currentTimeMs % 1000) / 10),
             color = if (isInsideRange) Color.Red else Color.White,
             fontSize = 24.sp,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
@@ -715,11 +740,11 @@ fun TimelineEditor(
 
                      // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.
 
-                 // Layout da régua: texto no topo, ticks embaixo apontando para as thumbs
-                     val tickZoneTop = 30.dp.toPx()
-                     val tickZoneHeight = rulerHeight - tickZoneTop
+                  // Layout da régua: texto no topo, ticks embaixo apontando para as thumbs
+                      val tickZoneTop = 45.dp.toPx()
+                      val tickZoneHeight = rulerHeight - tickZoneTop
 
-                     for (i in startTickIndex..endTickIndex) {
+                      for (i in startTickIndex..endTickIndex) {
                         val tickTimeSec = i * tickSpacingSeconds
                         if (tickTimeSec < 0f || tickTimeSec > videoDurationMs / 1000f) continue
 
@@ -754,9 +779,11 @@ fun TimelineEditor(
                         // Timestamp acima dos ticks (zona de texto no topo da régua)
                         if (isFiveSecond || isTenSecond) {
                             val totalSec = tickTimeSec.toInt()
+                            val totalMs = (tickTimeSec * 1000).toLong()
                             val min = totalSec / 60
                             val sec = totalSec % 60
-                            val label = String.format("%d:%02d", min, sec)
+                            val ms = (totalMs % 1000) / 10
+                            val label = String.format("%02d:%02d:%02d", min, sec, ms)
                             drawIntoCanvas { canvas ->
                                 canvas.nativeCanvas.drawText(
                                     label,
