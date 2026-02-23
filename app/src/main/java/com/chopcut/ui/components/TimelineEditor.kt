@@ -807,8 +807,8 @@ fun TimelineEditor(
                               strokeWidth = 1.dp.toPx()
                           )
 
-                          // Timestamp acima dos ticks (só nos múltiplos de 5 segundos)
-                          if (isFiveSecond) {
+                          // Timestamp acima dos ticks de segundo
+                          if (isSecond) {
                               val totalSec = (tickTimeSec * 10).toInt() / 10
                               val min = totalSec / 60
                               val sec = totalSec % 60

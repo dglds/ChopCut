@@ -15,11 +15,9 @@ import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import com.chopcut.data.model.TimeRange
 import com.chopcut.data.repository.VideoRepository
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 
@@ -32,15 +30,17 @@ class TransformerPipeline(
      *
      * Cada range é adicionado como um clip separado na composição
      */
-    fun trim(uri: Uri, ranges: List<TimeRange>): Flow<Result<File>> = callbackFlow {
+    fun trim(uri: Uri, ranges: List<TimeRange>): Flow<TrimProgress> = callbackFlow {
         val outputFile = videoRepository.createTempFile(".mp4")
 
         Log.d("TransformerPipeline", "Starting trim with ${ranges.size} range(s)")
         Timber.d("Starting trim with ${ranges.size} range(s)")
 
+        var isFinished = false
+        var transformerRef: Transformer? = null
+        val progressHolder = ProgressHolder()
+
         try {
-            // CRÍTICO: Criar UMA ÚNICA sequência com múltiplos itens (não múltiplas sequências!)
-            // Múltiplas sequências seriam tratadas como tracks paralelos, não concatenados
             val sequenceBuilder = EditedMediaItemSequence.Builder()
 
             ranges.forEach { range ->
@@ -64,23 +64,34 @@ class TransformerPipeline(
 
             val sequence = sequenceBuilder.build()
 
-            // Criar composição com a sequência única
             val composition = Composition.Builder(sequence)
                 .build()
 
-            Log.d("TransformerPipeline", "Created composition with 1 sequence containing ${ranges.size} item(s)")
             Timber.d("Created composition with ${ranges.size} item(s) in sequence")
             Log.d("TransformerPipeline", "Output file: ${outputFile.absolutePath}")
 
-            // CRÍTICO: Criar Transformer na thread principal com Looper
             val mainHandler = Handler(Looper.getMainLooper())
 
-            // Criar transformer com listener
+            // Polling de progresso a cada 250ms
+            val progressRunnable = object : Runnable {
+                override fun run() {
+                    if (isFinished) return
+                    val transformer = transformerRef ?: return
+                    val state = transformer.getProgress(progressHolder)
+                    if (state == Transformer.PROGRESS_STATE_AVAILABLE) {
+                        trySend(TrimProgress.InProgress(progressHolder.progress))
+                    }
+                    mainHandler.postDelayed(this, 250)
+                }
+            }
+
             val transformerListener = object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, result: ExportResult) {
+                    isFinished = true
+                    mainHandler.removeCallbacks(progressRunnable)
                     Log.d("TransformerPipeline", "Export finished successfully, file exists: ${outputFile.exists()}, size: ${outputFile.length()}")
                     Timber.d("Export finished successfully")
-                    trySend(Result.success(outputFile))
+                    trySend(TrimProgress.Completed(outputFile))
                     channel.close()
                 }
 
@@ -89,41 +100,50 @@ class TransformerPipeline(
                     result: ExportResult,
                     exception: ExportException
                 ) {
+                    isFinished = true
+                    mainHandler.removeCallbacks(progressRunnable)
                     Log.e("TransformerPipeline", "Export failed", exception)
                     Timber.e(exception, "Export failed")
-                    trySend(Result.failure(exception))
+                    trySend(TrimProgress.Failed(exception))
                     channel.close()
                 }
             }
 
-            // Criar e iniciar o Transformer na thread principal
+            // Emitir progresso inicial
+            trySend(TrimProgress.InProgress(0))
+
             mainHandler.post {
                 try {
                     val transformer = Transformer.Builder(context)
                         .addListener(transformerListener)
                         .build()
 
+                    transformerRef = transformer
                     Log.d("TransformerPipeline", "Starting transformer...")
-                    // Iniciar exportação
                     transformer.start(composition, outputFile.absolutePath)
+
+                    // Iniciar polling de progresso
+                    mainHandler.postDelayed(progressRunnable, 250)
                 } catch (e: Exception) {
                     Log.e("TransformerPipeline", "Error starting transformer", e)
                     Timber.e(e, "Error starting transformer")
-                    trySend(Result.failure(e))
+                    trySend(TrimProgress.Failed(e))
                     channel.close()
                 }
             }
 
-            // Manter canal aberto até conclusão
             awaitClose {
+                isFinished = true
+                mainHandler.removeCallbacks(progressRunnable)
+                // Transformer deve ser cancelado na main thread
+                mainHandler.post { transformerRef?.cancel() }
                 Log.d("TransformerPipeline", "awaitClose called")
-                // Cleanup se necessário
             }
 
         } catch (e: Exception) {
             Log.e("TransformerPipeline", "Error during trim operation", e)
             Timber.e(e, "Error during trim operation")
-            trySend(Result.failure(e))
+            trySend(TrimProgress.Failed(e))
             channel.close()
 
             if (outputFile.exists()) {

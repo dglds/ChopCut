@@ -91,17 +91,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val range = TimeRange(startMs = 0, endMs = 5000)
 
                 transformerPipeline.trim(uri, listOf(range))
-                    .collect { result ->
-                        result.onSuccess { file ->
-                            Timber.d("Trim completed: ${file.absolutePath}")
-                            _uiState.value = HomeUiState.Success(
-                                "Trim completed!\nOutput: ${file.name}\nSize: ${file.length() / 1024} KB"
-                            )
-                        }.onFailure { error ->
-                            Timber.e(error, "Trim failed")
-                            val errorState = ErrorHandler.handle(error, getApplication())
-                            _errorState.value = errorState
-                            _uiState.value = HomeUiState.Error(errorState.message)
+                    .collect { progress ->
+                        when (progress) {
+                            is com.chopcut.data.pipeline.TrimProgress.InProgress -> {
+                                // Progresso intermediário - pode atualizar UI se necessário
+                            }
+                            is com.chopcut.data.pipeline.TrimProgress.Completed -> {
+                                val file = progress.file
+                                Timber.d("Trim completed: ${file.absolutePath}")
+                                _uiState.value = HomeUiState.Success(
+                                    "Trim completed!\nOutput: ${file.name}\nSize: ${file.length() / 1024} KB"
+                                )
+                            }
+                            is com.chopcut.data.pipeline.TrimProgress.Failed -> {
+                                val error = progress.error
+                                Timber.e(error, "Trim failed")
+                                val errorState = ErrorHandler.handle(error, getApplication())
+                                _errorState.value = errorState
+                                _uiState.value = HomeUiState.Error(errorState.message)
+                            }
                         }
                     }
             } catch (e: Exception) {

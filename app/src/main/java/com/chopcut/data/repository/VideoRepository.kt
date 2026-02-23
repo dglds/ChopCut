@@ -169,23 +169,26 @@ class VideoRepository(
      * Save processed video to gallery/storage
      * Tries to save to root "ChopCut" folder first, falls back to Movies/ChopCut
      */
-    suspend fun saveToGallery(file: File, filename: String? = null): Uri? = withContext(Dispatchers.IO) {
+    suspend fun saveToGallery(file: File, filename: String? = null): Uri = withContext(Dispatchers.IO) {
         val videoName = filename ?: "ChopCut_${System.currentTimeMillis()}.mp4"
-        
+
+        if (!file.exists() || file.length() == 0L) {
+            throw IllegalStateException("Arquivo de origem não existe ou está vazio: ${file.absolutePath}")
+        }
+
         // 1. Try to save to root /ChopCut folder (Legacy/Permissive)
         try {
             val root = Environment.getExternalStorageDirectory()
             val chopCutDir = File(root, "ChopCut")
             if (!chopCutDir.exists()) {
                 if (!chopCutDir.mkdirs()) {
-                    Timber.w("Failed to create root ChopCut directory, trying MediaStore")
                     throw java.io.IOException("Cannot create directory")
                 }
             }
-            
+
             val destFile = File(chopCutDir, videoName)
             file.copyTo(destFile, overwrite = true)
-            
+
             // Scan file to make it visible in gallery
             android.media.MediaScannerConnection.scanFile(
                 context,
@@ -193,56 +196,53 @@ class VideoRepository(
                 arrayOf("video/mp4"),
                 null
             )
-            
+
             Timber.d("Saved to root ChopCut folder: ${destFile.absolutePath}")
             return@withContext Uri.fromFile(destFile)
-            
+
         } catch (e: Exception) {
             Timber.w("Failed to save to root folder (${e.message}), falling back to MediaStore")
         }
 
         // 2. Fallback to MediaStore (Scoped Storage / Android 10+)
-        try {
-            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            } else {
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            }
-
-            val contentValues = ContentValues().apply {
-                put(MediaStore.Video.Media.DISPLAY_NAME, videoName)
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.SIZE, file.length())
-                put(MediaStore.Video.Media.IS_PENDING, 1)
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/ChopCut")
-                }
-            }
-
-            val uri = contentResolver.insert(collection, contentValues)
-
-            uri?.let {
-                contentResolver.openOutputStream(it)?.use { output ->
-                    file.inputStream().use { input ->
-                        input.copyTo(output)
-                    }
-                }
-
-                // Clear pending flag
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    contentValues.clear()
-                    contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
-                    contentResolver.update(it, contentValues, null, null)
-                }
-
-                Timber.d("Saved video to gallery via MediaStore: $it")
-                it
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Error saving video to gallery")
-            null
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        } else {
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
         }
+
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, videoName)
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(MediaStore.Video.Media.SIZE, file.length())
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/ChopCut")
+            }
+        }
+
+        val uri = contentResolver.insert(collection, contentValues)
+            ?: throw IllegalStateException("MediaStore insert retornou null para $videoName")
+
+        val outputStream = contentResolver.openOutputStream(uri)
+            ?: throw IllegalStateException("Não foi possível abrir OutputStream para $uri")
+
+        outputStream.use { output ->
+            file.inputStream().use { input ->
+                input.copyTo(output)
+            }
+        }
+
+        // Clear pending flag
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            contentValues.clear()
+            contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
+            contentResolver.update(uri, contentValues, null, null)
+        }
+
+        Timber.d("Saved video to gallery via MediaStore: $uri")
+        uri
     }
 
     /**
