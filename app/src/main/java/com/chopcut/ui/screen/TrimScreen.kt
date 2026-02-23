@@ -30,7 +30,7 @@ import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TrimEditionScreen(
+fun TrimScreen(
     videoUri: Uri,
     viewModel: TrimViewModel = viewModel(),
     onNavigateBack: () -> Unit = {}
@@ -73,7 +73,7 @@ fun TrimEditionScreen(
     // Carregar AudioWaveForms quando tivermos a duração do vídeo
     LaunchedEffect(state.videoDurationMs) {
         if (videoUri != Uri.EMPTY && state.videoDurationMs > 0) {
-            Timber.d("TrimEditionScreen: LaunchedEffect triggered - videoDurationMs=${state.videoDurationMs}, targetBarCount=$targetBarCount")
+            Timber.d("TrimScreen: LaunchedEffect triggered - videoDurationMs=${state.videoDurationMs}, targetBarCount=$targetBarCount")
             viewModel.loadAudioWaveforms(videoUri, targetBarCount)
         }
     }
@@ -298,11 +298,12 @@ fun TrimEditionScreen(
                                                             ?.substringBeforeLast('.')
                                                             ?.take(30)
                                                             ?.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-                                                            ?: "ChopCut"
+                                                            ?.removePrefix("ChopCut_")
+                                                            ?: "video"
 
-                                                        val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
+                                                        val timestamp = java.text.SimpleDateFormat("mmssSSS", java.util.Locale.getDefault())
                                                             .format(java.util.Date())
-                                                        val fileName = "${originalFileName}_$timestamp"
+                                                        val fileName = "ChopCut_${timestamp}_$originalFileName"
 
                                                         videoRepository.saveToGallery(trimmedFile, "$fileName.mp4")
                                                         trimmedFile.delete()

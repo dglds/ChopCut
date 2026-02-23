@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMerge
@@ -393,23 +392,6 @@ private fun VideoPickerLoaded(
                         RoundedCornerShape(6.dp)
                     )
                     .padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
-
-        // Center play button
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(64.dp)
-                .background(Primary.copy(alpha = 0.9f), CircleShape)
-                .clickable(onClick = onOpenEditor),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Abrir editor",
-                tint = OnPrimary,
-                modifier = Modifier.size(36.dp)
             )
         }
 

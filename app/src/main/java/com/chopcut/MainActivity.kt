@@ -20,8 +20,10 @@ import com.chopcut.data.local.PreferencesManager
 import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.PreferencesScreen
-import com.chopcut.ui.screen.TrimEditionScreen
+import com.chopcut.ui.screen.TrimScreen
 import com.chopcut.ui.screen.debug.AudioWaveFormsTestScreen
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import com.chopcut.ui.theme.ChopCutTheme
 
 /**
@@ -100,13 +102,17 @@ class MainActivity : ComponentActivity() {
                                     nullable = true
                                     defaultValue = null
                                 }
-                            )
+                            ),
+                            enterTransition = { EnterTransition.None },
+                            exitTransition = { ExitTransition.None },
+                            popEnterTransition = { EnterTransition.None },
+                            popExitTransition = { ExitTransition.None }
                         ) { backStackEntry ->
                             val videoUriString = backStackEntry.arguments?.getString("videoUri")
 
                             val videoUri = videoUriString?.let { Uri.parse(it) }
 
-                            TrimEditionScreen(
+                            TrimScreen(
                                 videoUri = videoUri ?: Uri.EMPTY,
                                 onNavigateBack = { navController.popBackStack() }
                             )
