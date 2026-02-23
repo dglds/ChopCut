@@ -6,11 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -18,12 +16,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.data.pipeline.TrimProgress
 import com.chopcut.data.repository.VideoRepository
-import com.chopcut.data.model.TimeRange
 import com.chopcut.ui.components.TimelineEditor
 import com.chopcut.ui.components.trim.TrimControlPanel
+import com.chopcut.ui.components.trim.SaveDialogState
+import com.chopcut.ui.components.trim.TrimSaveDialog
 import com.chopcut.ui.components.feedback.ErrorState
 import com.chopcut.ui.theme.ChopCutSpacing
-import com.chopcut.ui.screen.TrimViewModel
+import com.chopcut.utils.FileNameUtils
+import com.chopcut.utils.RangeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -37,11 +37,8 @@ fun TrimScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
+    var saveDialogState by remember { mutableStateOf(SaveDialogState()) }
     var showSaveDialog by remember { mutableStateOf(false) }
-    var isSaving by remember { mutableStateOf(false) }
-    var savingProgress by remember { mutableIntStateOf(0) }
-    var saveCompleted by remember { mutableStateOf(false) }
-    var saveError by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
 
@@ -112,10 +109,10 @@ fun TrimScreen(
                                     }
                                     showSaveDialog = true
                                 },
-                                enabled = !isSaving
+                                enabled = !saveDialogState.isSaving
                             ) {
                                 Icon(
-                                    if (isSaving) Icons.Default.Check else Icons.Default.Save,
+                                    if (saveDialogState.isSaving) Icons.Default.Check else Icons.Default.Save,
                                     contentDescription = "Salvar"
                                 )
                             }
@@ -163,181 +160,68 @@ fun TrimScreen(
     }
 
     if (showSaveDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                // Impedir dispensar durante processamento
-                if (!isSaving) {
+        TrimSaveDialog(
+            state = saveDialogState,
+            onDismiss = {
+                if (saveDialogState.canDismiss) {
                     showSaveDialog = false
-                    saveCompleted = false
-                    saveError = null
-                    savingProgress = 0
+                    saveDialogState = SaveDialogState()
                 }
             },
-            title = {
-                Text(
-                    when {
-                        saveCompleted -> "Vídeo Salvo!"
-                        saveError != null -> "Erro ao Salvar"
-                        isSaving -> "Exportando..."
-                        else -> "Remover Trechos"
-                    }
-                )
-            },
-            text = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    when {
-                        saveCompleted -> {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("Vídeo salvo com sucesso!")
+            onSave = {
+                scope.launch(Dispatchers.IO) {
+                    saveDialogState = saveDialogState.copy(isSaving = true, progress = 0)
+                    try {
+                        val trimRanges = state.trimPosition.completeRanges.sortedBy { it.first }
+
+                        Timber.d("Trim ranges: $trimRanges")
+                        Timber.d("Video duration: ${state.videoDurationMs}")
+
+                        val rangesToSave = RangeUtils.calculateKeepRanges(trimRanges, state.videoDurationMs)
+
+                        Timber.d("Keep ranges to save: $rangesToSave")
+
+                        if (rangesToSave.isEmpty()) {
+                            throw Exception("No ranges to save - video is empty")
                         }
-                        saveError != null -> {
-                            Text(saveError ?: "Erro desconhecido")
-                        }
-                        isSaving -> {
-                            if (savingProgress > 0) {
-                                CircularProgressIndicator(
-                                    progress = { savingProgress / 100f },
-                                    modifier = Modifier.size(48.dp),
-                                    strokeWidth = 4.dp
-                                )
-                            } else {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(48.dp),
-                                    strokeWidth = 4.dp
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("${savingProgress}%")
-                        }
-                        else -> {
-                            Text("Deseja remover os trechos selecionados e salvar o vídeo?")
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                when {
-                    saveCompleted -> {
-                        TextButton(onClick = {
-                            showSaveDialog = false
-                            saveCompleted = false
-                            savingProgress = 0
-                            onNavigateBack()
-                        }) {
-                            Text("Ir para Início")
-                        }
-                    }
-                    saveError != null -> {
-                        TextButton(onClick = {
-                            showSaveDialog = false
-                            saveError = null
-                            savingProgress = 0
-                            isSaving = false
-                        }) {
-                            Text("Fechar")
-                        }
-                    }
-                    isSaving -> {
-                        // Nenhum botão durante processamento
-                    }
-                    else -> {
-                        TextButton(
-                            onClick = {
-                                scope.launch(Dispatchers.IO) {
-                                    isSaving = true
-                                    savingProgress = 0
-                                    try {
-                                        val trimRanges = state.trimPosition.completeRanges.sortedBy { it.first }
 
-                                        Timber.d("Trim ranges: $trimRanges")
-                                        Timber.d("Video duration: ${state.videoDurationMs}")
+                        transformerPipeline.trim(videoUri, rangesToSave)
+                            .collect { progress ->
+                                when (progress) {
+                                    is TrimProgress.InProgress -> {
+                                        saveDialogState = saveDialogState.copy(progress = progress.percent)
+                                    }
+                                    is TrimProgress.Completed -> {
+                                        val trimmedFile = progress.file
+                                        Timber.d("Trimmed file exists: ${trimmedFile.exists()}, size: ${trimmedFile.length()}")
 
-                                        val keepRanges = mutableListOf<Pair<Long, Long>>()
-                                        var lastEndMs = 0L
+                                        val originalFileName = FileNameUtils.extractBaseNameFromUri(videoUri)
+                                        val fileName = FileNameUtils.generateTimestampedFileName(originalFileName)
 
-                                        trimRanges.forEach { (start, end) ->
-                                            if (start > lastEndMs) {
-                                                keepRanges.add(lastEndMs to start)
-                                            }
-                                            lastEndMs = end
-                                        }
+                                        videoRepository.saveToGallery(trimmedFile, fileName)
+                                        trimmedFile.delete()
 
-                                        if (lastEndMs < state.videoDurationMs) {
-                                            keepRanges.add(lastEndMs to state.videoDurationMs)
-                                        }
-
-                                        val rangesToSave = keepRanges.map { (start, end) -> TimeRange(start, end) }
-
-                                        Timber.d("Keep ranges to save: $rangesToSave")
-
-                                        if (rangesToSave.isEmpty()) {
-                                            throw Exception("No ranges to save - video is empty")
-                                        }
-
-                                        transformerPipeline.trim(videoUri, rangesToSave)
-                                            .collect { progress ->
-                                                when (progress) {
-                                                    is TrimProgress.InProgress -> {
-                                                        savingProgress = progress.percent
-                                                    }
-                                                    is TrimProgress.Completed -> {
-                                                        val trimmedFile = progress.file
-                                                        Timber.d("Trimmed file exists: ${trimmedFile.exists()}, size: ${trimmedFile.length()}")
-
-                                                        val originalFileName = videoUri.lastPathSegment
-                                                            ?.substringAfterLast('/')
-                                                            ?.substringBeforeLast('.')
-                                                            ?.take(30)
-                                                            ?.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-                                                            ?.removePrefix("ChopCut_")
-                                                            ?: "video"
-
-                                                        val timestamp = java.text.SimpleDateFormat("mmssSSS", java.util.Locale.getDefault())
-                                                            .format(java.util.Date())
-                                                        val fileName = "ChopCut_${timestamp}_$originalFileName"
-
-                                                        videoRepository.saveToGallery(trimmedFile, "$fileName.mp4")
-                                                        trimmedFile.delete()
-
-                                                        saveCompleted = true
-                                                        isSaving = false
-                                                    }
-                                                    is TrimProgress.Failed -> {
-                                                        Timber.e(progress.error, "TransformerPipeline trim error")
-                                                        saveError = progress.error.message ?: "Erro desconhecido"
-                                                        isSaving = false
-                                                    }
-                                                }
-                                            }
-                                    } catch (e: Exception) {
-                                        Timber.e(e, "Failed to save video")
-                                        saveError = e.message ?: "Erro desconhecido"
-                                        isSaving = false
+                                        saveDialogState = saveDialogState.copy(isCompleted = true, isSaving = false)
+                                    }
+                                    is TrimProgress.Failed -> {
+                                        Timber.e(progress.error, "TransformerPipeline trim error")
+                                        saveDialogState = saveDialogState.copy(
+                                            error = progress.error.message ?: "Erro desconhecido",
+                                            isSaving = false
+                                        )
                                     }
                                 }
                             }
-                        ) {
-                            Text("Salvar")
-                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to save video")
+                        saveDialogState = saveDialogState.copy(
+                            error = e.message ?: "Erro desconhecido",
+                            isSaving = false
+                        )
                     }
                 }
             },
-            dismissButton = {
-                if (!isSaving && !saveCompleted && saveError == null) {
-                    TextButton(onClick = { showSaveDialog = false }) {
-                        Text("Cancelar")
-                    }
-                }
-            }
+            onNavigateBack = onNavigateBack
         )
     }
 }

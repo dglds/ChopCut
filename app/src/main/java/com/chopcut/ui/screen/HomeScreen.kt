@@ -213,7 +213,7 @@ private fun VideoPickerEmpty(onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(16f / 9f)
+            .height(280.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(SurfaceVariant)
             .clickable(onClick = onClick)
@@ -289,7 +289,7 @@ private fun VideoPickerLoading() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(16f / 9f)
+            .height(280.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(SurfaceVariant),
         contentAlignment = Alignment.Center
@@ -333,7 +333,7 @@ private fun VideoPickerLoaded(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(16f / 9f)
+            .height(280.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(SurfaceVariant)
     ) {
@@ -347,7 +347,7 @@ private fun VideoPickerLoaded(
                 imageLoader = imageLoader
             ),
             contentDescription = "Thumbnail do vídeo",
-            contentScale = ContentScale.Crop,
+            contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize()
         )
 
@@ -500,7 +500,7 @@ private fun FeatureGrid() {
         }
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.md)
+        verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -523,7 +523,7 @@ private fun FeatureGrid() {
         features.chunked(2).forEach { rowFeatures ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
+                horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xs)
             ) {
                 rowFeatures.forEach { feature ->
                     FeatureCard(
@@ -546,18 +546,18 @@ private fun FeatureCard(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(Surface)
             .clickable { }
-            .padding(ChopCutSpacing.md)
+            .padding(ChopCutSpacing.sm)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .height(44.dp)
                 .background(
-                    feature.accentColor.copy(alpha = 0.12f),
-                    RoundedCornerShape(14.dp)
+                    feature.accentColor.copy(alpha = 0.1f),
+                    RoundedCornerShape(10.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -565,17 +565,17 @@ private fun FeatureCard(
                 imageVector = feature.icon,
                 contentDescription = null,
                 tint = feature.accentColor,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
-        Spacer(Modifier.height(ChopCutSpacing.sm))
+        Spacer(Modifier.height(ChopCutSpacing.xs))
         Text(
             text = feature.title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
             color = OnSurface
         )
-        Spacer(Modifier.height(ChopCutSpacing.xxs))
+        Spacer(Modifier.height(2.dp))
         Text(
             text = feature.description,
             style = MaterialTheme.typography.bodySmall,

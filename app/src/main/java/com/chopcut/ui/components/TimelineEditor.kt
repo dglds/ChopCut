@@ -1,10 +1,10 @@
 package com.chopcut.ui.components
 
 import android.net.Uri
-import android.view.ViewGroup
-import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Canvas
@@ -18,19 +18,14 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,25 +42,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.size
 import com.chopcut.ui.components.AudioWaveForms
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import com.chopcut.ui.components.timeline.VideoPreview
+import com.chopcut.ui.components.timeline.SeekbarProgress
+import com.chopcut.ui.components.timeline.CurrentTimeDisplay
+import com.chopcut.ui.components.timeline.VideoFileInfo
+import com.chopcut.utils.FormatUtils
 import com.chopcut.data.thumbnail.ThumbnailStripManager
 import com.chopcut.data.thumbnail.ThumbnailStripManager.Companion.SEGMENT_SECONDS
 import kotlinx.coroutines.NonCancellable
@@ -73,9 +61,13 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import com.chopcut.ui.theme.ChopCutMonoFont
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.tween
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -327,226 +319,41 @@ fun TimelineEditor(
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Video Filename with metadata
-            val fileName = try {
-                context.contentResolver.query(
-                    videoUri,
-                    arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
-                    null,
-                    null,
-                    null
-                )?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        cursor.getString(cursor.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME))
-                    } else {
-                        null
-                    }
-                } ?: videoUri.lastPathSegment?.substringAfterLast('/')
-            } catch (e: Exception) {
-                videoUri.lastPathSegment?.substringAfterLast('/')
-            } ?: "unknown"
-
-            // Get file size
-            val fileSizeBytes = try {
-                context.contentResolver.openFileDescriptor(videoUri, "r")?.use { pfd ->
-                    pfd.statSize
-                } ?: 0L
-            } catch (e: Exception) {
-                0L
-            }
-
-            // Format file size
-            val fileSizeFormatted = when {
-                fileSizeBytes >= 1024 * 1024 * 1024 -> String.format("%.2f GB", fileSizeBytes / (1024.0 * 1024.0 * 1024.0))
-                fileSizeBytes >= 1024 * 1024 -> String.format("%.2f MB", fileSizeBytes / (1024.0 * 1024.0))
-                fileSizeBytes >= 1024 -> String.format("%.2f KB", fileSizeBytes / 1024.0)
-                else -> "$fileSizeBytes B"
-            }
-
-            // Format total duration
-            val totalDurationMin = videoDurationMs / 60000
-            val totalDurationSec = (videoDurationMs % 60000) / 1000
-            val totalDurationFormatted = String.format("%d:%02d", totalDurationMin, totalDurationSec)
-
-            val truncatedName = if (fileName.length > 20) fileName.take(20) + "…" else fileName
-            val fileInfo = "$truncatedName · $fileSizeFormatted · $totalDurationFormatted"
-
-            Text(
-                text = fileInfo,
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Start
+            VideoFileInfo(
+                fileInfo = FormatUtils.getFileInfo(context, videoUri, videoDurationMs)
             )
 
-            // 1. VIDEO PREVIEW
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(320.dp)
-                    .background(Color.Black)
-            ) {
-                if (playerError != null) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = Color.Red,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = playerError!!,
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                        
-                        if (isSecurityError && onRequestNewMedia != null) {
-                             androidx.compose.material3.Button(
-                                onClick = onRequestNewMedia,
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.errorContainer,
-                                    contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onErrorContainer
-                                )
-                             ) {
-                                Text("Re-Localizar Arquivo (Necessário)")
-                            }
-                        } else {
-                            androidx.compose.material3.Button(onClick = { 
-                                playerError = null
-                                isSecurityError = false
-                                exoPlayer.prepare()
-                                exoPlayer.play()
-                            }) {
-                                Text("Tentar Novamente")
-                            }
-                        }
-
-                        if (!isSecurityError && onRequestNewMedia != null) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            androidx.compose.material3.OutlinedButton(onClick = onRequestNewMedia) {
-                                Text("Localizar Arquivo")
-                            }
-                        }
-                    }
-                } else {
-                    AndroidView(
-                        factory = { ctx ->
-                            PlayerView(ctx).apply {
-                                player = exoPlayer
-                                useController = false
-                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                layoutParams = FrameLayout.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                
-                    if (isInsideRange) {
-                        // Overlay com linhas diagonais vermelhas
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            drawRect(Color.Red.copy(alpha = 0.1f))
-
-                            val stripeSpacing = 28.dp.toPx()
-                            val stripeWidth = 6.dp.toPx()
-                            val stripeColor = Color.Red.copy(alpha = 0.25f)
-                            val maxDim = size.width + size.height
-                            var offset = -size.height
-                            while (offset < maxDim) {
-                                drawLine(
-                                    color = stripeColor,
-                                    start = Offset(offset, size.height),
-                                    end = Offset(offset + size.height, 0f),
-                                    strokeWidth = stripeWidth
-                                )
-                                offset += stripeSpacing
-                            }
-
-                            drawRect(
-                                color = Color.Red.copy(alpha = 0.5f),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                            )
-                        }
-                    }
-
-                    // Botão central: lixeira (dentro de range) ou play/pause
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = if (isInsideRange) 0.1f else 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isInsideRange) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Trecho será removido",
-                                tint = Color.Red.copy(alpha = 0.5f),
-                                modifier = Modifier.size(72.dp)
-                            )
-                        } else {
-                            IconButton(
-                                onClick = {
-                                    if (isPlaying) {
-                                        exoPlayer.pause()
-                                    } else {
-                                        exoPlayer.play()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .background(Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = if (isPlaying) "Pause" else "Play",
-                                    tint = Color.White
-                                )
-                            }
-                        }
+            VideoPreview(
+                exoPlayer = exoPlayer,
+                isPlaying = isPlaying,
+                isInsideRange = isInsideRange,
+                playerError = playerError,
+                isSecurityError = isSecurityError,
+                onRequestNewMedia = onRequestNewMedia,
+                onRetry = {
+                    playerError = null
+                    isSecurityError = false
+                    exoPlayer.prepare()
+                    exoPlayer.play()
+                },
+                onTogglePlayPause = {
+                    if (isPlaying) {
+                        exoPlayer.pause()
+                    } else {
+                        exoPlayer.play()
                     }
                 }
-            }
+            )
+
         // 2. PASSIVE SEEKBAR (Visual Playback Bar) - Custom Sharp
         val progress = if (videoDurationMs > 0) currentTimeMs.toFloat() / videoDurationMs.toFloat() else 0f
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .background(Color(0xFF424242))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(progress)
-                    .background(Color(0xFF64B5F6))
-             )
-         }
+        SeekbarProgress(progress = progress)
 
-         // 2.5. CURRENT TIME DISPLAY (Outside timeline container, below video)
-         Text(
-             text = String.format("%02d:%02d:%02d",
-                 (currentTimeMs / 60000),
-                 (currentTimeMs % 60000) / 1000,
-                 (currentTimeMs % 1000) / 10),
-             color = if (isInsideRange) Color.Red else Color.White,
-             fontSize = 24.sp,
-             fontFamily = ChopCutMonoFont,
-             fontWeight = FontWeight.Bold,
-             letterSpacing = 0.sp,
-             modifier = Modifier.padding(vertical = 12.dp)
-         )
+        // 2.5. CURRENT TIME DISPLAY (Outside timeline container, below video)
+        CurrentTimeDisplay(
+            currentTimeMs = currentTimeMs,
+            isInsideRange = isInsideRange
+        )
 
           // 3. TIMELINE RULER (Moved up, Gray BG, Pause on Scroll)
           Spacer(modifier = Modifier.height(10.dp))
@@ -613,26 +420,8 @@ fun TimelineEditor(
                      Box(modifier = Modifier.align(Alignment.BottomCenter).height(waveformHeightDp).fillMaxWidth(), contentAlignment = Alignment.Center) {
                          Text(text = "❌", fontSize = 10.sp)
                     }
-                } else if (waveformData.amplitudes.isNotEmpty()) {
-                     // Fallback para waveform antigo
-                     val audioDurationMs = if (waveformData.durationMs > 0) waveformData.durationMs else videoDurationMs
-                     val waveformWidth = (audioDurationMs / 1000f) * pxPerSecond
-                     val waveformStartOffset = centerOffset - currentScroll
-
-                     WaveForm(
-                         amplitudes = waveformData.amplitudes,
-                         modifier = Modifier
-                             .height(waveformHeightDp)
-                             .align(Alignment.BottomStart)
-                             .width(with(density) { waveformWidth.toDp() })
-                             .graphicsLayer {
-                                 translationX = waveformStartOffset
-                             },
-                         maxAmp = 1.0f,
-                         style = waveformStyle
-                     )
-                }
-                } // Fim do if (showWaveform)
+                 }
+                 } // Fim do if (showWaveform)
 
                 // PAINT ALLOCATIONS MOVED OUTSIDE LOOP (Optimization)
                 // Pré-alocar objetos fora do draw loop (zero allocations por frame durante scroll)
