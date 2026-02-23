@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
@@ -367,13 +368,15 @@ fun TimelineEditor(
             val totalDurationSec = (videoDurationMs % 60000) / 1000
             val totalDurationFormatted = String.format("%d:%02d", totalDurationMin, totalDurationSec)
 
-            val fileInfo = "$fileName · $fileSizeFormatted · $totalDurationFormatted"
+            val truncatedName = if (fileName.length > 20) fileName.take(20) + "…" else fileName
+            val fileInfo = "$truncatedName · $fileSizeFormatted · $totalDurationFormatted"
 
             Text(
                 text = fileInfo,
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
+                maxLines = 1,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -453,37 +456,64 @@ fun TimelineEditor(
                     )
                 
                     if (isInsideRange) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .border(2.dp, Color.Red.copy(alpha = 0.5f))
-                                .background(Color.Red.copy(alpha = 0.1f))
-                        )
+                        // Overlay com linhas diagonais vermelhas
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawRect(Color.Red.copy(alpha = 0.1f))
+
+                            val stripeSpacing = 28.dp.toPx()
+                            val stripeWidth = 6.dp.toPx()
+                            val stripeColor = Color.Red.copy(alpha = 0.25f)
+                            val maxDim = size.width + size.height
+                            var offset = -size.height
+                            while (offset < maxDim) {
+                                drawLine(
+                                    color = stripeColor,
+                                    start = Offset(offset, size.height),
+                                    end = Offset(offset + size.height, 0f),
+                                    strokeWidth = stripeWidth
+                                )
+                                offset += stripeSpacing
+                            }
+
+                            drawRect(
+                                color = Color.Red.copy(alpha = 0.5f),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                            )
+                        }
                     }
-    
-                    // Play/Pause Button Overlay
+
+                    // Botão central: lixeira (dentro de range) ou play/pause
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.2f)),
+                            .background(Color.Black.copy(alpha = if (isInsideRange) 0.1f else 0.2f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        IconButton(
-                            onClick = {
-                                if (isPlaying) {
-                                    exoPlayer.pause()
-                                } else {
-                                    exoPlayer.play()
-                                }
-                            },
-                            modifier = Modifier
-                                .background(Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
-                        ) {
+                        if (isInsideRange) {
                             Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                                tint = Color.White
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Trecho será removido",
+                                tint = Color.Red.copy(alpha = 0.5f),
+                                modifier = Modifier.size(72.dp)
                             )
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    if (isPlaying) {
+                                        exoPlayer.pause()
+                                    } else {
+                                        exoPlayer.play()
+                                    }
+                                },
+                                modifier = Modifier
+                                    .background(Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (isPlaying) "Pause" else "Play",
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
                 }
@@ -638,12 +668,15 @@ fun TimelineEditor(
                 }
 
                   // Paint para timestamps da régua (pré-alocado, fora do draw loop)
-                  val timestampPaint = remember {
+                  val robotoMonoTypeface = remember {
+                      androidx.core.content.res.ResourcesCompat.getFont(context, com.chopcut.R.font.roboto_mono)
+                  }
+                  val timestampPaint = remember(robotoMonoTypeface) {
                       android.graphics.Paint().apply {
                           color = android.graphics.Color.parseColor("#808080")
                           textSize = with(density) { 12.dp.toPx() }
                           textAlign = android.graphics.Paint.Align.CENTER
-                          typeface = android.graphics.Typeface.MONOSPACE
+                          typeface = robotoMonoTypeface ?: android.graphics.Typeface.MONOSPACE
                           isAntiAlias = true
                           letterSpacing = 0f
                       }
@@ -807,8 +840,8 @@ fun TimelineEditor(
                               strokeWidth = 1.dp.toPx()
                           )
 
-                          // Timestamp acima dos ticks de segundo
-                          if (isSecond) {
+                          // Timestamp acima dos ticks a cada 5 segundos
+                          if (isSecond && totalSec % 50 == 0) {
                               val totalSec = (tickTimeSec * 10).toInt() / 10
                               val min = totalSec / 60
                               val sec = totalSec % 60
