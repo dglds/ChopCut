@@ -3,15 +3,18 @@ package com.chopcut.ui.screen
 import android.net.Uri
 import com.chopcut.BuildConfig
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material3.Button
@@ -71,7 +74,6 @@ fun PreloadScreen(
                 }
                 is PreloadUiState.Ready -> {
                     Timber.d("Preload ready, navigating to editor")
-                    // Salvar dados no store para recuperar no TrimScreen
                     PreloadDataStore.setData((uiState as PreloadUiState.Ready).data)
                     onReady()
                 }
@@ -110,11 +112,36 @@ private fun LoadingContent(
         
         Spacer(modifier = Modifier.height(24.dp))
         
+        Text(
+            text = getStageMessage(progress.stage),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            color = Primary
+        )
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
         ProgressIndicators(progress)
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        if (BuildConfig.DEBUG) {
+            DebugProgressLogs(progress.logs)
+        }
         
         Spacer(modifier = Modifier.height(24.dp))
         
         CancelButton(onCancel = onCancel)
+    }
+}
+
+private fun getStageMessage(stage: ExtractionStage): String {
+    return when (stage) {
+        ExtractionStage.Starting -> "Iniciando..."
+        ExtractionStage.Validating -> "Validando vídeo..."
+        ExtractionStage.ExtractingAudio -> "Extraindo áudio..."
+        ExtractionStage.ExtractingThumbnails -> "Extraindo thumbnails..."
+        ExtractionStage.Ready -> "Pronto!"
     }
 }
 
@@ -133,8 +160,45 @@ private fun ProgressIndicators(
             progress.totalSegments
         )
         
-        if (BuildConfig.DEBUG) {
-            DebugProgressLogs(progress.logs)
+        val overallProgress = (progress.audioPercent + progress.thumbnailPercent) / 2
+        OverallProgressBar(overallProgress)
+    }
+}
+
+@Composable
+private fun OverallProgressBar(progress: Int) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp)
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "Progresso Geral",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "$progress%",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Primary
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress / 100f)
+                    .height(8.dp)
+                    .background(Primary, RoundedCornerShape(4.dp))
+            )
         }
     }
 }

@@ -13,12 +13,13 @@ import com.chopcut.data.model.VideoInfo
 import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.util.DispatcherProvider
 import com.chopcut.util.error.ErrorHandler
+import com.chopcut.util.error.RecoveryStrategy
 import com.chopcut.util.error.safeExecuteSuspend
 import com.chopcut.utils.VideoConstraints
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -26,12 +27,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val videoRepository = VideoRepository(application)
     private val transformerPipeline = TransformerPipeline(application, videoRepository)
     private val audioDataExtractor = AudioDataExtractor(application)
+    
+    // PreloadViewModel para extração em background
+    private val preloadViewModel = PreloadViewModel(application)
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Initial)
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     private val _selectedVideoUri = MutableStateFlow<Uri?>(null)
     val selectedVideoUri: StateFlow<Uri?> = _selectedVideoUri.asStateFlow()
+    
+    // Estado do preload
+    val preloadState = preloadViewModel.uiState
+    val preloadedData = preloadViewModel.preloadedData
 
     // Structured error state
     private val _errorState = MutableStateFlow<ErrorHandler.ErrorState?>(null)
@@ -40,6 +48,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun selectVideo(uri: Uri) {
         _selectedVideoUri.value = uri
         loadVideoMetadata(uri)
+    }
+    
+    // Iniciar preload em background após vídeo ser validado
+    private fun startPreloadInBackground(uri: Uri) {
+        viewModelScope.launch {
+            // Aguardar um pouco para UI atualizar primeiro
+            kotlinx.coroutines.delay(100)
+            preloadViewModel.startPreload(uri, 180f)
+        }
     }
 
     private fun loadVideoMetadata(uri: Uri) {
@@ -69,6 +86,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         } else {
                             _uiState.value = HomeUiState.VideoLoaded(metadata)
                             Timber.d("Video loaded: ${metadata.fileName}")
+                            // INICIAR PRELOAD EM BACKGROUND IMEDIATAMENTE
+                            startPreloadInBackground(uri)
                         }
                     } else {
                         _errorState.value = ErrorHandler.ErrorState(
@@ -137,6 +156,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetState() {
         _uiState.value = HomeUiState.Initial
+        // Cancelar preload ao resetar
+        preloadViewModel.cancelPreload()
+        PreloadDataStore.clearData()
+    }
+    
+    fun cancelPreload() {
+        preloadViewModel.cancelPreload()
+    }
+    
+    fun isPreloadReady(): Boolean {
+        return preloadState.value is PreloadUiState.Ready
     }
 }
 

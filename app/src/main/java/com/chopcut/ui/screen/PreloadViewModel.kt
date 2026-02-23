@@ -161,7 +161,8 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
             if (percent != lastPercent) {
                 updateProgress(
                     stage = ExtractionStage.ExtractingAudio,
-                    audioPercent = percent
+                    audioPercent = percent,
+                    logs = listOf("Extraindo áudio: $percent%")
                 )
                 lastPercent = percent
             }
@@ -193,7 +194,8 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
                     stage = ExtractionStage.ExtractingThumbnails,
                     thumbnailPercent = percent,
                     currentSegment = i + 1,
-                    totalSegments = targetSegments
+                    totalSegments = targetSegments,
+                    logs = listOf("Strip ${i + 1}/$targetSegments extraída (${percent}%)")
                 )
                 lastPercent = percent
             }
