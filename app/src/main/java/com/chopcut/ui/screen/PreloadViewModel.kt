@@ -12,11 +12,14 @@ import com.chopcut.util.DispatcherProvider
 import com.chopcut.utils.VideoConstraints
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 class PreloadViewModel(application: Application) : AndroidViewModel(application) {
@@ -65,7 +68,7 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
                 
                 // Inicializar StripManager com dimensões baseadas na largura da tela
                 val thumbWidth = screenWidthDp.toInt()
-                val thumbHeight = (thumbWidth * 0.67f).toInt() // Aspect 3:2
+                val thumbHeight = (thumbWidth * 0.67f).toInt()
                 stripManager = ThumbnailStripManager(getApplication(), thumbWidth, thumbHeight)
                 
                 val totalSegments = stripManager!!.getSegmentCount(durationMs)
@@ -86,7 +89,7 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
                     logs = listOf("Aguardando delay para extração de thumbnails...")
                 )
                 
-                // Iniciar extração de thumbnails com delay (PRIO)
+                // Iniciar extração de thumbnails com delay (PRIORIDADE)
                 thumbnailJob = viewModelScope.launch(Dispatchers.IO) {
                     kotlinx.coroutines.delay(PreloadConfig.THUMBNAIL_EXTRACTION_DELAY_MS)
                     
@@ -95,7 +98,7 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
                         logs = listOf("Iniciando extração de thumbnails (prioridade)...")
                     )
                     
-                    val strips = extractThumbnailsWithProgress(
+                    val strips = extractThumbnailsWithPriority(
                         uri = uri,
                         stripManager = stripManager!!,
                         targetSegments = preloadSegments,
@@ -194,11 +197,8 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
     ): AudioRawData {
         var lastPercent = -1
         
-        // Como AudioDataExtractor não tem callback de progresso nativo,
-        // vamos extrair tudo de uma vez e simular progresso para debug
         val audioData = audioDataExtractor.extractRawPcmData(uri, targetBarCount)
         
-        // Emitir logs de progresso simulados para debug
         val totalSteps = 5
         for (i in 1..totalSteps) {
             val percent = (i * 100 / totalSteps)
@@ -215,7 +215,7 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
         return audioData
     }
     
-    private suspend fun extractThumbnailsWithProgress(
+    private suspend fun extractThumbnailsWithPriority(
         uri: Uri,
         stripManager: ThumbnailStripManager,
         targetSegments: Int,
@@ -225,24 +225,48 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
         val strips = mutableMapOf<Int, Bitmap>()
         var lastPercent = -1
         
-        for (i in 0 until targetSegments) {
-            val strip = stripManager.extractSegment(uri, i, durationMs)
-            if (strip != null) {
-                strips[i] = strip
-            }
+        // PRIORIDADE: Primeira strip com Dispatchers.Default (alta prioridade)
+        updateProgress(
+            stage = ExtractionStage.ExtractingThumbnails,
+            currentSegment = 1,
+            logs = listOf("Strip 1 extraída instantaneamente (prioridade)")
+        )
+        
+        val strip0 = withContext(Dispatchers.Default) {
+            stripManager.extractSegment(uri, 0, durationMs)
+        }
+        if (strip0 != null) {
+            strips[0] = strip0
+        }
+        
+        Timber.d("First strip extracted immediately: ${strip0 != null}")
+        
+        // Continuar com restante em paralelo (Dispatchers.IO, limitado por Semaphore)
+        if (targetSegments > 1) {
+            val remainingSegments = (1 until targetSegments).toList()
             
-            // Calcular percentual
-            val percent = ((i + 1) * 100 / targetSegments)
-            if (percent != lastPercent) {
-                updateProgress(
-                    stage = ExtractionStage.ExtractingThumbnails,
-                    thumbnailPercent = percent,
-                    currentSegment = i + 1,
-                    totalSegments = targetSegments,
-                    logs = listOf("Strip ${i + 1}/$targetSegments extraída (${percent}%)")
-                )
-                lastPercent = percent
-            }
+            val results = remainingSegments.map { segIdx ->
+                viewModelScope.async(Dispatchers.IO) {
+                    val strip = stripManager.extractSegment(uri, segIdx, durationMs)
+                    if (strip != null) {
+                        strips[segIdx] = strip
+                    }
+                    
+                    val percent = ((segIdx + 1) * 100 / targetSegments)
+                    if (percent != lastPercent) {
+                        updateProgress(
+                            stage = ExtractionStage.ExtractingThumbnails,
+                            thumbnailPercent = percent,
+                            currentSegment = segIdx + 1,
+                            totalSegments = targetSegments,
+                            logs = listOf("Strip ${segIdx + 1}/$targetSegments extraída (${percent}%)")
+                        )
+                        lastPercent = percent
+                    }
+                    
+                    strip
+                }
+            }.awaitAll()
         }
         
         return strips
@@ -282,20 +306,19 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
     
     private fun calculateTargetBarCount(durationMs: Long): Int {
         return when {
-            durationMs < 60000 -> 100 // < 1 min
-            durationMs < 300000 -> 300 // < 5 min
-            else -> 600 // 5-15 min
+            durationMs < 60000 -> 100
+            durationMs < 300000 -> 300
+            else -> 600
         }
     }
     
     private suspend fun getVideoDuration(uri: Uri): Long {
-        // Usar AudioDataExtractor para obter duração (já tem MediaExtractor interno)
         try {
             val audioData = audioDataExtractor.extractRawPcmData(uri, 100)
             return audioData.durationMs
         } catch (e: Exception) {
             Timber.e(e, "Failed to get video duration")
-            return VideoConstraints.MAX_DURATION_MS + 1 // Forçar erro
+            return VideoConstraints.MAX_DURATION_MS + 1
         }
     }
     
