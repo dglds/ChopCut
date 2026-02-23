@@ -23,6 +23,7 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
     
     private val audioDataExtractor = AudioDataExtractor(application)
     private var preloadJob: Job? = null
+    private var thumbnailJob: Job? = null
     private var stripManager: ThumbnailStripManager? = null
     
     private val _uiState = MutableStateFlow<PreloadUiState>(PreloadUiState.Idle)
@@ -33,6 +34,7 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
     
     fun startPreload(uri: Uri, screenWidthDp: Float) {
         preloadJob?.cancel()
+        thumbnailJob?.cancel()
         
         preloadJob = viewModelScope.launch(DispatcherProvider.io) {
             try {
@@ -78,54 +80,95 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
                     )
                 )
                 
-                // FASE 2: Extração de Áudio
+                // PRIORIDADE: Extração de Thumbnails com delay
                 updateProgress(
                     stage = ExtractionStage.ExtractingAudio,
-                    logs = listOf("Extraindo áudio...")
+                    logs = listOf("Aguardando delay para extração de thumbnails...")
                 )
                 
+                // Iniciar extração de thumbnails com delay (PRIO)
+                thumbnailJob = viewModelScope.launch(Dispatchers.IO) {
+                    kotlinx.coroutines.delay(PreloadConfig.THUMBNAIL_EXTRACTION_DELAY_MS)
+                    
+                    updateProgress(
+                        stage = ExtractionStage.WaitingForThumbnails,
+                        logs = listOf("Iniciando extração de thumbnails (prioridade)...")
+                    )
+                    
+                    val strips = extractThumbnailsWithProgress(
+                        uri = uri,
+                        stripManager = stripManager!!,
+                        targetSegments = preloadSegments,
+                        totalSegments = totalSegments,
+                        durationMs = durationMs
+                    )
+                    
+                    // Quando thumbnails terminam, marcar como Ready se já tiver áudio
+                    val currentAudio = _preloadedData.value?.audioAmplitudes
+                    if (currentAudio != null) {
+                        updateProgress(
+                            stage = ExtractionStage.Ready,
+                            thumbnailPercent = 100,
+                            logs = listOf("Thumbnails: 100% ✓ ($preloadSegments strips)")
+                        )
+                        
+                        val data = PreloadedData(
+                            videoUri = uri,
+                            audioAmplitudes = currentAudio,
+                            preloadedStrips = strips,
+                            totalSegments = totalSegments,
+                            preloadPercentage = 0.5f
+                        )
+                        
+                        _preloadedData.value = data
+                        _uiState.value = PreloadUiState.Ready(data)
+                        
+                        Timber.d("Preload completed: ${strips.size} strips, ${currentAudio.size} audio samples")
+                    } else {
+                        // Se não tem áudio, aguardar (áudio será extraído em paralelo)
+                        Timber.d("Thumbnails completed, waiting for audio...")
+                    }
+                }
+                
+                // Extração de áudio em paralelo (sem prioridade)
                 val targetBarCount = calculateTargetBarCount(durationMs)
                 val audioData = extractAudioWithProgress(uri, targetBarCount)
                 
-                updateProgress(
-                    stage = ExtractionStage.ExtractingAudio,
-                    audioPercent = 100,
-                    logs = listOf("Áudio: 100% ✓ (${audioData.pcmSamples.size} amostras)")
-                )
-                
-                // FASE 3: Extração de Thumbnails
-                updateProgress(
-                    stage = ExtractionStage.ExtractingThumbnails,
-                    logs = listOf("Extraindo thumbnails...")
-                )
-                
-                val strips = extractThumbnailsWithProgress(
-                    uri = uri,
-                    stripManager = stripManager!!,
-                    targetSegments = preloadSegments,
-                    totalSegments = totalSegments,
-                    durationMs = durationMs
-                )
-                
-                updateProgress(
-                    stage = ExtractionStage.Ready,
-                    thumbnailPercent = 100,
-                    logs = listOf("Thumbnails: 100% ✓ ($preloadSegments strips)")
-                )
-                
-                // Dados prontos
-                val data = PreloadedData(
+                // Salvar dados parciais quando áudio termina
+                val currentStrips = _preloadedData.value?.preloadedStrips
+                _preloadedData.value = PreloadedData(
                     videoUri = uri,
                     audioAmplitudes = audioData.pcmSamples.toList(),
-                    preloadedStrips = strips,
+                    preloadedStrips = currentStrips ?: emptyMap(),
                     totalSegments = totalSegments,
                     preloadPercentage = 0.5f
                 )
                 
-                _preloadedData.value = data
-                _uiState.value = PreloadUiState.Ready(data)
-                
-                Timber.d("Preload completed: ${strips.size} strips, ${audioData.pcmSamples.size} audio samples")
+                // Se thumbnails já terminaram, marcar como Ready
+                if (currentStrips != null && currentStrips.isNotEmpty()) {
+                    updateProgress(
+                        stage = ExtractionStage.Ready,
+                        audioPercent = 100,
+                        thumbnailPercent = 100,
+                        logs = listOf(
+                            "Áudio: 100% ✓",
+                            "Thumbnails: 100% ✓"
+                        )
+                    )
+                    
+                    val data = PreloadedData(
+                        videoUri = uri,
+                        audioAmplitudes = audioData.pcmSamples.toList(),
+                        preloadedStrips = currentStrips,
+                        totalSegments = totalSegments,
+                        preloadPercentage = 0.5f
+                    )
+                    
+                    _preloadedData.value = data
+                    _uiState.value = PreloadUiState.Ready(data)
+                    
+                    Timber.d("Preload completed: ${currentStrips.size} strips, ${audioData.pcmSamples.size} audio samples")
+                }
                 
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
@@ -140,6 +183,7 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
     
     fun cancelPreload() {
         preloadJob?.cancel()
+        thumbnailJob?.cancel()
         _uiState.value = PreloadUiState.Cancelled
         Timber.d("Preload cancelled")
     }
@@ -258,6 +302,7 @@ class PreloadViewModel(application: Application) : AndroidViewModel(application)
     override fun onCleared() {
         super.onCleared()
         preloadJob?.cancel()
+        thumbnailJob?.cancel()
         preloadedData.value?.preloadedStrips?.values?.forEach { bitmap ->
             if (!bitmap.isRecycled) bitmap.recycle()
         }

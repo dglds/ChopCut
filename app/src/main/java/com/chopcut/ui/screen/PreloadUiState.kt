@@ -3,6 +3,10 @@ package com.chopcut.ui.screen
 import android.graphics.Bitmap
 import android.net.Uri
 
+object PreloadConfig {
+    const val THUMBNAIL_EXTRACTION_DELAY_MS = 3000L // 3 segundos
+}
+
 sealed class PreloadUiState {
     object Idle : PreloadUiState()
     data class Loading(val progress: PreloadProgress) : PreloadUiState()
@@ -35,6 +39,7 @@ enum class ExtractionStage {
     Starting,
     Validating,
     ExtractingAudio,
+    WaitingForThumbnails,
     ExtractingThumbnails,
     Ready
 }
