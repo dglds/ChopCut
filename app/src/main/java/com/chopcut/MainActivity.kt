@@ -19,6 +19,9 @@ import androidx.navigation.navArgument
 import com.chopcut.data.local.PreferencesManager
 import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.HomeScreen
+import com.chopcut.ui.screen.PreloadDataStore
+import com.chopcut.ui.screen.PreloadScreen
+import com.chopcut.ui.screen.PreloadViewModel
 import com.chopcut.ui.screen.PreferencesScreen
 import com.chopcut.ui.screen.TrimScreen
 import com.chopcut.ui.screen.debug.AudioWaveFormsTestScreen
@@ -32,6 +35,7 @@ import com.chopcut.ui.theme.ChopCutTheme
  * Navigation structure:
  * - "onboarding" -> Onboarding screen (first run only)
  * - "home" -> Home screen (start destination)
+ * - "preload?videoUri={videoUri}" -> Video preload screen
  * - "editor?videoUri={videoUri}" -> Video editor screen
  */
 class MainActivity : ComponentActivity() {
@@ -65,13 +69,13 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // ==================== HOME SCREEN ====================
-                        composable("home") {
-                            HomeScreen(
-                                onNavigateToEditor = { videoUri ->
-                                    val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
-                                    navController.navigate("editor?videoUri=$encodedUri")
-                                },
+                         // ==================== HOME SCREEN ====================
+                         composable("home") {
+                             HomeScreen(
+                                 onNavigateToEditor = { videoUri ->
+                                     val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
+                                     navController.navigate("preload?videoUri=$encodedUri")
+                                 },
                                 onNavigateToPreferences = {
                                     navController.navigate("preferences")
                                 },
@@ -86,37 +90,69 @@ class MainActivity : ComponentActivity() {
                             AudioWaveFormsTestScreen()
                         }
 
-                        // ==================== PREFERENCES SCREEN ====================
-                        composable("preferences") {
-                            PreferencesScreen(
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                         // ==================== PREFERENCES SCREEN ====================
+                         composable("preferences") {
+                             PreferencesScreen(
+                                 onNavigateBack = { navController.popBackStack() }
+                             )
+                         }
 
-                        // ==================== EDITOR SCREEN ====================
-                        composable(
-                            route = "editor?videoUri={videoUri}",
-                            arguments = listOf(
-                                navArgument("videoUri") {
-                                    type = NavType.StringType
-                                    nullable = true
-                                    defaultValue = null
-                                }
-                            ),
-                            enterTransition = { EnterTransition.None },
-                            exitTransition = { ExitTransition.None },
-                            popEnterTransition = { EnterTransition.None },
-                            popExitTransition = { ExitTransition.None }
-                        ) { backStackEntry ->
-                            val videoUriString = backStackEntry.arguments?.getString("videoUri")
+                         // ==================== PRELOAD SCREEN ====================
+                         composable(
+                             route = "preload?videoUri={videoUri}",
+                             arguments = listOf(
+                                 navArgument("videoUri") { type = NavType.StringType }
+                             )
+                         ) { backStackEntry ->
+                             val videoUriString = backStackEntry.arguments?.getString("videoUri")
+                             val videoUri = Uri.parse(videoUriString)
+                             
+                             PreloadScreen(
+                                 videoUri = videoUri,
+                                 onReady = {
+                                     // Passar os dados pré-carregados via navigation
+                                     navController.navigate("editor?videoUri=${java.net.URLEncoder.encode(videoUriString, "UTF-8")}") {
+                                         popUpTo("home")
+                                     }
+                                 },
+                                 onCancel = {
+                                     navController.popBackStack()
+                                 }
+                             )
+                         }
 
-                            val videoUri = videoUriString?.let { Uri.parse(it) }
+                         // ==================== EDITOR SCREEN ====================
+                         composable(
+                             route = "editor?videoUri={videoUri}",
+                             arguments = listOf(
+                                 navArgument("videoUri") {
+                                     type = NavType.StringType
+                                     nullable = true
+                                     defaultValue = null
+                                 }
+                             ),
+                             enterTransition = { EnterTransition.None },
+                             exitTransition = { ExitTransition.None },
+                             popEnterTransition = { EnterTransition.None },
+                             popExitTransition = { ExitTransition.None }
+                         ) { backStackEntry ->
+                             val videoUriString = backStackEntry.arguments?.getString("videoUri")
 
-                            TrimScreen(
-                                videoUri = videoUri ?: Uri.EMPTY,
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                             val videoUri = videoUriString?.let { Uri.parse(it) }
+                             
+                             // Recuperar dados pré-carregados do PreloadDataStore
+                             val preloadedData = PreloadDataStore.getData()
+
+                             TrimScreen(
+                                 videoUri = videoUri ?: Uri.EMPTY,
+                                 preloadedData = preloadedData,
+                                 onNavigateBack = {
+                                     // Limpar dados ao navegar para trás
+                                     PreloadDataStore.clearData()
+                                     navController.popBackStack()
+                                 }
+                             )
+                         }
                     }
                 }
             }

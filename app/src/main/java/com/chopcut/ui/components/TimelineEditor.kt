@@ -1,5 +1,6 @@
 package com.chopcut.ui.components
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.annotation.OptIn
 import kotlinx.coroutines.Dispatchers
@@ -79,16 +80,15 @@ fun TimelineEditor(
     isWaveformLoading: Boolean = false,
     waveformError: String? = null,
     waveformStyle: WaveformStyle = WaveformStyle(),
-    // Novos parâmetros para AudioWaveForms
     audioWaveformsAmplitudes: List<Float> = emptyList(),
     isAudioWaveformsLoading: Boolean = false,
+    preloadedStrips: Map<Int, Bitmap> = emptyMap(),
     onPositionChange: (Long) -> Unit,
         onAddPosition: () -> Unit,
         onRequestNewMedia: (() -> Unit)? = null,
         onVideoDurationChange: ((Long) -> Unit)? = null,
         extraContent: @Composable () -> Unit = {},
         modifier: Modifier = Modifier,
-        // ⚠️ Flag para desativar waveform temporariamente
         showWaveform: Boolean = false
     ) {
          val context = androidx.compose.ui.platform.LocalContext.current
@@ -108,12 +108,20 @@ fun TimelineEditor(
         // Dimensões density-aware: match exato do display = pixel-perfect, sem distorção
         val thumbWidth = remember(density) { with(density) { 60.dp.roundToPx() } }
         val thumbHeight = remember(density) { with(density) { 40.dp.roundToPx() } }
-        val stripManager = remember(thumbWidth, thumbHeight) {
-            ThumbnailStripManager(context, thumbWidth, thumbHeight)
-        }
-        val strips = remember { androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>() }
-        val loadingStrips = remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
-        val scope = androidx.compose.runtime.rememberCoroutineScope()
+         val stripManager = remember(thumbWidth, thumbHeight) {
+             ThumbnailStripManager(context, thumbWidth, thumbHeight)
+         }
+         val strips = remember {
+             if (preloadedStrips.isNotEmpty()) {
+                 androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
+                     putAll(preloadedStrips)
+                 }
+             } else {
+                 androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>()
+             }
+         }
+         val loadingStrips = remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
+         val scope = androidx.compose.runtime.rememberCoroutineScope()
 
         // Máximo de strips em memória (100 × ~432KB RGB_565 ≈ 42MB)
         // Suficiente para ~16 minutos de timeline sem eviction

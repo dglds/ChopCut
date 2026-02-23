@@ -14,6 +14,7 @@ import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.util.DispatcherProvider
 import com.chopcut.util.error.ErrorHandler
 import com.chopcut.util.error.safeExecuteSuspend
+import com.chopcut.utils.VideoConstraints
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
@@ -54,8 +55,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 is com.chopcut.util.error.ErrorResult.Success -> {
                     val metadata = result.data
                     if (metadata != null) {
-                        _uiState.value = HomeUiState.VideoLoaded(metadata)
-                        Timber.d("Video loaded: ${metadata.fileName}")
+                        // Validar duração
+                        val validation = VideoConstraints.getValidationMessage(
+                            metadata.durationMs
+                        )
+                        if (validation != null) {
+                            _errorState.value = ErrorHandler.ErrorState(
+                                title = "Vídeo muito longo",
+                                message = validation,
+                                recovery = com.chopcut.util.error.RecoveryStrategy.SelectAnotherVideo
+                            )
+                            _uiState.value = HomeUiState.Error(validation)
+                        } else {
+                            _uiState.value = HomeUiState.VideoLoaded(metadata)
+                            Timber.d("Video loaded: ${metadata.fileName}")
+                        }
                     } else {
                         _errorState.value = ErrorHandler.ErrorState(
                             title = "Erro de vídeo",

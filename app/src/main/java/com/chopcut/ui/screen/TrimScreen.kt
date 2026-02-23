@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.data.pipeline.TrimProgress
 import com.chopcut.data.repository.VideoRepository
@@ -32,7 +33,10 @@ import timber.log.Timber
 @Composable
 fun TrimScreen(
     videoUri: Uri,
-    viewModel: TrimViewModel = viewModel(),
+    preloadedData: PreloadedData? = null,
+    viewModel: TrimViewModel = viewModel(
+        factory = TrimViewModel.TrimViewModelFactory(preloadedData)
+    ),
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -135,6 +139,7 @@ fun TrimScreen(
                         waveformStyle = com.chopcut.ui.components.WaveformStyle(),
                         audioWaveformsAmplitudes = state.audioWaveformsAmplitudes,
                         isAudioWaveformsLoading = state.isAudioWaveformsLoading,
+                        preloadedStrips = preloadedData?.preloadedStrips ?: emptyMap(),
                         onPositionChange = { viewModel.setCurrentPosition(it) },
                         onAddPosition = { viewModel.addPosition(state.currentPosition) },
                         onRequestNewMedia = { },

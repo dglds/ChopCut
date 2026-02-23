@@ -1,8 +1,11 @@
 package com.chopcut.ui.screen
 
 import android.app.Application
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.data.audio.WaveFormGenerator
@@ -17,7 +20,40 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
-class TrimViewModel(application: Application) : AndroidViewModel(application) {
+class TrimViewModel(
+    application: Application,
+    private val initialAudioAmplitudes: List<Float>? = null,
+    private val initialPreloadedStrips: Map<Int, Bitmap>? = null
+) : AndroidViewModel(application) {
+
+    class TrimViewModelFactory(
+        private val preloadedData: PreloadedData?
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(TrimViewModel::class.java)) {
+                @Suppress("DEPRECATION")
+                val app = modelClass.classLoader?.let { 
+                    try {
+                        java.lang.Class.forName("android.app.ActivityThread")
+                            .getMethod("currentApplication")
+                            .invoke(null) as? Application
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                
+                if (app != null) {
+                    return TrimViewModel(
+                        application = app,
+                        initialAudioAmplitudes = preloadedData?.audioAmplitudes,
+                        initialPreloadedStrips = preloadedData?.preloadedStrips
+                    ) as T
+                }
+            }
+            throw IllegalArgumentException("Unknown ViewModel class")
+        }
+    }
 
     private val _state = MutableStateFlow(TrimEditorState())
     val state: StateFlow<TrimEditorState> = _state.asStateFlow()
@@ -40,18 +76,17 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
             Timber.d("TrimViewModel: loadWaveform START - uri=$uri")
             _state.update { it.copy(isWaveformLoading = true, waveformError = null) }
             try {
-                // Usar targetBarCount baseado na qualidade atual
                 val barCount = waveformQuality.calculateBarCount(
-                    durationMs = 0,  // Será obtido do rawData
+                    durationMs = 0,
                     screenWidthDp = 400f
                 )
                 Timber.d("TrimViewModel: calculated barCount=$barCount for quality=${waveformQuality.displayName}")
 
                 val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = barCount)
-                Timber.d("TrimViewModel: rawData received - samples=${rawData.pcmSamples.size}, duration=${rawData.durationMs}ms, sampleRate=${rawData.sampleRate}")
+                Timber.d("TrimViewModel: rawData received - samples=${rawData.pcmSamples.size}, duration=${rawData.durationMs}ms")
 
                 val threshold = 0.05f
-                val silenceHeight: Float? = null  // Dinâmico - calculado a partir das samples mais baixas
+                val silenceHeight: Float? = null
 
                 val amplitudes = WaveFormGenerator.generateWaveform(
                     pcmSamples = rawData.pcmSamples,
@@ -77,12 +112,21 @@ class TrimViewModel(application: Application) : AndroidViewModel(application) {
     fun loadAudioWaveforms(uri: Uri, targetBarCount: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             Timber.d("TrimViewModel: loadAudioWaveforms START - uri=$uri, targetBarCount=$targetBarCount")
+            
+            if (initialAudioAmplitudes != null) {
+                _state.update { it.copy(
+                    audioWaveformsAmplitudes = initialAudioAmplitudes,
+                    isAudioWaveformsLoading = false
+                ) }
+                Timber.d("TrimViewModel: Using preloaded audio - ${initialAudioAmplitudes.size} amplitudes")
+                return@launch
+            }
+            
             _state.update { it.copy(isAudioWaveformsLoading = true, audioWaveformsAmplitudes = emptyList()) }
             try {
                 val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = targetBarCount)
                 Timber.d("TrimViewModel: AudioWaveforms rawData received - samples=${rawData.pcmSamples.size}, duration=${rawData.durationMs}ms")
 
-                // Armazenar as amplitudes diretamente (já processadas pelo AudioDataExtractor)
                 val amplitudesList = rawData.pcmSamples.toList()
                 Timber.d("TrimViewModel: Converted to List - ${amplitudesList.size} amplitudes")
                 _state.update { it.copy(
