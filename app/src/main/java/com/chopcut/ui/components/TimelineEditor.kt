@@ -113,10 +113,13 @@ fun TimelineEditor(
          }
          val strips = remember {
              if (preloadedStrips.isNotEmpty()) {
+                 android.util.Log.d("ThumbnailStrip", "Initializing with preloaded strips: ${preloadedStrips.size}")
+                 android.util.Log.d("ThumbnailStrip", "Preloaded strips keys: ${preloadedStrips.keys.joinToString()}")
                  androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
                      putAll(preloadedStrips)
                  }
              } else {
+                 android.util.Log.d("ThumbnailStrip", "Initializing empty strips map")
                  androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>()
              }
          }
@@ -178,13 +181,17 @@ fun TimelineEditor(
         }
 
         // BACKGROUND LOADING: Pré-carregar até maxStrips segmentos sequencialmente
-        LaunchedEffect(videoUri, videoDurationMs) {
+        // Só pré-carregar em background se não houver strips pré-carregadas
+        LaunchedEffect(videoUri, videoDurationMs, preloadedStrips.isEmpty()) {
             if (videoDurationMs == 0L) return@LaunchedEffect
+            // Se já temos strips pré-carregadas, não precisamos pré-carregar em background
+            if (preloadedStrips.isNotEmpty()) return@LaunchedEffect
+            
             val totalSegments = stripManager.getSegmentCount(videoDurationMs)
             val toPreload = minOf(totalSegments, maxStrips)
-
+            
             android.util.Log.d("ThumbnailStrip", "Background: $totalSegments segments, pre-loading $toPreload")
-
+            
             for (segIdx in 0 until toPreload) {
                 // Parar se já atingiu o limite (scroll-based pode ter preenchido)
                 if (strips.size >= maxStrips) break
@@ -200,7 +207,7 @@ fun TimelineEditor(
                     }
                 }
             }
-
+            
             android.util.Log.d("ThumbnailStrip", "Background: Complete (${strips.size} strips loaded)")
         }
 

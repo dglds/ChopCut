@@ -19,6 +19,7 @@ import com.chopcut.utils.VideoConstraints
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -56,6 +57,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             // Aguardar um pouco para UI atualizar primeiro
             kotlinx.coroutines.delay(100)
             preloadViewModel.startPreload(uri, 180f)
+            
+            // Observar o preloadState para salvar os dados no PreloadDataStore quando prontos
+            preloadViewModel.uiState.collectLatest { state ->
+                if (state is PreloadUiState.Ready) {
+                    // Salvar dados no PreloadDataStore para TrimScreen
+                    PreloadDataStore.setData(state.data)
+                    Timber.d("Preloaded data saved to PreloadDataStore: ${state.data.preloadedStrips.size} strips")
+                }
+            }
         }
     }
 
