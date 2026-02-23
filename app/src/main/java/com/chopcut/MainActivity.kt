@@ -20,8 +20,6 @@ import com.chopcut.data.local.PreferencesManager
 import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.PreloadDataStore
-import com.chopcut.ui.screen.PreloadScreen
-import com.chopcut.ui.screen.PreloadViewModel
 import com.chopcut.ui.screen.PreferencesScreen
 import com.chopcut.ui.screen.TrimScreen
 import com.chopcut.ui.screen.debug.AudioWaveFormsTestScreen
@@ -35,7 +33,6 @@ import com.chopcut.ui.theme.ChopCutTheme
  * Navigation structure:
  * - "onboarding" -> Onboarding screen (first run only)
  * - "home" -> Home screen (start destination)
- * - "preload?videoUri={videoUri}" -> Video preload screen
  * - "editor?videoUri={videoUri}" -> Video editor screen
  */
 class MainActivity : ComponentActivity() {
@@ -74,7 +71,7 @@ class MainActivity : ComponentActivity() {
                              HomeScreen(
                                  onNavigateToEditor = { videoUri ->
                                      val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
-                                     navController.navigate("preload?videoUri=$encodedUri")
+                                     navController.navigate("editor?videoUri=$encodedUri")
                                  },
                                 onNavigateToPreferences = {
                                     navController.navigate("preferences")
@@ -94,30 +91,6 @@ class MainActivity : ComponentActivity() {
                          composable("preferences") {
                              PreferencesScreen(
                                  onNavigateBack = { navController.popBackStack() }
-                             )
-                         }
-
-                         // ==================== PRELOAD SCREEN ====================
-                         composable(
-                             route = "preload?videoUri={videoUri}",
-                             arguments = listOf(
-                                 navArgument("videoUri") { type = NavType.StringType }
-                             )
-                         ) { backStackEntry ->
-                             val videoUriString = backStackEntry.arguments?.getString("videoUri")
-                             val videoUri = Uri.parse(videoUriString)
-                             
-                             PreloadScreen(
-                                 videoUri = videoUri,
-                                 onReady = {
-                                     // Passar os dados pré-carregados via navigation
-                                     navController.navigate("editor?videoUri=${java.net.URLEncoder.encode(videoUriString, "UTF-8")}") {
-                                         popUpTo("home")
-                                     }
-                                 },
-                                 onCancel = {
-                                     navController.popBackStack()
-                                 }
                              )
                          }
 

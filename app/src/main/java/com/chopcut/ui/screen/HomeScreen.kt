@@ -1,6 +1,7 @@
 package com.chopcut.ui.screen
 
 import android.net.Uri
+import com.chopcut.BuildConfig
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -70,6 +71,7 @@ import com.chopcut.data.model.VideoInfo
 import com.chopcut.ui.components.atoms.formatDuration
 import com.chopcut.ui.components.buttons.ChopCutPrimaryButton
 import com.chopcut.ui.components.buttons.ChopCutSecondaryButton
+import com.chopcut.ui.components.feedback.DebugToast
 import com.chopcut.ui.components.feedback.ErrorState
 import com.chopcut.ui.components.gallery.BottomSheetGallery
 import com.chopcut.ui.theme.Border
@@ -141,55 +143,78 @@ fun HomeScreen(
             )
         }
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = ChopCutSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.lg)
-        ) {
-            // Video Picker Section
-            item {
-                Spacer(Modifier.height(ChopCutSpacing.xs))
-
-                val uri = selectedUri
-                when {
-                    uri != null && uiState is HomeUiState.VideoLoaded -> {
-                        VideoPickerLoaded(
-                            videoInfo = (uiState as HomeUiState.VideoLoaded).videoInfo,
-                            videoUri = uri,
-                            onChangeVideo = requestGallery,
-                            onOpenEditor = { onNavigateToEditor(uri) }
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = ChopCutSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.lg)
+            ) {
+                // Video Picker Section
+                item {
+                    Spacer(Modifier.height(ChopCutSpacing.xs))
+        
+                    val uri = selectedUri
+                    when {
+                        uri != null && uiState is HomeUiState.VideoLoaded -> {
+                            VideoPickerLoaded(
+                                videoInfo = (uiState as HomeUiState.VideoLoaded).videoInfo,
+                                videoUri = uri,
+                                onChangeVideo = requestGallery,
+                                onOpenEditor = { onNavigateToEditor(uri) }
+                            )
+                        }
+                        uri != null && uiState is HomeUiState.Loading -> {
+                            VideoPickerLoading()
+                        }
+                        else -> {
+                            VideoPickerEmpty(onClick = requestGallery)
+                        }
+                    }
+                }
+        
+                // Feature Grid
+                item {
+                    FeatureGrid()
+                }
+        
+                // Error State
+                if (uiState is HomeUiState.Error) {
+                    item {
+                        ErrorState(
+                            title = "Erro",
+                            message = (uiState as HomeUiState.Error).message,
+                            actionLabel = "Dispensar",
+                            onAction = { viewModel.resetState() }
                         )
                     }
-                    uri != null && uiState is HomeUiState.Loading -> {
-                        VideoPickerLoading()
-                    }
-                    else -> {
-                        VideoPickerEmpty(onClick = requestGallery)
+                }
+        
+                // Bottom spacing
+                item { Spacer(Modifier.height(ChopCutSpacing.md)) }
+            }
+            
+            // DebugToast na parte de baixo (DEBUG only)
+            if (com.chopcut.BuildConfig.DEBUG) {
+                val preloadState = viewModel.preloadState.collectAsStateWithLifecycle().value
+                if (preloadState is com.chopcut.ui.screen.PreloadUiState.Loading) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp)
+                    ) {
+                        val progress = (preloadState as com.chopcut.ui.screen.PreloadUiState.Loading).progress
+                        val logText = buildString {
+                            progress.logs.forEach { log ->
+                                append(log)
+                                append("\n")
+                            }
+                        }
+                        DebugToast(text = logText)
                     }
                 }
             }
-
-            // Feature Grid
-            item {
-                FeatureGrid()
-            }
-
-            // Error State
-            if (uiState is HomeUiState.Error) {
-                item {
-                    ErrorState(
-                        title = "Erro",
-                        message = (uiState as HomeUiState.Error).message,
-                        actionLabel = "Dispensar",
-                        onAction = { viewModel.resetState() }
-                    )
-                }
-            }
-
-            // Bottom spacing
-            item { Spacer(Modifier.height(ChopCutSpacing.md)) }
         }
     }
 
