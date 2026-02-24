@@ -515,52 +515,60 @@ fun TimelineEditor(
                       // OTIMIZAÇÃO: Culling agressivo - sem buffer para renderizar ~30% menos strips
                       val endSecond = ((currentScroll - centerOffset + timelineWidth) / pxPerSecond).toInt()
 
+                      // OTIMIZAÇÃO: Calcular segmentos visíveis para buscar strips uma vez
+                     val visibleSegmentIndices = mutableSetOf<Int>()
                      for (sec in startSecond..endSecond) {
-                         val timeMs = sec * 1000L
-                         if (timeMs >= videoDurationMs) break
-
                          val segIdx = sec / SEGMENT_SECONDS
-                         val frameInStrip = sec % SEGMENT_SECONDS
-                         val x = centerOffset + (sec * pxPerSecond) - currentScroll
+                         visibleSegmentIndices.add(segIdx)
+                     }
 
-                         // Cull check: Pular se fora da tela (redundante com start/endSecond mas bom pra garantir)
-                         if (x > size.width || x + pxPerSecond < 0) continue
+                     android.util.Log.d("TimelineEditor", "Drawing ${visibleSegmentIndices.size} visible segments (optimized)")
+
+                     for (sec in startSecond..endSecond) {
+                          val timeMs = sec * 1000L
+                          if (timeMs >= videoDurationMs) break
+
+                          val segIdx = sec / SEGMENT_SECONDS
+                          val frameInStrip = sec % SEGMENT_SECONDS
+                          val x = centerOffset + (sec * pxPerSecond) - currentScroll
+
+                          if (x > size.width || x + pxPerSecond < 0) continue
 
                           val strip = strips[segIdx]
-                          if (strip != null && !strip.isRecycled) {
-                              // Recortar o frame correto da strip (mantendo aspect ratio 1:1)
-                              srcRect.set(
-                                  (frameInStrip * thumbW).toInt(), 0,
-                                  ((frameInStrip + 1) * thumbW).toInt(), thumbH.toInt()
-                              )
-                              // Manter largura original do thumb para evitar distorção
-                              val thumbDisplayWidth = thumbW
-                              val thumbDisplayHeight = thumbW * (thumbH / thumbW) // Mantém aspect ratio
-                              dstRect.set(
-                                  x.toInt(), thumbnailTop.toInt(),
-                                  (x + thumbDisplayWidth).toInt(), (thumbnailTop + thumbH.toInt()).toInt()
-                              )
-                              drawIntoCanvas { canvas ->
-                                  canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
-                              }
-                          } else {
-                              // Strip não carregada - fundo escuro + spinner animado
-                              drawIntoCanvas { canvas ->
-                                  // Draw BG
-                                  canvas.nativeCanvas.drawRect(
-                                      x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
-                                      bgPaint
-                                  )
+                           if (strip != null && !strip.isRecycled) {
+                               // Recortar o frame correto da strip (mantendo aspect ratio 1:1)
+                               srcRect.set(
+                                   (frameInStrip * thumbW).toInt(), 0,
+                                   ((frameInStrip + 1) * thumbW).toInt(), thumbH.toInt()
+                               )
+                               // Manter largura original do thumb para evitar distorção
+                               val thumbDisplayWidth = thumbW
+                               val thumbDisplayHeight = thumbW * (thumbH / thumbW)
+                               dstRect.set(
+                                   x.toInt(), thumbnailTop.toInt(),
+                                   (x + thumbDisplayWidth).toInt(), (thumbnailTop + thumbH.toInt()).toInt()
+                               )
+                               drawIntoCanvas { canvas ->
+                                   canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
+                               }
+                           } else {
+                               // Strip não carregada - fundo escuro + spinner animado
+                               drawIntoCanvas { canvas ->
+                                   // Draw BG
+                                   canvas.nativeCanvas.drawRect(
+                                       x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
+                                       bgPaint
+                                   )
 
-                                  // Draw Spinner
-                                  val cx = x + pxPerSecond / 2
-                                  val cy = thumbnailTop + thumbnailHeightPx / 2
-                                  val r = 8.dp.toPx()
-                                  arcRect.set(cx - r, cy - r, cx + r, cy + r)
-                                  canvas.nativeCanvas.drawArc(arcRect, spinnerAngle, 270f, false, arcPaint)
-                              }
-                          }
-                     }
+                                   // Draw Spinner
+                                   val cx = x + pxPerSecond / 2
+                                   val cy = thumbnailTop + thumbnailHeightPx / 2
+                                   val r = 8.dp.toPx()
+                                   arcRect.set(cx - r, cy - r, cx + r, cy + r)
+                                   canvas.nativeCanvas.drawArc(arcRect, spinnerAngle, 270f, false, arcPaint)
+                               }
+                           }
+                      }
                      drawContext.canvas.restore()
 
                      // DRAW AUDIO WAVEFORMS (sincronizado com thumbnails)
