@@ -3,12 +3,17 @@ package com.chopcut.ui.screen
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.chopcut.data.local.PreferencesManager
 import com.chopcut.data.repository.VideoRepository
+import com.chopcut.data.thumbnail.ThumbnailStripManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
 
 sealed class PreferencesUiState {
     object Idle : PreferencesUiState()
@@ -21,9 +26,20 @@ class PreferencesViewModel(
     application: Application
 ) : AndroidViewModel(application) {
     private val videoRepository = VideoRepository(application)
+    private val prefsManager = PreferencesManager(application)
 
     private val _uiState = MutableStateFlow<PreferencesUiState>(PreferencesUiState.Idle)
     val uiState: StateFlow<PreferencesUiState> = _uiState.asStateFlow()
+
+    /** Estado do cache de thumbnails (reactivo) */
+    private val _isCacheEnabled = MutableStateFlow(prefsManager.thumbnailCacheEnabled)
+    val isCacheEnabled: StateFlow<Boolean> = _isCacheEnabled.asStateFlow()
+
+    fun setCacheEnabled(enabled: Boolean) {
+        prefsManager.thumbnailCacheEnabled = enabled
+        _isCacheEnabled.value = enabled
+        Timber.i("Thumbnail cache ${if (enabled) "enabled" else "disabled"}")
+    }
 
     fun deleteSavedVideos() {
         viewModelScope.launch {
@@ -43,6 +59,51 @@ class PreferencesViewModel(
                 Timber.e(e, "Error deleting saved videos")
                 _uiState.value = PreferencesUiState.Error(
                     message = "Erro ao remover vídeos: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /**
+     * Calcula o tamanho atual do cache de thumbnails em MB
+     */
+    suspend fun getThumbnailCacheSize(): Double = withContext(Dispatchers.IO) {
+        try {
+            val cacheDir = File(getApplication<Application>().cacheDir, "thumbnail_strips")
+            if (!cacheDir.exists()) {
+                return@withContext 0.0
+            }
+
+            var totalBytes = 0L
+            cacheDir.walkTopDown()
+                .filter { it.isFile }
+                .forEach { totalBytes += it.length() }
+
+            val totalMB = totalBytes / (1024.0 * 1024.0)
+            Timber.d("Thumbnail cache size: ${String.format("%.2f", totalMB)}MB ($totalBytes bytes)")
+            totalMB
+        } catch (e: Exception) {
+            Timber.e(e, "Error calculating thumbnail cache size")
+            0.0
+        }
+    }
+
+    /**
+     * Limpa todo o cache de thumbnails do disco
+     */
+    fun clearThumbnailCache() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.value = PreferencesUiState.Loading
+            try {
+                ThumbnailStripManager.clearCache(getApplication())
+                _uiState.value = PreferencesUiState.Success(
+                    message = "Cache de thumbnails limpo com sucesso."
+                )
+                Timber.i("Thumbnail cache cleared by user")
+            } catch (e: Exception) {
+                Timber.e(e, "Error clearing thumbnail cache")
+                _uiState.value = PreferencesUiState.Error(
+                    message = "Erro ao limpar cache: ${e.message}"
                 )
             }
         }
