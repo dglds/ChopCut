@@ -63,6 +63,7 @@ import com.chopcut.ui.theme.ChopCutMonoFont
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
 import androidx.media3.common.MediaItem
@@ -211,16 +212,16 @@ fun TimelineEditor(
             android.util.Log.d("ThumbnailStrip", "Background: Complete (${strips.size} strips loaded)")
         }
 
-        // Animação de spinner para thumbnails carregando
-        val infiniteTransition = rememberInfiniteTransition(label = "thumbnailSpinner")
-        val spinnerAngle by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
+        // Animação de shimmer suave para placeholders de thumbnails
+        val infiniteTransition = rememberInfiniteTransition(label = "thumbnailShimmer")
+        val shimmerProgress by infiniteTransition.animateFloat(
+            initialValue = -1f,
+            targetValue = 2f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1000, easing = LinearEasing),
+                animation = tween(5000, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Restart
             ),
-            label = "spinnerRotation"
+            label = "shimmerProgress"
         )
 
         val exoPlayer = remember(videoUri) {
@@ -451,25 +452,26 @@ fun TimelineEditor(
                    }
                 }
 
-                // Paint para spinner (pré-alocado)
-                val arcPaint = remember {
-                    android.graphics.Paint().apply {
-                        color = android.graphics.Color.parseColor("#64B5F6")
-                        style = android.graphics.Paint.Style.STROKE
-                        strokeWidth = 3f * 2.625f // 3dp approx in px, hardcoded for now or pass density
-                        isAntiAlias = true
-                        strokeCap = android.graphics.Paint.Cap.ROUND
-                    }
-                }
-                val arcRect = remember { android.graphics.RectF() }
-
-                // Paint para BG placeholder
+                // Paint para background do placeholder (base)
                 val bgPaint = remember {
                     android.graphics.Paint().apply {
-                       color = android.graphics.Color.parseColor("#1A1A1A")
+                       color = android.graphics.Color.parseColor("#1E1E1E")
                        style = android.graphics.Paint.Style.FILL
                     }
                 }
+
+                // Shimmer gradient colors (gradiente diagonal suave)
+                val shimmerGradient = remember {
+                    intArrayOf(
+                        android.graphics.Color.parseColor("#1E1E1E"), // Base escuro
+                        android.graphics.Color.parseColor("#2E2E2E"), // Médio
+                        android.graphics.Color.parseColor("#3A3A3A"), // Claro
+                        android.graphics.Color.parseColor("#2E2E2E"), // Médio
+                        android.graphics.Color.parseColor("#1E1E1E")  // Base escuro
+                    )
+                }
+
+                val shimmerPositions = remember { floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f) }
 
                   // Paint para timestamps da régua (pré-alocado, fora do draw loop)
                   val robotoMonoTypeface = remember {
@@ -552,20 +554,40 @@ fun TimelineEditor(
                                    canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
                                }
                            } else {
-                               // Strip não carregada - fundo escuro + spinner animado
+                               // Strip não carregada - shimmer effect diagonal suave
                                drawIntoCanvas { canvas ->
-                                   // Draw BG
+                                   // Draw base background
                                    canvas.nativeCanvas.drawRect(
                                        x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
                                        bgPaint
                                    )
 
-                                   // Draw Spinner
-                                   val cx = x + pxPerSecond / 2
-                                   val cy = thumbnailTop + thumbnailHeightPx / 2
-                                   val r = 8.dp.toPx()
-                                   arcRect.set(cx - r, cy - r, cx + r, cy + r)
-                                   canvas.nativeCanvas.drawArc(arcRect, spinnerAngle, 270f, false, arcPaint)
+                                   // Draw shimmer com gradiente diagonal
+                                   val shimmerPaint = android.graphics.Paint().apply {
+                                       // Gradiente diagonal (45°) que se move suavemente
+                                       val width = pxPerSecond
+                                       val height = thumbnailHeightPx
+                                       val gradientSize = (width + height) * 0.8f
+
+                                       // Calcular posição do gradiente baseado no shimmerProgress
+                                       val offsetX = shimmerProgress * (width + gradientSize) - gradientSize
+                                       val offsetY = shimmerProgress * (height + gradientSize) - gradientSize
+
+                                       shader = android.graphics.LinearGradient(
+                                           x + offsetX,
+                                           thumbnailTop + offsetY,
+                                           x + offsetX + gradientSize,
+                                           thumbnailTop + offsetY + gradientSize,
+                                           shimmerGradient,
+                                           shimmerPositions,
+                                           android.graphics.Shader.TileMode.CLAMP
+                                       )
+                                   }
+
+                                   canvas.nativeCanvas.drawRect(
+                                       x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
+                                       shimmerPaint
+                                   )
                                }
                            }
                       }
