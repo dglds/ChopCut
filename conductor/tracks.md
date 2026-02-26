@@ -28,3 +28,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [~] **Track: Implemente a feature trim-range para remoção de múltiplos pedaços do vídeo na TimelinePlayer.**
 *Link: [./tracks/trim_range_20260203/](./tracks/trim_range_20260203/)*
+
+---
+
+- [ ] **Track: Otimização de thumbnails da timeline com aspect ratio dinâmico, extração progressiva e compressão WEBP.**
+*Link: [./tracks/thumb_optimization_20260226/](./tracks/thumb_optimization_20260226/)*
