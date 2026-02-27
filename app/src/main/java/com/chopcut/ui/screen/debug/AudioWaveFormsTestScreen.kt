@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chopcut.ui.components.AudioWaveForms
+import com.chopcut.ui.components.feedback.DebugViewModel
 import com.chopcut.ui.components.AudioWaveFormsConfig
 import com.chopcut.ui.theme.ChopCutSpacing
 
@@ -46,7 +47,8 @@ import com.chopcut.ui.theme.ChopCutSpacing
 @Composable
 fun AudioWaveFormsTestScreen(
     testVideoUri: Uri? = null,
-    viewModel: AudioWaveFormsViewModel = viewModel()
+    viewModel: AudioWaveFormsViewModel = viewModel(),
+    debugViewModel: DebugViewModel? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 

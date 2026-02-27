@@ -44,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,7 +75,8 @@ import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.atoms.formatDuration
 import com.chopcut.ui.components.buttons.ChopCutPrimaryButton
 import com.chopcut.ui.components.buttons.ChopCutSecondaryButton
-import com.chopcut.ui.components.feedback.DebugToast
+import com.chopcut.ui.components.feedback.DebugEntry
+import com.chopcut.ui.components.feedback.DebugViewModel
 import com.chopcut.ui.components.feedback.ErrorState
 import com.chopcut.ui.components.gallery.BottomSheetGallery
 import com.chopcut.ui.theme.Border
@@ -98,7 +100,8 @@ import timber.log.Timber
 fun HomeScreen(
     onNavigateToEditor: (Uri) -> Unit = {},
     onNavigateToTests: () -> Unit = {},
-    onNavigateToPreferences: () -> Unit = {}
+    onNavigateToPreferences: () -> Unit = {},
+    debugViewModel: DebugViewModel? = null
 ) {
     val application = LocalContext.current.applicationContext as Application
     val videoRepository = remember { VideoRepository(application) }
@@ -197,21 +200,12 @@ fun HomeScreen(
             
             if (com.chopcut.BuildConfig.DEBUG) {
                 val preloadState = viewModel.preloadState.collectAsStateWithLifecycle().value
-                if (preloadState is com.chopcut.ui.screen.PreloadUiState.Loading) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .navigationBarsPadding()
-                            .padding(16.dp)
-                    ) {
-                        val progress = (preloadState as com.chopcut.ui.screen.PreloadUiState.Loading).progress
-                        val logText = buildString {
-                            progress.logs.forEach { log ->
-                                append(log)
-                                append("\n")
-                            }
+                if (preloadState is com.chopcut.ui.screen.PreloadUiState.Loading && debugViewModel != null) {
+                    val progress = (preloadState as com.chopcut.ui.screen.PreloadUiState.Loading).progress
+                    LaunchedEffect(progress.logs) {
+                        progress.logs.forEach { log ->
+                            debugViewModel.log(log)
                         }
-                        DebugToast(text = logText)
                     }
                 }
             }
