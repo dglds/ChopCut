@@ -28,8 +28,10 @@ Refatoração da extração para suportar dois níveis de qualidade para carrega
 Migração para WEBP para equilibrar o aumento de resolução com economia de disco.
 
 - [x] **Task: Migração para Compressão WEBP**
+    - [x] Escrever teste para validar que imagens salvas em WEBP são lidas corretamente e ocupam menos espaço que o JPEG equivalente.
     - [x] Atualizar o `ThumbnailStripManager` para usar `Bitmap.CompressFormat.WEBP`.
 - [x] **Task: Versionamento e Invalidação de Cache**
+    - [x] Escrever teste para garantir que o cache antigo (JPEG/RGB_565) é invalidado ou ignorado com segurança.
     - [x] Implementar `CACHE_VERSION` no sistema de arquivos de cache.
 - [x] **Task: Conductor - User Manual Verification 'Cache e Armazenamento' (Protocol in workflow.md)**
 
