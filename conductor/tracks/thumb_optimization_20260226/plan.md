@@ -11,7 +11,7 @@ Esta fase foca em detectar corretamente as proporções do vídeo para que a UI 
     - [x] Atualizar o `ViewModel` ou o estado da tela para expor o `aspectRatio` calculado.
 - [x] **Task: Conductor - User Manual Verification 'Infraestrutura de Metadados' (Protocol in workflow.md)**
 
-## Fase 2: Engine de Extração Progressiva (Baixa vs. Alta Resolução)
+## Fase 2: Engine de Extração Progressiva (Baixa vs. Alta Resolução) [checkpoint: 21c5d0d]
 Refatoração da extração para suportar dois níveis de qualidade para carregamento instantâneo.
 
 - [x] **Task: Suporte a Níveis de Qualidade na Extração**
