@@ -360,6 +360,7 @@ private fun VideoPickerLoaded(
             ),
             contentDescription = "Thumbnail do vídeo",
             contentScale = ContentScale.Crop,
+            alignment = Alignment.Center,
             modifier = Modifier.fillMaxSize()
         )
 
