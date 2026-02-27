@@ -15,12 +15,14 @@ Esta fase foca em detectar corretamente as proporções do vídeo para que a UI 
 Refatoração da extração para suportar dois níveis de qualidade para carregamento instantâneo.
 
 - [x] **Task: Suporte a Níveis de Qualidade na Extração**
+    - [x] Escrever teste para a nova interface de extração que solicita resoluções específicas.
     - [x] Refatorar o `ThumbnailExtractor` para aceitar um parâmetro de qualidade/escala.
 - [x] **Task: Implementar Extração Rápida (Low Quality)**
+    - [x] Escrever teste garantindo que a extração "Fast" é significativamente mais rápida que a padrão.
     - [x] Implementar a extração otimizada para velocidade (downsample agressivo).
 - [x] **Task: Implementar Extração de Alta Qualidade com Anti-Aliasing**
+    - [x] Escrever teste visual ou de integridade de bitmap para verificar a ausência de serrilhado (aliasing).
     - [x] Implementar extração em background com filtros de redimensionamento de alta fidelidade.
-- [x] **Task: Conductor - User Manual Verification 'Engine de Extração' (Protocol in workflow.md)**
 
 ## Fase 3: Cache e Otimização de Armazenamento (WEBP)
 Migração para WEBP para equilibrar o aumento de resolução com economia de disco.
