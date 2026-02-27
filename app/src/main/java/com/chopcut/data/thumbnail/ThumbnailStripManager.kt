@@ -306,6 +306,24 @@ class ThumbnailStripManager(
                 val strip = Bitmap.createBitmap(stripWidth, thumbHeight, Bitmap.Config.RGB_565)
                 val canvas = Canvas(strip)
 
+                // 🔍 ASPECT MONITOR: Log início da criação da strip
+                android.util.Log.i("ThumbnailAspectMonitor", """
+                    ╔═════════════════════════════════════════════════════════╗
+                    ║ CRIAÇÃO DE STRIP - Segmento: $segmentIndex
+                    ╚═════════════════════════════════════════════════════════╝
+                    📊 STRIP INFO:
+                       • Frames no segmento: $framesInSegment
+                       • Dimensões da strip: ${stripWidth}x${thumbHeight}
+                       • Config: RGB_565 (2 bytes/pixel)
+                       • Tamanho estimado: ${(stripWidth * thumbHeight * 2) / 1024}KB
+                       • Range de tempo: ${startSec}s - ${startSec + framesInSegment}s
+                       • Qualidade: $quality
+
+                    🎯 THUMB INDIVIDUAL:
+                       • Dimensões: ${thumbWidth}x${thumbHeight}
+                       • Aspect Ratio: ${String.format("%.3f", thumbWidth.toFloat() / thumbHeight.toFloat())}
+                """.trimIndent())
+
                 // MELHORIA: Extrair frames em batch usando ThumbnailExtractorBatch
                 // Isso reutiliza UMA instância do MediaMetadataRetriever para todo o segmento
                 val positions = (0 until framesInSegment).map { frameIdx ->
@@ -322,13 +340,14 @@ class ThumbnailStripManager(
                 )
 
                 if (extractedFrames.isEmpty()) {
+                    android.util.Log.w("ThumbnailAspectMonitor", "❌ ERRO: Nenhum frame extraído para segmento $segmentIndex")
                     Timber.w("ThumbnailStrip: No frames extracted for segment $segmentIndex")
                     return@withPermit null
                 }
 
-                // Stitch frames na strip
-                val dstAspect = thumbWidth.toFloat() / thumbHeight
+                android.util.Log.i("ThumbnailAspectMonitor", "   ✅ Extraídos ${extractedFrames.size}/${framesInSegment} frames com sucesso")
 
+                // Stitch frames na strip
                 for (frameIdx in 0 until framesInSegment) {
                     coroutineContext.ensureActive() // Responsividade ao cancelamento
 
@@ -337,34 +356,36 @@ class ThumbnailStripManager(
                     val source = extractedFrames[positionMs]
 
                     if (source != null) {
-                        // CenterCrop
-                        val srcW = source.width
-                        val srcH = source.height
-                        val srcAspect = srcW.toFloat() / srcH
-
-                        val cropW: Int
-                        val cropH: Int
-                        if (srcAspect > dstAspect) {
-                            cropH = srcH
-                            cropW = (srcH * dstAspect).toInt()
-                        } else {
-                            cropW = srcW
-                            cropH = (srcW / dstAspect).toInt()
-                        }
-
-                        val cropX = (srcW - cropW) / 2
-                        val cropY = (srcH - cropH) / 2
-
-                        val srcRect = Rect(cropX, cropY, cropX + cropW, cropY + cropH)
+                        // A lógica de aspect ratio agora está no `ThumbnailExtractorBatch`.
+                        // Apenas desenhamos o bitmap retornado no canvas da strip.
                         val dstX = frameIdx * thumbWidth
                         val dstRect = Rect(dstX, 0, dstX + thumbWidth, thumbHeight)
 
-                        canvas.drawBitmap(source, srcRect, dstRect, cropPaint)
+                        // 🔍 ASPECT MONITOR: Log detalhado do stitching
+                        android.util.Log.d("ThumbnailAspectMonitor", """
+                            🔗 STITCHING Frame #$frameIdx (${sec}s):
+                               • Source: ${source.width}x${source.height} (ratio: ${String.format("%.3f", source.width.toFloat() / source.height.toFloat())})
+                               • Destino na strip: [$dstX, 0, ${dstX + thumbWidth}, $thumbHeight]
+                               • Esperado: ${thumbWidth}x${thumbHeight}
+                               • Match: ${source.width == thumbWidth && source.height == thumbHeight}
+                        """.trimIndent())
+
+                        canvas.drawBitmap(source, null, dstRect, cropPaint)
                         source.recycle()
                     } else {
+                        android.util.Log.w("ThumbnailAspectMonitor", "   ⚠️ Frame #$frameIdx (${sec}s) não extraído")
                         Timber.w("ThumbnailStrip: Failed to extract frame at sec=$sec")
                     }
                 }
+
+                android.util.Log.i("ThumbnailAspectMonitor", """
+                    ✅ STRIP FINALIZADA:
+                       • Segmento: $segmentIndex
+                       • Dimensões finais: ${strip.width}x${strip.height}
+                       • Aspect Ratio: ${String.format("%.3f", strip.width.toFloat() / strip.height.toFloat())}
+                       • Frames stitchados: ${extractedFrames.size}/$framesInSegment
+                    ╚═════════════════════════════════════════════════════════╝
+                """.trimIndent())
 
                 Timber.d("ThumbnailStrip: Segment $segmentIndex ($framesInSegment frames, ${stripWidth}x$thumbHeight, RGB_565) - BATCH MODE")
 
@@ -376,6 +397,7 @@ class ThumbnailStripManager(
                 strip
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                android.util.Log.e("ThumbnailAspectMonitor", "❌ EXCEÇÃO FATAL ao extrair segmento $segmentIndex: ${e.message}", e)
                 Timber.e(e, "ThumbnailStrip: Fatal error extracting segment $segmentIndex")
                 null
             }

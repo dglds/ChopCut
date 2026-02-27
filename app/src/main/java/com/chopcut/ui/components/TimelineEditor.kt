@@ -159,28 +159,28 @@ fun TimelineEditor(
              .filter { !strips.containsKey(it) && loadingStrips[it] != true }
 
             segmentsToLoad.forEach { segIdx ->
-                loadingStrips[segIdx] = true
-                // scope.launch sobrevive ao restart do LaunchedEffect
+                if (loadingStrips.containsKey(segIdx)) return@forEach
+
+                // Carga Progressiva: LOW -> HIGH
                 scope.launch(Dispatchers.IO) {
+                    loadingStrips[segIdx] = true
                     try {
-                        val strip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = com.chopcut.data.model.ThumbnailQuality.HIGH)
-                        withContext(Dispatchers.Main) {
-                            if (strip != null) {
-                                strips[segIdx] = strip
+                        // 1. Carregar LOW quality primeiro (rápido)
+                        val lowQualityStrip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = ThumbnailQuality.LOW)
+                        if (lowQualityStrip != null && isActive) {
+                            withContext(Dispatchers.Main) {
+                                strips[segIdx] = lowQualityStrip
                             }
-                            // LRU eviction: remover strip mais distante do visível
-                            while (strips.size > maxStrips) {
-                                val currSeg = (scrollOffsetPx / pxPerSecond).toInt().coerceAtLeast(0) / SEGMENT_SECONDS
-                                val toEvict = strips.keys
-                                    .maxByOrNull { kotlin.math.abs(it - currSeg) }
-                                    ?: break
-                                strips.remove(toEvict)?.let { bmp ->
-                                    if (!bmp.isRecycled) bmp.recycle()
-                                }
+                        }
+
+                        // 2. Carregar HIGH quality em background
+                        val highQualityStrip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = ThumbnailQuality.HIGH)
+                        if (highQualityStrip != null && isActive) {
+                            withContext(Dispatchers.Main) {
+                                strips[segIdx] = highQualityStrip
                             }
                         }
                     } finally {
-                        // Garantir cleanup mesmo se cancelada/exception
                         withContext(Dispatchers.Main + NonCancellable) {
                             loadingStrips.remove(segIdx)
                         }
@@ -192,32 +192,38 @@ fun TimelineEditor(
         // BACKGROUND LOADING: Pré-carregar até maxStrips segmentos sequencialmente
         // Só pré-carregar em background se não houver strips pré-carregadas
         LaunchedEffect(videoUri, videoDurationMs, preloadedStrips.isEmpty()) {
-            if (videoDurationMs == 0L) return@LaunchedEffect
-            // Se já temos strips pré-carregadas, não precisamos pré-carregar em background
-            if (preloadedStrips.isNotEmpty()) return@LaunchedEffect
+            if (videoDurationMs == 0L || preloadedStrips.isNotEmpty()) return@LaunchedEffect
             
             val totalSegments = stripManager.getSegmentCount(videoDurationMs)
             val toPreload = minOf(totalSegments, maxStrips)
             
-            android.util.Log.d("ThumbnailStrip", "Background: $totalSegments segments, pre-loading $toPreload")
+            android.util.Log.d("ThumbnailStrip", "Background: Pre-loading $toPreload segments")
             
             for (segIdx in 0 until toPreload) {
-                // Parar se já atingiu o limite (scroll-based pode ter preenchido)
-                if (strips.size >= maxStrips) break
-                if (!strips.containsKey(segIdx) && loadingStrips[segIdx] != true) {
-                    loadingStrips[segIdx] = true
+                if (strips.size >= maxStrips || strips.containsKey(segIdx) || loadingStrips.containsKey(segIdx)) continue
+
+                loadingStrips[segIdx] = true
+                scope.launch(Dispatchers.IO) {
                     try {
-                        val strip = withContext(Dispatchers.IO) {
-                            stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = com.chopcut.data.model.ThumbnailQuality.HIGH)
+                        // LOW quality primeiro
+                        val lowQualityStrip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = ThumbnailQuality.LOW)
+                        if (lowQualityStrip != null && isActive) {
+                            withContext(Dispatchers.Main) { strips[segIdx] = lowQualityStrip }
                         }
-                        if (strip != null) strips[segIdx] = strip
+                        // HIGH quality em seguida
+                        val highQualityStrip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = ThumbnailQuality.HIGH)
+                        if (highQualityStrip != null && isActive) {
+                            withContext(Dispatchers.Main) { strips[segIdx] = highQualityStrip }
+                        }
                     } finally {
-                        loadingStrips.remove(segIdx)
+                        withContext(Dispatchers.Main + NonCancellable) {
+                            loadingStrips.remove(segIdx)
+                        }
                     }
                 }
             }
             
-            android.util.Log.d("ThumbnailStrip", "Background: Complete (${strips.size} strips loaded)")
+            android.util.Log.d("ThumbnailStrip", "Background: Pre-load sequence initiated")
         }
 
         // Animação de shimmer suave para placeholders de thumbnails
@@ -554,14 +560,27 @@ fun TimelineEditor(
                                // Manter largura original do thumb para evitar distorção
                                val thumbDisplayWidth = thumbW
                                val thumbDisplayHeight = thumbH
-                               
+
                                // Centralizar verticalmente na área de thumbnails (48dp)
                                val verticalOffset = (thumbnailHeightPx - thumbDisplayHeight) / 2f
-                               
+
                                dstRect.set(
                                    x.toInt(), (thumbnailTop + verticalOffset).toInt(),
                                    (x + thumbDisplayWidth).toInt(), (thumbnailTop + verticalOffset + thumbDisplayHeight).toInt()
                                )
+
+                               // 🔍 ASPECT MONITOR: Log de renderização (apenas primeiro frame de cada strip para reduzir spam)
+                               if (frameInStrip == 0) {
+                                   android.util.Log.d("ThumbnailAspectMonitor", """
+                                       🖼️ RENDER Strip #$segIdx | Frame ${sec}s:
+                                          • Strip: ${strip.width}x${strip.height} (ratio: ${String.format("%.2f", strip.width.toFloat() / strip.height.toFloat())})
+                                          • SrcRect: [${srcRect.left}, ${srcRect.top}, ${srcRect.right}, ${srcRect.bottom}] = ${srcRect.width()}x${srcRect.height()}
+                                          • DstRect: [${dstRect.left}, ${dstRect.top}, ${dstRect.right}, ${dstRect.bottom}] = ${dstRect.width()}x${dstRect.height()}
+                                          • Display ratio: ${String.format("%.2f", dstRect.width().toFloat() / dstRect.height().toFloat())}
+                                          • Vertical offset: ${verticalOffset}px
+                                   """.trimIndent())
+                               }
+
                                drawIntoCanvas { canvas ->
                                    canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
                                }
