@@ -5,10 +5,10 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
 import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.data.audio.AudioRawData
+import com.chopcut.data.model.VideoInfo
+import com.chopcut.data.repository.VideoRepository
 import com.chopcut.data.thumbnail.ThumbnailStripManager
 import com.chopcut.util.DispatcherProvider
 import com.chopcut.utils.VideoConstraints
@@ -25,59 +25,65 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 class PreloadViewModel(
-    application: Application
+    application: Application,
+    private val videoRepository: VideoRepository
 ) : AndroidViewModel(application) {
-    
+
     private val audioDataExtractor = AudioDataExtractor(application)
     private var preloadJob: Job? = null
     private var thumbnailJob: Job? = null
     private var stripManager: ThumbnailStripManager? = null
-    
+
     private val _uiState = MutableStateFlow<PreloadUiState>(PreloadUiState.Idle)
     val uiState: StateFlow<PreloadUiState> = _uiState.asStateFlow()
-    
+
     private val _preloadedData = MutableStateFlow<PreloadedData?>(null)
     val preloadedData: StateFlow<PreloadedData?> = _preloadedData.asStateFlow()
-    
+
     fun startPreload(uri: Uri, screenWidthDp: Float) {
         preloadJob?.cancel()
         thumbnailJob?.cancel()
-        
+
         preloadJob = viewModelScope.launch(DispatcherProvider.io) {
             try {
                 _uiState.value = PreloadUiState.Loading(
                     PreloadProgress(stage = ExtractionStage.Starting)
                 )
-                
-                // FASE 1: Validação
-                updateProgress(ExtractionStage.Validating, logs = listOf("Validando vídeo..."))
-                
-                val durationMs = getVideoDurationFast(uri)
-                if (!VideoConstraints.isDurationValid(durationMs)) {
-                    val message = VideoConstraints.getValidationMessage(durationMs)!!
+
+                // FASE 1: Extração de Metadados e Validação
+                updateProgress(stage = ExtractionStage.Validating, logs = listOf("Extraindo metadados..."))
+                val videoInfo = videoRepository.getMetadata(uri)
+                if (videoInfo == null) {
+                    _uiState.value = PreloadUiState.Error("Não foi possível ler os metadados do vídeo.")
+                    return@launch
+                }
+
+                updateProgress(stage = ExtractionStage.Validating, logs = listOf("Validando vídeo..."))
+                if (!VideoConstraints.isDurationValid(videoInfo.durationMs)) {
+                    val message = VideoConstraints.getValidationMessage(videoInfo.durationMs)!!
                     _uiState.value = PreloadUiState.Error(
                         message = message,
                         isDurationExceeded = true
                     )
                     return@launch
                 }
-                
+
                 updateProgress(
                     stage = ExtractionStage.Validating,
                     logs = listOf(
-                        "Duração: ${durationMs / 60000}min",
+                        "Duração: ${videoInfo.durationMs / 60000}min",
                         "Validado: ≤ 15min ✓"
                     )
                 )
-                
-                // Inicializar StripManager com dimensões baseadas na largura da tela
+
+                // Inicializar StripManager com dimensões baseadas no aspect ratio do vídeo
                 val thumbWidth = screenWidthDp.toInt()
-                val thumbHeight = (thumbWidth * 0.67f).toInt()
+                val thumbHeight = (thumbWidth / videoInfo.aspectRatio).toInt()
                 stripManager = ThumbnailStripManager(getApplication(), thumbWidth, thumbHeight)
-                
-                val totalSegments = stripManager!!.getSegmentCount(durationMs)
+
+                val totalSegments = stripManager!!.getSegmentCount(videoInfo.durationMs)
                 val preloadSegments = (totalSegments * 0.5f).toInt().coerceAtLeast(1)
-                
+
                 updateProgress(
                     stage = ExtractionStage.Validating,
                     totalSegments = totalSegments,
@@ -87,12 +93,11 @@ class PreloadViewModel(
                     )
                 )
 
-                // MELHORIA: Iniciar extração de thumbnails imediatamente (sem delay)
-                // Extração agora é 67% mais rápida com ThumbnailExtractorBatch
+                // Iniciar extração de thumbnails
                 thumbnailJob = viewModelScope.launch(Dispatchers.IO) {
                     updateProgress(
                         stage = ExtractionStage.ExtractingThumbnails,
-                        logs = listOf("Iniciando extração de thumbnails ( ThumbnailExtractorBatch )...")
+                        logs = listOf("Iniciando extração de thumbnails (ThumbnailExtractorBatch)...")
                     )
 
                     val strips = extractThumbnailsWithPriority(
@@ -100,10 +105,9 @@ class PreloadViewModel(
                         stripManager = stripManager!!,
                         targetSegments = preloadSegments,
                         totalSegments = totalSegments,
-                        durationMs = durationMs
+                        durationMs = videoInfo.durationMs
                     )
-                    
-                    // Quando thumbnails terminam, marcar como Ready se já tiver áudio
+
                     val currentAudio = _preloadedData.value?.audioAmplitudes
                     if (currentAudio != null) {
                         updateProgress(
@@ -111,65 +115,59 @@ class PreloadViewModel(
                             thumbnailPercent = 100,
                             logs = listOf("Thumbnails: 100% ✓ ($preloadSegments strips)")
                         )
-                        
+
                         val data = PreloadedData(
-                            videoUri = uri,
+                            videoInfo = videoInfo,
                             audioAmplitudes = currentAudio,
                             preloadedStrips = strips,
                             totalSegments = totalSegments,
                             preloadPercentage = 0.5f
                         )
-                        
+
                         _preloadedData.value = data
                         _uiState.value = PreloadUiState.Ready(data)
-                        
+
                         Timber.d("Preload completed: ${strips.size} strips, ${currentAudio.size} audio samples")
                     } else {
-                        // Se não tem áudio, aguardar (áudio será extraído em paralelo)
                         Timber.d("Thumbnails completed, waiting for audio...")
                     }
                 }
-                
-                // Extração de áudio em paralelo (sem prioridade)
-                val targetBarCount = calculateTargetBarCount(durationMs)
+
+                // Extração de áudio em paralelo
+                val targetBarCount = calculateTargetBarCount(videoInfo.durationMs)
                 val audioData = extractAudioWithProgress(uri, targetBarCount)
-                
-                // Salvar dados parciais quando áudio termina
+
                 val currentStrips = _preloadedData.value?.preloadedStrips
                 _preloadedData.value = PreloadedData(
-                    videoUri = uri,
+                    videoInfo = videoInfo,
                     audioAmplitudes = audioData.pcmSamples.toList(),
                     preloadedStrips = currentStrips ?: emptyMap(),
                     totalSegments = totalSegments,
                     preloadPercentage = 0.5f
                 )
-                
-                // Se thumbnails já terminaram, marcar como Ready
+
                 if (currentStrips != null && currentStrips.isNotEmpty()) {
                     updateProgress(
                         stage = ExtractionStage.Ready,
                         audioPercent = 100,
                         thumbnailPercent = 100,
-                        logs = listOf(
-                            "Áudio: 100% ✓",
-                            "Thumbnails: 100% ✓"
-                        )
+                        logs = listOf("Áudio: 100% ✓", "Thumbnails: 100% ✓")
                     )
-                    
+
                     val data = PreloadedData(
-                        videoUri = uri,
+                        videoInfo = videoInfo,
                         audioAmplitudes = audioData.pcmSamples.toList(),
                         preloadedStrips = currentStrips,
                         totalSegments = totalSegments,
                         preloadPercentage = 0.5f
                     )
-                    
+
                     _preloadedData.value = data
                     _uiState.value = PreloadUiState.Ready(data)
-                    
+
                     Timber.d("Preload completed: ${currentStrips.size} strips, ${audioData.pcmSamples.size} audio samples")
                 }
-                
+
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
                     Timber.e(e, "Preload failed")
@@ -187,7 +185,47 @@ class PreloadViewModel(
         _uiState.value = PreloadUiState.Cancelled
         Timber.d("Preload cancelled")
     }
-    
+
+    private fun updateProgress(
+        stage: ExtractionStage,
+        audioPercent: Int = 0,
+        thumbnailPercent: Int = 0,
+        currentSegment: Int = 0,
+        totalSegments: Int = 0,
+        logs: List<String> = emptyList()
+    ) {
+        val currentState = _uiState.value
+        
+        if (currentState is PreloadUiState.Loading) {
+            val currentLogs = currentState.progress.logs
+            val newLogs = if (logs.isEmpty()) currentLogs else {
+                val maxLogs = 20
+                (currentLogs + logs).takeLast(maxLogs)
+            }
+            
+            _uiState.update {
+                PreloadUiState.Loading(
+                    currentState.progress.copy(
+                        stage = stage,
+                        audioPercent = audioPercent,
+                        thumbnailPercent = thumbnailPercent,
+                        currentSegment = currentSegment,
+                        totalSegments = totalSegments,
+                        logs = newLogs
+                    )
+                )
+            }
+        }
+    }
+
+    private fun calculateTargetBarCount(durationMs: Long): Int {
+        return when {
+            durationMs < 60000 -> 100
+            durationMs < 300000 -> 300
+            else -> 600
+        }
+    }
+
     private suspend fun extractAudioWithProgress(
         uri: Uri,
         targetBarCount: Int
@@ -211,7 +249,7 @@ class PreloadViewModel(
         
         return audioData
     }
-    
+
     private suspend fun extractThumbnailsWithPriority(
         uri: Uri,
         stripManager: ThumbnailStripManager,
@@ -267,79 +305,6 @@ class PreloadViewModel(
         }
         
         return strips
-    }
-    
-    private fun updateProgress(
-        stage: ExtractionStage,
-        audioPercent: Int = 0,
-        thumbnailPercent: Int = 0,
-        currentSegment: Int = 0,
-        totalSegments: Int = 0,
-        logs: List<String> = emptyList()
-    ) {
-        val currentState = _uiState.value
-        
-        if (currentState is PreloadUiState.Loading) {
-            val currentLogs = currentState.progress.logs
-            val newLogs = if (logs.isEmpty()) currentLogs else {
-                val maxLogs = 20
-                (currentLogs + logs).takeLast(maxLogs)
-            }
-            
-            _uiState.update {
-                PreloadUiState.Loading(
-                    currentState.progress.copy(
-                        stage = stage,
-                        audioPercent = audioPercent,
-                        thumbnailPercent = thumbnailPercent,
-                        currentSegment = currentSegment,
-                        totalSegments = totalSegments,
-                        logs = newLogs
-                    )
-                )
-            }
-        }
-    }
-    
-    private fun calculateTargetBarCount(durationMs: Long): Int {
-        return when {
-            durationMs < 60000 -> 100
-            durationMs < 300000 -> 300
-            else -> 600
-        }
-    }
-    
-    private suspend fun getVideoDurationFast(uri: Uri): Long {
-        // MELHORIA: Usar ExoPlayer para obter duração de forma rápida (sem extração de áudio)
-        // Antes: extractRawPcmData extraía todo o áudio (muito lento)
-        // Agora: ExoPlayer lê metadata do vídeo em < 1s
-        return withContext(Dispatchers.IO) {
-            val player = ExoPlayer.Builder(getApplication()).build()
-            try {
-                player.setMediaItem(MediaItem.fromUri(uri))
-                player.prepare()
-                val duration = player.duration.coerceAtLeast(0L)
-                Timber.d("Video duration: ${duration}ms (fast method)")
-                duration
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to get video duration (fast method)")
-                VideoConstraints.MAX_DURATION_MS + 1
-            } finally {
-                player.release()
-            }
-        }
-    }
-    
-    // Função antiga (mantida para compatibilidade, mas não usada mais)
-    @Deprecated("Use getVideoDurationFast instead")
-    private suspend fun getVideoDuration(uri: Uri): Long {
-        try {
-            val audioData = audioDataExtractor.extractRawPcmData(uri, 100)
-            return audioData.durationMs
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get video duration")
-            return VideoConstraints.MAX_DURATION_MS + 1
-        }
     }
     
     override fun onCleared() {

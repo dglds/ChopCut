@@ -93,7 +93,20 @@ fun TrimScreen(
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text("Editor de Trim") },
+                        title = {
+                            Column {
+                                Text("Editor de Trim")
+                                if (preloadedData != null) {
+                                    val videoInfo = preloadedData.videoInfo
+                                    val aspectRatio = formatAspectRatio(videoInfo.aspectRatio)
+                                    Text(
+                                        text = "${videoInfo.width}×${videoInfo.height} ($aspectRatio)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
                         navigationIcon = {
                             IconButton(onClick = onNavigateBack) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
@@ -228,5 +241,15 @@ fun TrimScreen(
             },
             onNavigateBack = onNavigateBack
         )
+    }
+}
+
+private fun formatAspectRatio(ratio: Float): String {
+    return when {
+        (ratio - 16f / 9f).let { kotlin.math.abs(it) } < 0.01f -> "16:9"
+        (ratio - 9f / 16f).let { kotlin.math.abs(it) } < 0.01f -> "9:16"
+        (ratio - 4f / 3f).let { kotlin.math.abs(it) } < 0.01f -> "4:3"
+        (ratio - 1f).let { kotlin.math.abs(it) } < 0.01f -> "1:1"
+        else -> "%.2f".format(ratio)
     }
 }

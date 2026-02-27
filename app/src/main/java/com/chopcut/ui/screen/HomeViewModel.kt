@@ -23,14 +23,16 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
-class HomeViewModel(application: Application) : AndroidViewModel(application) {
+class HomeViewModel(
+    application: Application,
+    private val videoRepository: VideoRepository
+) : AndroidViewModel(application) {
 
-    private val videoRepository = VideoRepository(application)
     private val transformerPipeline = TransformerPipeline(application, videoRepository)
     private val audioDataExtractor = AudioDataExtractor(application)
     
     // PreloadViewModel para extração em background
-    private val preloadViewModel = PreloadViewModel(application)
+    private val preloadViewModel = PreloadViewModel(application, videoRepository)
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Initial)
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()

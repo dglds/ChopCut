@@ -2,6 +2,7 @@ package com.chopcut.ui.screen
 
 import android.graphics.Bitmap
 import android.net.Uri
+import com.chopcut.data.model.VideoInfo
 
 object PreloadConfig {
     // MELHORIA: Delay removido - extração agora é rápida (67% mais rápido com ThumbnailExtractorBatch)
@@ -22,12 +23,14 @@ sealed class PreloadUiState {
 }
 
 data class PreloadedData(
-    val videoUri: Uri,
+    val videoInfo: VideoInfo,
     val audioAmplitudes: List<Float>,
     val preloadedStrips: Map<Int, Bitmap>,
     val totalSegments: Int,
     val preloadPercentage: Float
-)
+) {
+    val videoUri: Uri get() = videoInfo.uri
+}
 
 data class PreloadProgress(
     val stage: ExtractionStage,

@@ -1,5 +1,6 @@
 package com.chopcut.ui.screen
 
+import android.app.Application
 import android.net.Uri
 import com.chopcut.BuildConfig
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,6 +70,7 @@ import coil.compose.rememberAsyncImagePainter
 import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
 import com.chopcut.data.model.VideoInfo
+import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.atoms.formatDuration
 import com.chopcut.ui.components.buttons.ChopCutPrimaryButton
 import com.chopcut.ui.components.buttons.ChopCutSecondaryButton
@@ -91,17 +93,18 @@ import com.chopcut.ui.theme.Warning
 import com.chopcut.ui.theme.Waveform
 import timber.log.Timber
 
-/**
- * Home screen - Main entry point for video editing
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    viewModel: HomeViewModel = viewModel(),
     onNavigateToEditor: (Uri) -> Unit = {},
     onNavigateToTests: () -> Unit = {},
     onNavigateToPreferences: () -> Unit = {}
 ) {
+    val application = LocalContext.current.applicationContext as Application
+    val videoRepository = remember { VideoRepository(application) }
+    val factory = remember { HomeViewModelFactory(application, videoRepository) }
+    val viewModel: HomeViewModel = viewModel(factory = factory)
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedUri by viewModel.selectedVideoUri.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -152,7 +155,6 @@ fun HomeScreen(
                     .padding(horizontal = ChopCutSpacing.md),
                 verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.lg)
             ) {
-                // Video Picker Section
                 item {
                     Spacer(Modifier.height(ChopCutSpacing.xs))
         
@@ -175,12 +177,10 @@ fun HomeScreen(
                     }
                 }
         
-                // Feature Grid
                 item {
                     FeatureGrid()
                 }
         
-                // Error State
                 if (uiState is HomeUiState.Error) {
                     item {
                         ErrorState(
@@ -192,11 +192,9 @@ fun HomeScreen(
                     }
                 }
         
-                // Bottom spacing
                 item { Spacer(Modifier.height(ChopCutSpacing.md)) }
             }
             
-            // DebugToast na parte de baixo (DEBUG only)
             if (com.chopcut.BuildConfig.DEBUG) {
                 val preloadState = viewModel.preloadState.collectAsStateWithLifecycle().value
                 if (preloadState is com.chopcut.ui.screen.PreloadUiState.Loading) {
@@ -230,10 +228,6 @@ fun HomeScreen(
         )
     }
 }
-
-// ─────────────────────────────────────────────
-// Video Picker - Empty State
-// ─────────────────────────────────────────────
 
 @Composable
 private fun VideoPickerEmpty(onClick: () -> Unit) {
@@ -307,10 +301,6 @@ private fun VideoPickerEmpty(onClick: () -> Unit) {
     }
 }
 
-// ─────────────────────────────────────────────
-// Video Picker - Loading State
-// ─────────────────────────────────────────────
-
 @Composable
 private fun VideoPickerLoading() {
     Box(
@@ -339,10 +329,6 @@ private fun VideoPickerLoading() {
     }
 }
 
-// ─────────────────────────────────────────────
-// Video Picker - Loaded State (with thumbnail)
-// ─────────────────────────────────────────────
-
 @Composable
 private fun VideoPickerLoaded(
     videoInfo: VideoInfo,
@@ -364,7 +350,6 @@ private fun VideoPickerLoaded(
             .clip(RoundedCornerShape(16.dp))
             .background(SurfaceVariant)
     ) {
-        // Video thumbnail
         Image(
             painter = rememberAsyncImagePainter(
                 model = ImageRequest.Builder(context)
@@ -374,11 +359,10 @@ private fun VideoPickerLoaded(
                 imageLoader = imageLoader
             ),
             contentDescription = "Thumbnail do vídeo",
-            contentScale = ContentScale.Fit,
+            contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
 
-        // Gradient overlay (bottom to top)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -393,36 +377,18 @@ private fun VideoPickerLoaded(
                 )
         )
 
-        // Top badges row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(ChopCutSpacing.sm),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
         ) {
-            Text(
-                text = "${videoInfo.width}×${videoInfo.height}",
-                style = DurationTextStyle.copy(color = Color.White),
-                modifier = Modifier
-                    .background(
-                        Color.Black.copy(alpha = 0.6f),
-                        RoundedCornerShape(6.dp)
-                    )
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-            Text(
-                text = formatDuration(videoInfo.durationMs),
-                style = DurationTextStyle.copy(color = Color.White),
-                modifier = Modifier
-                    .background(
-                        Color.Black.copy(alpha = 0.6f),
-                        RoundedCornerShape(6.dp)
-                    )
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            )
+            BadgeText(text = "${videoInfo.width}×${videoInfo.height}")
+            BadgeText(text = formatAspectRatio(videoInfo.aspectRatio))
+            Spacer(modifier = Modifier.weight(1f))
+            BadgeText(text = formatDuration(videoInfo.durationMs))
         }
 
-        // Bottom info and actions
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -502,10 +468,6 @@ private fun VideoPickerLoaded(
     }
 }
 
-// ─────────────────────────────────────────────
-// Feature Grid
-// ─────────────────────────────────────────────
-
 private data class FeatureInfo(
     val icon: ImageVector,
     val title: String,
@@ -575,7 +537,7 @@ private fun FeatureCard(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(Surface)
-            .clickable { }
+            .clickable { } // TODO: Implement feature navigation
             .padding(ChopCutSpacing.sm)
     ) {
         Box(
@@ -610,5 +572,29 @@ private fun FeatureCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+private fun BadgeText(text: String) {
+    Text(
+        text = text,
+        style = DurationTextStyle.copy(color = Color.White),
+        modifier = Modifier
+            .background(
+                Color.Black.copy(alpha = 0.6f),
+                RoundedCornerShape(6.dp)
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    )
+}
+
+private fun formatAspectRatio(ratio: Float): String {
+    return when {
+        (ratio - 16f / 9f).let { kotlin.math.abs(it) } < 0.01f -> "16:9"
+        (ratio - 9f / 16f).let { kotlin.math.abs(it) } < 0.01f -> "9:16"
+        (ratio - 4f / 3f).let { kotlin.math.abs(it) } < 0.01f -> "4:3"
+        (ratio - 1f).let { kotlin.math.abs(it) } < 0.01f -> "1:1"
+        else -> "%.2f".format(ratio)
     }
 }

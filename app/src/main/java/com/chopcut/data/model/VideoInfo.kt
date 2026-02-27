@@ -20,4 +20,13 @@ data class VideoInfo(
     val durationMs: Long get() = durationUs / 1000
     val widthF: Float get() = width.toFloat()
     val heightF: Float get() = height.toFloat()
+
+    val aspectRatio: Float
+        get() {
+            if (width == 0 || height == 0) return 16f / 9f // Fallback
+            val isPortrait = rotation == 90 || rotation == 270
+            val displayWidth = if (isPortrait) height else width
+            val displayHeight = if (isPortrait) width else height
+            return displayWidth.toFloat() / displayHeight.toFloat()
+        }
 }

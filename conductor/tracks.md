@@ -31,5 +31,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Otimização de thumbnails da timeline com aspect ratio dinâmico, extração progressiva e compressão WEBP.**
+- [~] **Track: Otimização de thumbnails da timeline com aspect ratio dinâmico, extração progressiva e compressão WEBP.**
 *Link: [./tracks/thumb_optimization_20260226/](./tracks/thumb_optimization_20260226/)*
