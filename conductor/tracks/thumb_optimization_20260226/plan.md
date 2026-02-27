@@ -39,8 +39,10 @@ Migração para WEBP para equilibrar o aumento de resolução com economia de di
 Ajuste da UI para ser dinâmica e exibir as thumbnails progressivamente.
 
 - [x] **Task: Layout Dinâmico da Timeline**
+    - [x] Criar teste de UI (Compose Preview/Screenshot test) para verificar o layout com diferentes aspect ratios.
     - [x] Atualizar componentes da timeline para calcular `height` e `width` dinamicamente baseados no `aspectRatio`.
 - [x] **Task: Lógica de Troca Progressiva de Imagens**
+    - [x] Escrever teste para verificar a transição de estado entre Placeholder -> Low Res -> High Res.
     - [x] Implementar observação asíncrona no componente de imagem da timeline para atualizar o Bitmap assim que a versão de alta qualidade estiver no cache.
 - [x] **Task: Conductor - User Manual Verification 'Interface e Fluidez' (Protocol in workflow.md)**
 
@@ -62,3 +64,26 @@ Ajustes finais baseados no feedback do usuário sobre aspect ratio e centraliza�
 - [x] **Task: Indicador de Zoom nas Preferências**
     - [x] Adicionar nível de zoom (escala relativa a 1080p) na tela de Preferences.
 - [x] **Task: Conductor - User Manual Verification 'Distorção e Polimento'**
+
+## Fase 7: Sistema de Monitoramento de Aspect Ratio [checkpoint: b7ffd34]
+Implementação de instrumentação detalhada para diagnosticar distorções em produção.
+
+- [x] **Task: Instrumentação do Pipeline de Extração**
+    - [x] Adicionar logs detalhados em `ThumbnailExtractorBatch` para capturar:
+        - Dimensões originais do vídeo (largura x altura)
+        - Rotação e orientação (portrait/landscape)
+        - Aspect ratio real vs esperado vs final
+        - Dimensões em cada etapa de transformação
+- [x] **Task: Instrumentação da Criação de Strips**
+    - [x] Adicionar logs em `ThumbnailStripManager` para monitorar:
+        - Dimensões da strip horizontal completa
+        - Processo de stitching frame por frame
+        - Validação de dimensões esperadas vs reais
+- [x] **Task: Instrumentação da Renderização**
+    - [x] Adicionar logs em `TimelineEditor` para capturar:
+        - SrcRect e DstRect de cada strip renderizada
+        - Aspect ratios de display
+        - Offsets de centralização vertical
+- [x] **Task: Sistema de Monitoramento via ADB**
+    - [x] Tag dedicada: `ThumbnailAspectMonitor`
+    - [x] Comando para captura em tempo real com salvamento em arquivo local
