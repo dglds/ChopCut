@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import com.chopcut.data.model.ThumbnailQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -36,7 +37,8 @@ class ThumbnailExtractorBatch(
         uri: Uri,
         positionsMs: List<Long>,
         width: Int = 320,
-        height: Int = 180
+        height: Int = 180,
+        quality: ThumbnailQuality = ThumbnailQuality.HIGH
     ): Map<Long, Bitmap> = withContext(Dispatchers.IO) {
         if (positionsMs.isEmpty()) {
             Timber.w("extractBatch: positionsMs is empty")
@@ -60,7 +62,7 @@ class ThumbnailExtractorBatch(
             // Extrair cada posição
             sortedPositions.forEach { positionMs ->
                 try {
-                    val bitmap = extractFrameAt(retriever, positionMs, width, height)
+                    val bitmap = extractFrameAt(retriever, positionMs, width, height, quality)
                     if (bitmap != null) {
                         results[positionMs] = bitmap
                     }
@@ -100,7 +102,8 @@ class ThumbnailExtractorBatch(
         uri: Uri,
         positionMs: Long,
         width: Int = 320,
-        height: Int = 180
+        height: Int = 180,
+        quality: ThumbnailQuality = ThumbnailQuality.HIGH
     ): Bitmap? = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         val retriever = MediaMetadataRetriever()
@@ -138,17 +141,50 @@ class ThumbnailExtractorBatch(
         retriever: MediaMetadataRetriever,
         positionMs: Long,
         width: Int,
-        height: Int
+        height: Int,
+        quality: ThumbnailQuality = ThumbnailQuality.HIGH
     ): Bitmap? {
         return try {
-            // Usar getScaledFrameAtTime para melhor performance
-            // OPTION_CLOSEST_SYNC é mais rápido (seek para keyframe mais próximo)
-            val frame = retriever.getScaledFrameAtTime(
+            // Get frame at position
+            // For HIGH quality, we extract slightly larger and scale down with filtering (Anti-Aliasing)
+            // Obter dimensões reais do vídeo para evitar distorção no getScaledFrameAtTime
+            val videoWidth = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: width
+            val videoHeight = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: height
+            val videoRotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+            
+            // Trocar dimensões se estiver rotacionado
+            val isPortrait = videoRotation == 90 || videoRotation == 270
+            val realWidth = if (isPortrait) videoHeight else videoWidth
+            val realHeight = if (isPortrait) videoWidth else videoHeight
+            val videoAspectRatio = realWidth.toFloat() / realHeight.toFloat()
+
+            // Ajustar dimensões de extração para manter aspect ratio
+            val (extractWidth, extractHeight) = if (videoAspectRatio > width.toFloat() / height.toFloat()) {
+                // Vídeo mais largo que o target: fixar altura, ajustar largura
+                ((height * videoAspectRatio).toInt() to height)
+            } else {
+                // Vídeo mais alto que o target: fixar largura, ajustar altura
+                (width to (width / videoAspectRatio).toInt())
+            }
+
+            // Aplicar fator de qualidade HIGH se necessário (usando 1.2x para anti-aliasing)
+            val finalWidth = if (quality == ThumbnailQuality.HIGH) (extractWidth * 1.2f).toInt() else extractWidth
+            val finalHeight = if (quality == ThumbnailQuality.HIGH) (extractHeight * 1.2f).toInt() else extractHeight
+
+            val rawFrame = retriever.getScaledFrameAtTime(
                 positionMs * 1000, // MediaMetadataRetriever usa microssegundos
                 MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                width,
-                height
+                finalWidth,
+                finalHeight
             )
+
+            val frame = if (quality == ThumbnailQuality.HIGH && rawFrame != null && (rawFrame.width != width || rawFrame.height != height)) {
+                val scaled = Bitmap.createScaledBitmap(rawFrame, width, height, true)
+                if (scaled != rawFrame) rawFrame.recycle()
+                scaled
+            } else {
+                rawFrame
+            }
 
             if (frame == null) {
                 Timber.w("extractFrameAt: Got null frame at ${positionMs}ms")

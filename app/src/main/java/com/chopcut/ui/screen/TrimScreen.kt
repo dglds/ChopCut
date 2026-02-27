@@ -153,6 +153,7 @@ fun TrimScreen(
                         audioWaveformsAmplitudes = state.audioWaveformsAmplitudes,
                         isAudioWaveformsLoading = state.isAudioWaveformsLoading,
                         preloadedStrips = preloadedData?.preloadedStrips ?: emptyMap(),
+                        aspectRatio = preloadedData?.videoInfo?.aspectRatio ?: 16f/9f,
                         onPositionChange = { viewModel.setCurrentPosition(it) },
                         onAddPosition = { viewModel.addPosition(state.currentPosition) },
                         onRequestNewMedia = { },

@@ -1,13 +1,22 @@
 package com.chopcut.data.model
 
 /**
+ * Qualidade da extração de thumbnails
+ */
+enum class ThumbnailQuality {
+    LOW,    // Rápido, downsample agressivo
+    HIGH    // Alta fidelidade, filtros de anti-aliasing
+}
+
+/**
  * Configurações para extração de thumbnails em massa
  */
 data class ThumbnailSettings(
     val thumbsPerSecond: Int = 1,        // 1-10 thumbs por segundo
     val quality: Int = 85,                // 50-100 (JPEG)
     val format: ThumbnailFormat = ThumbnailFormat.JPEG,
-    val dimensionPreset: DimensionPreset = DimensionPreset.MEDIUM
+    val dimensionPreset: DimensionPreset = DimensionPreset.MEDIUM,
+    val extractionQuality: ThumbnailQuality = ThumbnailQuality.HIGH
 )
 
 /**

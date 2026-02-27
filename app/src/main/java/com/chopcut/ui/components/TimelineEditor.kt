@@ -60,6 +60,7 @@ import com.chopcut.data.thumbnail.ThumbnailStripManager.Companion.SEGMENT_SECOND
 import kotlinx.coroutines.NonCancellable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import com.chopcut.ui.theme.ChopCutMonoFont
+import com.chopcut.data.model.ThumbnailQuality
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.LinearEasing
@@ -84,14 +85,15 @@ fun TimelineEditor(
     audioWaveformsAmplitudes: List<Float> = emptyList(),
     isAudioWaveformsLoading: Boolean = false,
     preloadedStrips: Map<Int, Bitmap> = emptyMap(),
+    aspectRatio: Float = 16f / 9f,
     onPositionChange: (Long) -> Unit,
-        onAddPosition: () -> Unit,
-        onRequestNewMedia: (() -> Unit)? = null,
-        onVideoDurationChange: ((Long) -> Unit)? = null,
-        extraContent: @Composable () -> Unit = {},
-        modifier: Modifier = Modifier,
-        showWaveform: Boolean = false
-    ) {
+    onAddPosition: () -> Unit,
+    onRequestNewMedia: (() -> Unit)? = null,
+    onVideoDurationChange: ((Long) -> Unit)? = null,
+    extraContent: @Composable () -> Unit = {},
+    modifier: Modifier = Modifier,
+    showWaveform: Boolean = false
+) {
          val context = androidx.compose.ui.platform.LocalContext.current
          val density = LocalDensity.current
          val pxPerSecond = remember { with(density) { 60.dp.toPx() } }
@@ -108,20 +110,26 @@ fun TimelineEditor(
         // Strip-based Thumbnails State
         // Dimensões density-aware: match exato do display = pixel-perfect, sem distorção
         val thumbWidth = remember(density) { with(density) { 60.dp.roundToPx() } }
-        val thumbHeight = remember(density) { with(density) { 40.dp.roundToPx() } }
+        val thumbHeight = remember(thumbWidth, aspectRatio) { 
+            if (aspectRatio > 0) (thumbWidth / aspectRatio).toInt().coerceAtLeast(1) 
+            else with(density) { 40.dp.roundToPx() } 
+        }
          val stripManager = remember(thumbWidth, thumbHeight) {
              ThumbnailStripManager(context, thumbWidth, thumbHeight)
          }
          val strips = remember {
+             androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
+                 putAll(preloadedStrips)
+             }
+         }
+         
+         // Sincronizar strips internas com as preloaded (para suportar carregamento progressivo)
+         LaunchedEffect(preloadedStrips) {
              if (preloadedStrips.isNotEmpty()) {
-                 android.util.Log.d("ThumbnailStrip", "Initializing with preloaded strips: ${preloadedStrips.size}")
-                 android.util.Log.d("ThumbnailStrip", "Preloaded strips keys: ${preloadedStrips.keys.joinToString()}")
-                 androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
-                     putAll(preloadedStrips)
+                 android.util.Log.d("ThumbnailStrip", "Updating with preloaded strips: ${preloadedStrips.size}")
+                 preloadedStrips.forEach { (k, v) ->
+                     strips[k] = v
                  }
-             } else {
-                 android.util.Log.d("ThumbnailStrip", "Initializing empty strips map")
-                 androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>()
              }
          }
          val loadingStrips = remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
@@ -155,7 +163,7 @@ fun TimelineEditor(
                 // scope.launch sobrevive ao restart do LaunchedEffect
                 scope.launch(Dispatchers.IO) {
                     try {
-                        val strip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs)
+                        val strip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = com.chopcut.data.model.ThumbnailQuality.HIGH)
                         withContext(Dispatchers.Main) {
                             if (strip != null) {
                                 strips[segIdx] = strip
@@ -200,7 +208,7 @@ fun TimelineEditor(
                     loadingStrips[segIdx] = true
                     try {
                         val strip = withContext(Dispatchers.IO) {
-                            stripManager.extractSegment(videoUri, segIdx, videoDurationMs)
+                            stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = com.chopcut.data.model.ThumbnailQuality.HIGH)
                         }
                         if (strip != null) strips[segIdx] = strip
                     } finally {
@@ -545,10 +553,14 @@ fun TimelineEditor(
                                )
                                // Manter largura original do thumb para evitar distorção
                                val thumbDisplayWidth = thumbW
-                               val thumbDisplayHeight = thumbW * (thumbH / thumbW)
+                               val thumbDisplayHeight = thumbH
+                               
+                               // Centralizar verticalmente na área de thumbnails (48dp)
+                               val verticalOffset = (thumbnailHeightPx - thumbDisplayHeight) / 2f
+                               
                                dstRect.set(
-                                   x.toInt(), thumbnailTop.toInt(),
-                                   (x + thumbDisplayWidth).toInt(), (thumbnailTop + thumbH.toInt()).toInt()
+                                   x.toInt(), (thumbnailTop + verticalOffset).toInt(),
+                                   (x + thumbDisplayWidth).toInt(), (thumbnailTop + verticalOffset + thumbDisplayHeight).toInt()
                                )
                                drawIntoCanvas { canvas ->
                                    canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)

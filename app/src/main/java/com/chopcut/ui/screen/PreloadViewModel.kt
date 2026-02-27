@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.data.audio.AudioRawData
 import com.chopcut.data.model.VideoInfo
+import com.chopcut.data.model.ThumbnailQuality
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.data.thumbnail.ThumbnailStripManager
 import com.chopcut.util.DispatcherProvider
@@ -97,40 +98,45 @@ class PreloadViewModel(
                 thumbnailJob = viewModelScope.launch(Dispatchers.IO) {
                     updateProgress(
                         stage = ExtractionStage.ExtractingThumbnails,
-                        logs = listOf("Iniciando extração de thumbnails (ThumbnailExtractorBatch)...")
+                        logs = listOf("Iniciando extração rápida (Low Quality)...")
                     )
 
-                    val strips = extractThumbnailsWithPriority(
+                    // PASSO 1: Extração rápida (LOW quality)
+                    val stripsLow = extractThumbnailsWithPriority(
                         uri = uri,
                         stripManager = stripManager!!,
                         targetSegments = preloadSegments,
                         totalSegments = totalSegments,
-                        durationMs = videoInfo.durationMs
+                        durationMs = videoInfo.durationMs,
+                        quality = ThumbnailQuality.LOW
+                    )
+                    
+                    // Atualizar dados com LOW quality primeiro
+                    updateDataWithStrips(videoInfo, stripsLow, totalSegments)
+                    
+                    updateProgress(
+                        stage = ExtractionStage.ExtractingThumbnails,
+                        logs = listOf("Extração rápida concluída ✓ Iniciando alta fidelidade em background...")
                     )
 
-                    val currentAudio = _preloadedData.value?.audioAmplitudes
-                    if (currentAudio != null) {
-                        updateProgress(
-                            stage = ExtractionStage.Ready,
-                            thumbnailPercent = 100,
-                            logs = listOf("Thumbnails: 100% ✓ ($preloadSegments strips)")
-                        )
-
-                        val data = PreloadedData(
-                            videoInfo = videoInfo,
-                            audioAmplitudes = currentAudio,
-                            preloadedStrips = strips,
-                            totalSegments = totalSegments,
-                            preloadPercentage = 0.5f
-                        )
-
-                        _preloadedData.value = data
-                        _uiState.value = PreloadUiState.Ready(data)
-
-                        Timber.d("Preload completed: ${strips.size} strips, ${currentAudio.size} audio samples")
-                    } else {
-                        Timber.d("Thumbnails completed, waiting for audio...")
-                    }
+                    // PASSO 2: Extração de alta qualidade (HIGH quality) - substitui as de baixo
+                    val stripsHigh = extractThumbnailsWithPriority(
+                        uri = uri,
+                        stripManager = stripManager!!,
+                        targetSegments = preloadSegments,
+                        totalSegments = totalSegments,
+                        durationMs = videoInfo.durationMs,
+                        quality = ThumbnailQuality.HIGH
+                    )
+                    
+                    // Atualizar dados com HIGH quality
+                    updateDataWithStrips(videoInfo, stripsHigh, totalSegments)
+                    
+                    updateProgress(
+                        stage = ExtractionStage.Ready,
+                        thumbnailPercent = 100,
+                        logs = listOf("Thumbnails (Alta Qualidade): 100% ✓")
+                    )
                 }
 
                 // Extração de áudio em paralelo
@@ -250,25 +256,56 @@ class PreloadViewModel(
         return audioData
     }
 
+    private fun updateDataWithStrips(
+        videoInfo: VideoInfo,
+        newStrips: Map<Int, Bitmap>,
+        totalSegments: Int
+    ) {
+        val currentData = _preloadedData.value
+        val audioAmplitudes = currentData?.audioAmplitudes ?: emptyList()
+        val existingStrips = currentData?.preloadedStrips ?: emptyMap()
+        
+        // Merge strips (new ones override old ones if same index)
+        val mergedStrips = existingStrips.toMutableMap()
+        mergedStrips.putAll(newStrips)
+        
+        val data = PreloadedData(
+            videoInfo = videoInfo,
+            audioAmplitudes = audioAmplitudes,
+            preloadedStrips = mergedStrips,
+            totalSegments = totalSegments,
+            preloadPercentage = 0.5f
+        )
+        
+        _preloadedData.value = data
+        
+        // Se o áudio estiver pronto, atualizamos o Ready state também
+        if (audioAmplitudes.isNotEmpty()) {
+            _uiState.value = PreloadUiState.Ready(data)
+        }
+    }
+
     private suspend fun extractThumbnailsWithPriority(
         uri: Uri,
         stripManager: ThumbnailStripManager,
         targetSegments: Int,
         totalSegments: Int,
-        durationMs: Long
+        durationMs: Long,
+        quality: ThumbnailQuality = ThumbnailQuality.HIGH
     ): Map<Int, Bitmap> {
         val strips = mutableMapOf<Int, Bitmap>()
         var lastPercent = -1
         
         // PRIORIDADE: Primeira strip com Dispatchers.Default (alta prioridade)
+        val qualityLog = if (quality == ThumbnailQuality.LOW) "LOW" else "HIGH"
         updateProgress(
             stage = ExtractionStage.ExtractingThumbnails,
             currentSegment = 1,
-            logs = listOf("Strip 1 extraída instantaneamente (prioridade)")
+            logs = listOf("Strip 1 extraída ($qualityLog)...")
         )
         
         val strip0 = withContext(Dispatchers.Default) {
-            stripManager.extractSegment(uri, 0, durationMs)
+            stripManager.extractSegment(uri, 0, durationMs, quality)
         }
         if (strip0 != null) {
             strips[0] = strip0
@@ -282,7 +319,7 @@ class PreloadViewModel(
             
             val results = remainingSegments.map { segIdx ->
                 viewModelScope.async(Dispatchers.IO) {
-                    val strip = stripManager.extractSegment(uri, segIdx, durationMs)
+                    val strip = stripManager.extractSegment(uri, segIdx, durationMs, quality)
                     if (strip != null) {
                         strips[segIdx] = strip
                     }

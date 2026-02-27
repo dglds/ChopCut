@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -171,7 +172,49 @@ fun PreferencesScreen(
 
             Spacer(Modifier.height(ChopCutSpacing.md))
 
-            // Vídeos Salvos
+            // Informações de Extração (Zoom)
+            com.chopcut.ui.components.cards.ChopCutCard(
+                modifier = Modifier.fillMaxWidth(),
+                showShadow = true
+            ) {
+                Column(
+                    modifier = Modifier.padding(ChopCutSpacing.md)
+                ) {
+                    Text(
+                        text = "Configurações de Extração",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.height(ChopCutSpacing.sm))
+                    
+                    // Cálculo do Zoom (Referência 1080p)
+                    // MEDIUM preset é 320px. 320/1920 = ~16.6%
+                    val zoomLevel = (320f / 1920f * 100).roundToInt()
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Nível de Zoom (Ref: 1080p)",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "$zoomLevel%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Taxa de escala aplicada aos frames originais para gerar as thumbnails da timeline.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(ChopCutSpacing.md))
             com.chopcut.ui.components.cards.ChopCutCard(
                 modifier = Modifier.fillMaxWidth(),
                 showShadow = true

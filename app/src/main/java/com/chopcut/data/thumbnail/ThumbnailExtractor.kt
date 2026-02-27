@@ -8,6 +8,7 @@ import android.os.Build
 import com.chopcut.data.model.ThumbnailExtractionProgress
 import com.chopcut.data.model.ThumbnailFormat
 import com.chopcut.data.model.ThumbnailSettings
+import com.chopcut.data.model.ThumbnailQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -30,13 +31,15 @@ class ThumbnailExtractor(
      * @param positionMs Position in milliseconds
      * @param width Target thumbnail width
      * @param height Target thumbnail height
+     * @param quality Quality of the extraction
      * @return Bitmap thumbnail or null if extraction fails
      */
     suspend fun extractAt(
         uri: Uri,
         positionMs: Long,
         width: Int,
-        height: Int
+        height: Int,
+        quality: ThumbnailQuality = ThumbnailQuality.HIGH
     ): Bitmap? = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
         try {
@@ -48,18 +51,30 @@ class ThumbnailExtractor(
             }
 
             // Get frame at position
-            val frame = retriever.getScaledFrameAtTime(
+            // For HIGH quality, we extract slightly larger and scale down with filtering (Anti-Aliasing)
+            val extractWidth = if (quality == ThumbnailQuality.HIGH) (width * 1.2f).toInt() else width
+            val extractHeight = if (quality == ThumbnailQuality.HIGH) (height * 1.2f).toInt() else height
+
+            val rawFrame = retriever.getScaledFrameAtTime(
                 positionMs * 1000, // Convert to microseconds
                 MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                width,
-                height
+                extractWidth,
+                extractHeight
             )
 
+            val frame = if (quality == ThumbnailQuality.HIGH && rawFrame != null && (rawFrame.width != width || rawFrame.height != height)) {
+                val scaled = Bitmap.createScaledBitmap(rawFrame, width, height, true)
+                if (scaled != rawFrame) rawFrame.recycle()
+                scaled
+            } else {
+                rawFrame
+            }
+
             frame?.also {
-                Timber.d("Extracted thumbnail at ${positionMs}ms: ${width}x${height}")
+                Timber.d("Extracted thumbnail ($quality) at ${positionMs}ms: ${width}x${height}")
             }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to extract thumbnail at ${positionMs}ms")
+            Timber.e(e, "Failed to extract thumbnail ($quality) at ${positionMs}ms")
             null
         } finally {
             try {
@@ -157,12 +172,24 @@ class ThumbnailExtractor(
                     val positionMs = (i * intervalMs).toLong()
 
                     try {
-                        bitmap = retriever.getScaledFrameAtTime(
-                            positionMs * 1000, // Convert to microseconds
+                        val quality = settings.extractionQuality
+                        val extractWidth = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.width * 1.2f).toInt() else settings.dimensionPreset.width
+                        val extractHeight = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.height * 1.2f).toInt() else settings.dimensionPreset.height
+
+                        val rawFrame = retriever.getScaledFrameAtTime(
+                            positionMs * 1000,
                             MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                            settings.dimensionPreset.width,
-                            settings.dimensionPreset.height
+                            extractWidth,
+                            extractHeight
                         )
+
+                        bitmap = if (quality == ThumbnailQuality.HIGH && rawFrame != null && (rawFrame.width != settings.dimensionPreset.width || rawFrame.height != settings.dimensionPreset.height)) {
+                            val scaled = Bitmap.createScaledBitmap(rawFrame, settings.dimensionPreset.width, settings.dimensionPreset.height, true)
+                            if (scaled != rawFrame) rawFrame.recycle()
+                            scaled
+                        } else {
+                            rawFrame
+                        }
 
                         // Recycle previous bitmap if exists
                         bitmap?.let {
@@ -271,12 +298,24 @@ class ThumbnailExtractor(
                     val outputFile = File(outputDir, "thumb_${String.format("%05d", i)}$extension")
 
                     try {
-                        bitmap = retriever.getScaledFrameAtTime(
-                            positionMs * 1000, // Convert to microseconds
+                        val quality = settings.extractionQuality
+                        val extractWidth = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.width * 1.2f).toInt() else settings.dimensionPreset.width
+                        val extractHeight = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.height * 1.2f).toInt() else settings.dimensionPreset.height
+
+                        val rawFrame = retriever.getScaledFrameAtTime(
+                            positionMs * 1000,
                             MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                            settings.dimensionPreset.width,
-                            settings.dimensionPreset.height
+                            extractWidth,
+                            extractHeight
                         )
+
+                        bitmap = if (quality == ThumbnailQuality.HIGH && rawFrame != null && (rawFrame.width != settings.dimensionPreset.width || rawFrame.height != settings.dimensionPreset.height)) {
+                            val scaled = Bitmap.createScaledBitmap(rawFrame, settings.dimensionPreset.width, settings.dimensionPreset.height, true)
+                            if (scaled != rawFrame) rawFrame.recycle()
+                            scaled
+                        } else {
+                            rawFrame
+                        }
 
                         // Save bitmap to file
                         bitmap?.let {
@@ -375,12 +414,22 @@ class ThumbnailExtractor(
             for (i in 1..count) {
                 val positionMs = i * intervalMs
 
-                val frame = retriever.getScaledFrameAtTime(
-                    positionMs * 1000, // Convert to microseconds
+                // For strip, we use HIGH quality by default for best visual
+                val extractWidth = (width * 1.2f).toInt()
+                val extractHeight = (height * 1.2f).toInt()
+
+                val rawFrame = retriever.getScaledFrameAtTime(
+                    positionMs * 1000,
                     MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                    width,
-                    height
+                    extractWidth,
+                    extractHeight
                 )
+
+                val frame = rawFrame?.let {
+                    val scaled = Bitmap.createScaledBitmap(it, width, height, true)
+                    if (scaled != it) it.recycle()
+                    scaled
+                }
 
                 frame?.let { thumbnails.add(it) }
 
@@ -429,12 +478,15 @@ class ThumbnailExtractor(
             }
 
             val thumbnails = positionsMs.map { positionMs ->
+                val quality = ThumbnailQuality.HIGH // Default to high for positions
+                
                 // Extract frame at larger size to allow proper center crop
+                val extractFactor = if (quality == ThumbnailQuality.HIGH) 2 else 1
                 val sourceBitmap = retriever.getScaledFrameAtTime(
                     positionMs * 1000,
                     MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                    width * 2,  // Extract larger to ensure we have enough pixels
-                    height * 2
+                    width * extractFactor,
+                    height * extractFactor
                 )
 
                 val croppedBitmap = sourceBitmap?.let { src ->
@@ -540,11 +592,15 @@ class ThumbnailExtractor(
                 for (col in 0 until columns) {
                     val positionMs = ((row * columns + col + 1) * intervalMs).toLong()
 
+                    // Default to normal quality for grid
+                    val extractWidth = width
+                    val extractHeight = height
+
                     val frame = retriever.getScaledFrameAtTime(
                         positionMs * 1000,
                         MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        width,
-                        height
+                        extractWidth,
+                        extractHeight
                     )
 
                     rowThumbnails.add(frame)
@@ -613,12 +669,15 @@ class ThumbnailExtractor(
                     val positionMs = (i * intervalMs).toLong()
 
                     try {
+                        val quality = settings.extractionQuality
+                        val extractFactor = if (quality == ThumbnailQuality.HIGH) 2 else 1
+                        
                         // Extract frame at a larger size to ensure we have enough pixels
                         val sourceBitmap = retriever.getScaledFrameAtTime(
                             positionMs * 1000,
                             MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                            thumbWidth * 2,  // Extract larger to allow proper cropping
-                            thumbHeight * 2
+                            thumbWidth * extractFactor,
+                            thumbHeight * extractFactor
                         )
 
                         sourceBitmap?.let { src ->

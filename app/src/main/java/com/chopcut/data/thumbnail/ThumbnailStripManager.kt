@@ -9,8 +9,10 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.util.Size
 import com.chopcut.data.local.PreferencesManager
+import com.chopcut.data.model.ThumbnailQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
@@ -59,8 +61,11 @@ class ThumbnailStripManager(
         /** Tamanho máximo do cache em bytes (200MB) */
         private const val MAX_CACHE_SIZE = 200L * 1024 * 1024
 
-        /** Qualidade JPEG para compressão das strips (85% = bom equilíbrio qualidade/tamanho) */
-        private const val JPEG_QUALITY = 85
+        /** Versão do cache para invalidação manual ao mudar formatos/lógica */
+        private const val CACHE_VERSION = 2 // v1=JPEG, v2=WEBP
+
+        /** Qualidade para compressão das strips (85% = bom equilíbrio qualidade/tamanho) */
+        private const val COMPRESSION_QUALITY = 85
 
         /**
          * Limpa todo o cache de thumbnails do disco.
@@ -92,9 +97,11 @@ class ThumbnailStripManager(
      * Gera uma chave única de cache baseada no URI do vídeo
      * Usa lastModified + tamanho do arquivo para detectar modificações
      */
-    private fun getCacheKey(uri: Uri, segmentIndex: Int): String {
+    private fun getCacheKey(uri: Uri, segmentIndex: Int, quality: ThumbnailQuality): String {
         val fileInfo = getFileIdentifier(uri)
-        return "strip_${fileInfo}_${segmentIndex}.jpg"
+        val qualitySuffix = if (quality == ThumbnailQuality.LOW) "_low" else ""
+        // Incluir CACHE_VERSION na chave para invalidar automaticamente versões antigas
+        return "strip_v${CACHE_VERSION}_${fileInfo}_${segmentIndex}${qualitySuffix}.webp"
     }
 
     /**
@@ -130,10 +137,10 @@ class ThumbnailStripManager(
      * Tenta carregar uma strip do cache
      * @return Bitmap se encontrado e válido, null caso contrário
      */
-    private fun loadFromCache(uri: Uri, segmentIndex: Int): Bitmap? {
+    private fun loadFromCache(uri: Uri, segmentIndex: Int, quality: ThumbnailQuality): Bitmap? {
         synchronized(cacheLock) {
             try {
-                val cacheKey = getCacheKey(uri, segmentIndex)
+                val cacheKey = getCacheKey(uri, segmentIndex, quality)
                 val cacheFile = File(cacheDir, cacheKey)
                 
                 if (!cacheFile.exists()) {
@@ -167,15 +174,21 @@ class ThumbnailStripManager(
      * Salva uma strip no cache
      * @return true se salvo com sucesso, false caso contrário
      */
-    private fun saveToCache(uri: Uri, segmentIndex: Int, strip: Bitmap): Boolean {
+    private fun saveToCache(uri: Uri, segmentIndex: Int, strip: Bitmap, quality: ThumbnailQuality): Boolean {
         synchronized(cacheLock) {
             try {
-                val cacheKey = getCacheKey(uri, segmentIndex)
+                val cacheKey = getCacheKey(uri, segmentIndex, quality)
                 val cacheFile = File(cacheDir, cacheKey)
                 
                 val startTime = System.currentTimeMillis()
                 FileOutputStream(cacheFile).use { out ->
-                    strip.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+                    val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        Bitmap.CompressFormat.WEBP_LOSSY
+                    } else {
+                        @Suppress("DEPRECATION")
+                        Bitmap.CompressFormat.WEBP
+                    }
+                    strip.compress(format, COMPRESSION_QUALITY, out)
                 }
                 
                 val elapsed = System.currentTimeMillis() - startTime
@@ -256,20 +269,21 @@ class ThumbnailStripManager(
     suspend fun extractSegment(
         uri: Uri,
         segmentIndex: Int,
-        durationMs: Long
+        durationMs: Long,
+        quality: ThumbnailQuality = ThumbnailQuality.HIGH
     ): Bitmap? = withContext(Dispatchers.IO) {
         // Fail-fast se o job já foi cancelado
         coroutineContext.ensureActive()
 
                 // MELHORIA: Tentar carregar do cache primeiro (se habilitado)
                 if (prefsManager.thumbnailCacheEnabled) {
-                    val cachedStrip = loadFromCache(uri, segmentIndex)
+                    val cachedStrip = loadFromCache(uri, segmentIndex, quality)
                     if (cachedStrip != null) {
-                        Timber.i("ThumbnailStrip: CACHE HIT - Segment $segmentIndex loaded from disk")
+                        Timber.i("ThumbnailStrip: CACHE HIT ($quality) - Segment $segmentIndex loaded from disk")
                         return@withContext cachedStrip
                     }
 
-                    Timber.i("ThumbnailStrip: CACHE MISS - Segment $segmentIndex will be extracted")
+                    Timber.i("ThumbnailStrip: CACHE MISS ($quality) - Segment $segmentIndex will be extracted")
                 } else {
                     Timber.d("ThumbnailStrip: Cache disabled - Segment $segmentIndex will be extracted")
                 }
@@ -303,7 +317,8 @@ class ThumbnailStripManager(
                     uri = uri,
                     positionsMs = positions,
                     width = thumbWidth,
-                    height = thumbHeight
+                    height = thumbHeight,
+                    quality = quality
                 )
 
                 if (extractedFrames.isEmpty()) {
@@ -355,7 +370,7 @@ class ThumbnailStripManager(
 
                 // MELHORIA: Salvar no cache após extração bem-sucedida (se habilitado)
                 if (prefsManager.thumbnailCacheEnabled) {
-                    saveToCache(uri, segmentIndex, strip)
+                    saveToCache(uri, segmentIndex, strip, quality)
                 }
 
                 strip
