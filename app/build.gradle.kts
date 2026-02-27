@@ -105,6 +105,45 @@ dependencies {
     implementation(libs.coil.video)
 }
 
+import java.io.ByteArrayOutputStream
+
+tasks.register("logcatTimber", Exec::class) {
+    group = "Debug"
+    description = "Starts logcat with a filter for the app's PID and specific tags."
+
+    // Use a lazy property to find the PID only when the task executes
+    val pid by lazy {
+        val output = ByteArrayOutputStream()
+        try {
+            project.exec {
+                commandLine("adb", "shell", "pidof", "-s", "com.chopcut")
+                standardOutput = output
+                isIgnoreExitValue = true // Don't fail if pidof returns non-zero
+            }.rethrowFailure() // Rethrow if adb command itself fails
+            output.toString().trim()
+        } catch (e: Exception) {
+            "" // Return empty string on error
+        }
+    }
+
+    commandLine("echo", "Checking for app PID...")
+
+    doFirst {
+        if (pid.isBlank()) {
+            val errorMsg = "Error: Could not find PID for com.chopcut. Is the app running on a connected device?"
+            println(errorMsg)
+            throw StopExecutionException(errorMsg)
+        }
+        println("Found PID: $pid. Starting logcat...")
+        commandLine(
+            "adb",
+            "logcat",
+            "--pid=$pid",
+            "-s", "Timber:D", "ThumbnailStrip:I", "ThumbnailExtractorBatch:D"
+        )
+    }
+}
+
 
 
 
