@@ -24,7 +24,7 @@ Refatoração da extração para suportar dois níveis de qualidade para carrega
     - [x] Escrever teste visual ou de integridade de bitmap para verificar a ausência de serrilhado (aliasing).
     - [x] Implementar extração em background com filtros de redimensionamento de alta fidelidade.
 
-## Fase 3: Cache e Otimização de Armazenamento (WEBP)
+## Fase 3: Cache e Otimização de Armazenamento (WEBP) [checkpoint: 804f544]
 Migração para WEBP para equilibrar o aumento de resolução com economia de disco.
 
 - [x] **Task: Migração para Compressão WEBP**
