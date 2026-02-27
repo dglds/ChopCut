@@ -1,6 +1,6 @@
 # Plano de Implementação: Otimização de Thumbnails e Aspect Ratio Dinâmico
 
-## Fase 1: Infraestrutura de Metadados e Aspect Ratio
+## Fase 1: Infraestrutura de Metadados e Aspect Ratio [checkpoint: 2d4c99e]
 Esta fase foca em detectar corretamente as proporções do vídeo para que a UI possa se adaptar.
 
 - [x] **Task: Implementar Extração de Aspect Ratio**
