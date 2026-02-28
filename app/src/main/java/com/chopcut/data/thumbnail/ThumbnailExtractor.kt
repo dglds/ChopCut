@@ -63,9 +63,36 @@ class ThumbnailExtractor(
             )
 
             val frame = if (quality == ThumbnailQuality.HIGH && rawFrame != null && (rawFrame.width != width || rawFrame.height != height)) {
-                val scaled = Bitmap.createScaledBitmap(rawFrame, width, height, true)
-                if (scaled != rawFrame) rawFrame.recycle()
-                scaled
+                // Criar bitmap de destino no tamanho exato solicitado
+                val result = Bitmap.createBitmap(width, height, rawFrame.config ?: Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(result)
+                
+                // Calcular área de crop centralizado
+                val srcWidth = rawFrame.width
+                val srcHeight = rawFrame.height
+                val srcAspect = srcWidth.toFloat() / srcHeight
+                val dstAspect = width.toFloat() / height
+
+                val (cropWidth, cropHeight) = if (srcAspect > dstAspect) {
+                    // Source é mais largo que o destino (e.g. 16:9 -> 1:1)
+                    (srcHeight * dstAspect).toInt() to srcHeight
+                } else {
+                    // Source é mais alto que o destino (e.g. 9:16 -> 1:1)
+                    srcWidth to (srcWidth / dstAspect).toInt()
+                }
+
+                val cropX = (srcWidth - cropWidth) / 2
+                val cropY = (srcHeight - cropHeight) / 2
+
+                val srcRect = android.graphics.Rect(cropX, cropY, cropX + cropWidth, cropY + cropHeight)
+                val dstRect = android.graphics.Rect(0, 0, width, height)
+
+                // Desenhar com filtro bilinear para anti-aliasing
+                val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+                canvas.drawBitmap(rawFrame, srcRect, dstRect, paint)
+                
+                rawFrame.recycle()
+                result
             } else {
                 rawFrame
             }

@@ -5,14 +5,12 @@ object VideoConstraints {
     const val MAX_DURATION_SECONDS = 900
     
     fun isDurationValid(durationMs: Long): Boolean {
-        return durationMs <= MAX_DURATION_MS
+        // Desativado para testes conforme solicitado
+        return true
     }
     
     fun getValidationMessage(durationMs: Long): String? {
-        return if (!isDurationValid(durationMs)) {
-            val durationMin = (durationMs / 60000).toInt()
-            "Vídeo excede o limite de 15 minutos (${durationMin}min). " +
-            "Por favor, selecione um vídeo menor."
-        } else null
+        // Sem restrição de tempo para testes
+        return null
     }
 }

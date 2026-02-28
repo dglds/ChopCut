@@ -1,3 +1,5 @@
+import java.io.ByteArrayOutputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -105,8 +107,6 @@ dependencies {
     implementation(libs.coil.video)
 }
 
-import java.io.ByteArrayOutputStream
-
 tasks.register("logcatTimber", Exec::class) {
     group = "Debug"
     description = "Starts logcat with a filter for the app's PID and specific tags."
@@ -141,6 +141,204 @@ tasks.register("logcatTimber", Exec::class) {
             "--pid=$pid",
             "-s", "Timber:D", "ThumbnailStrip:I", "ThumbnailExtractorBatch:D"
         )
+    }
+}
+
+// ============================================================================
+// Performance Testing Tasks
+// ============================================================================
+
+/**
+ * Executa a suite completa de testes de performance
+ * Gera relatórios em JSON, Markdown e CSV
+ */
+tasks.register("performanceTest") {
+    group = "Performance"
+    description = "Run complete performance test suite with reports (JSON, MD, CSV)"
+
+    dependsOn("connectedDebugAndroidTest")
+
+    doFirst {
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("🚀 Running Complete Performance Test Suite")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("Tests included:")
+        println("  ✓ Video metadata extraction")
+        println("  ✓ Thumbnail extraction (single & batch)")
+        println("  ✓ Different resolutions (160x90 to 1280x720)")
+        println("  ✓ File operations")
+        println()
+        println("Reports will be saved to:")
+        println("  /storage/emulated/0/Android/data/com.chopcut/files/performance_reports/")
+        println()
+        println("Estimated time: 5-10 minutes")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+        // Configura argumentos de teste
+        project.gradle.startParameter.projectProperties.put(
+            "android.testInstrumentationRunnerArguments.class",
+            "com.chopcut.performance.PerformanceTestSuite"
+        )
+    }
+
+    doLast {
+        println()
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("✅ Performance tests completed!")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println()
+        println("To view reports:")
+        println("  ./gradlew pullPerformanceReports")
+        println("  ./scripts/view_performance_reports.sh")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    }
+}
+
+/**
+ * Executa apenas testes de extração de thumbnails
+ */
+tasks.register("performanceTestThumbnails", Exec::class) {
+    group = "Performance"
+    description = "Run thumbnail extraction performance tests only"
+
+    commandLine(
+        "./gradlew",
+        "connectedAndroidTest",
+        "-Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.performance.ThumbnailExtractionPerformanceTest"
+    )
+
+    doFirst {
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("🎬 Running Thumbnail Extraction Performance Tests")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    }
+}
+
+/**
+ * Executa apenas testes de operações de vídeo
+ */
+tasks.register("performanceTestVideo", Exec::class) {
+    group = "Performance"
+    description = "Run video operations performance tests only"
+
+    commandLine(
+        "./gradlew",
+        "connectedAndroidTest",
+        "-Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.performance.VideoOperationsPerformanceTest"
+    )
+
+    doFirst {
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("🎥 Running Video Operations Performance Tests")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    }
+}
+
+/**
+ * Executa stress test (200 thumbnails)
+ */
+tasks.register("performanceTestStress", Exec::class) {
+    group = "Performance"
+    description = "Run stress test (200 thumbnails extraction)"
+
+    commandLine(
+        "./gradlew",
+        "connectedAndroidTest",
+        "-Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.performance.PerformanceTestSuite",
+        "-Pandroid.testInstrumentationRunnerArguments.method=runStressTest"
+    )
+
+    doFirst {
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("💪 Running Stress Test (200 thumbnails)")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("⚠️  Warning: This test may take 10-15 minutes")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    }
+}
+
+/**
+ * Baixa relatórios de performance do dispositivo
+ */
+tasks.register("pullPerformanceReports", Exec::class) {
+    group = "Performance"
+    description = "Pull performance reports from device to ./performance_reports/"
+
+    val reportsDir = file("${project.rootDir}/performance_reports")
+    val devicePath = "/storage/emulated/0/Android/data/com.chopcut/files/performance_reports/"
+
+    doFirst {
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("📥 Pulling performance reports from device...")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+        // Cria diretório local se não existir
+        if (!reportsDir.exists()) {
+            reportsDir.mkdirs()
+            println("✓ Created local directory: ${reportsDir.absolutePath}")
+        }
+    }
+
+    commandLine("adb", "pull", devicePath, reportsDir.absolutePath)
+
+    doLast {
+        println()
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("✅ Reports downloaded to: ${reportsDir.absolutePath}")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println()
+        println("Available reports:")
+        reportsDir.listFiles()?.filter { it.isFile }?.forEach {
+            val icon = when {
+                it.name.endsWith(".json") -> "📊"
+                it.name.endsWith(".md") -> "📝"
+                it.name.endsWith(".csv") -> "📈"
+                else -> "📄"
+            }
+            println("  $icon ${it.name}")
+        }
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    }
+}
+
+/**
+ * Lista relatórios de performance no dispositivo
+ */
+tasks.register("listPerformanceReports", Exec::class) {
+    group = "Performance"
+    description = "List performance reports on device"
+
+    val devicePath = "/storage/emulated/0/Android/data/com.chopcut/files/performance_reports/"
+
+    commandLine("adb", "shell", "ls", "-lh", devicePath)
+
+    doFirst {
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("📋 Listing reports on device: $devicePath")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    }
+}
+
+/**
+ * Limpa relatórios de performance do dispositivo
+ */
+tasks.register("clearPerformanceReports", Exec::class) {
+    group = "Performance"
+    description = "Clear performance reports from device"
+
+    val devicePath = "/storage/emulated/0/Android/data/com.chopcut/files/performance_reports/"
+
+    commandLine("adb", "shell", "rm", "-rf", devicePath)
+
+    doFirst {
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        println("🗑️  Clearing reports from device...")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    }
+
+    doLast {
+        println("✅ Reports cleared from device")
+        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 }
 

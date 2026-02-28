@@ -42,19 +42,13 @@ class VideoRepository(
             }
             val bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull() ?: 0
 
-            // Extract frame rate (approximate from metadata)
-            val frameRate = extractFrameRate(retriever)
+            // Check for audio track (reusing same retriever)
+            val hasAudio = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) != null
 
             // Get file info
             val fileName = getFileName(uri)
             val mimeType = getContentMimeType(uri)
             val sizeBytes = getContentSize(uri)
-
-            // Check for audio track
-            val hasAudio = hasAudioTrack(uri)
-
-            // Get codec info
-            val (videoCodec, audioCodec) = extractCodecInfo(uri)
 
             VideoInfo(
                 uri = uri,
@@ -65,9 +59,9 @@ class VideoRepository(
                 height = height,
                 rotation = rotation,
                 bitrate = bitrate,
-                frameRate = frameRate,
-                videoCodec = videoCodec,
-                audioCodec = audioCodec,
+                frameRate = 30, // Default fallback
+                videoCodec = null,
+                audioCodec = null,
                 hasAudio = hasAudio,
                 sizeBytes = sizeBytes
             ).also {

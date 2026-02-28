@@ -37,8 +37,7 @@ class ThumbnailExtractorBatch(
         uri: Uri,
         positionsMs: List<Long>,
         width: Int = 320,
-        height: Int = 180,
-        quality: ThumbnailQuality = ThumbnailQuality.HIGH
+        height: Int = 180
     ): Map<Long, Bitmap> = withContext(Dispatchers.IO) {
         if (positionsMs.isEmpty()) {
             Timber.w("extractBatch: positionsMs is empty")
@@ -62,7 +61,7 @@ class ThumbnailExtractorBatch(
             // Extrair cada posição
             sortedPositions.forEach { positionMs ->
                 try {
-                    val bitmap = extractFrameAt(retriever, positionMs, width, height, quality)
+                    val bitmap = extractFrameAt(retriever, positionMs, width, height)
                     if (bitmap != null) {
                         results[positionMs] = bitmap
                     }
@@ -102,8 +101,7 @@ class ThumbnailExtractorBatch(
         uri: Uri,
         positionMs: Long,
         width: Int = 320,
-        height: Int = 180,
-        quality: ThumbnailQuality = ThumbnailQuality.HIGH
+        height: Int = 180
     ): Bitmap? = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         val retriever = MediaMetadataRetriever()
@@ -141,8 +139,7 @@ class ThumbnailExtractorBatch(
         retriever: MediaMetadataRetriever,
         positionMs: Long,
         width: Int,
-        height: Int,
-        quality: ThumbnailQuality = ThumbnailQuality.HIGH
+        height: Int
     ): Bitmap? {
         return try {
             // Get frame at position
@@ -167,14 +164,14 @@ class ThumbnailExtractorBatch(
                 (width to (width / videoAspectRatio).toInt())
             }
 
-            // Aplicar fator de qualidade HIGH se necessário (usando 1.2x para anti-aliasing)
-            val finalWidth = if (quality == ThumbnailQuality.HIGH) (extractWidth * 1.2f).toInt() else extractWidth
-            val finalHeight = if (quality == ThumbnailQuality.HIGH) (extractHeight * 1.2f).toInt() else extractHeight
+            // Aplicar fator de qualidade HIGH (usando 1.2x para anti-aliasing)
+            val finalWidth = (extractWidth * 1.2f).toInt()
+            val finalHeight = (extractHeight * 1.2f).toInt()
 
             // 🔍 ASPECT MONITOR: Log detalhado de metadados do vídeo e dimensões de extração
             android.util.Log.i("ThumbnailAspectMonitor", """
                 ═══════════════════════════════════════════════════════════
-                EXTRAÇÃO DE FRAME - Posição: ${positionMs}ms | Qualidade: $quality
+                EXTRAÇÃO DE FRAME - Posição: ${positionMs}ms | Qualidade: HIGH
                 ═══════════════════════════════════════════════════════════
                 📹 VÍDEO ORIGINAL:
                    • Dimensões brutas: ${videoWidth}x${videoHeight}
@@ -190,8 +187,8 @@ class ThumbnailExtractorBatch(
                 ⚙️ EXTRAÇÃO AJUSTADA:
                    • Dimensões base: ${extractWidth}x${extractHeight}
                    • Aspect Ratio: ${String.format("%.3f", extractWidth.toFloat() / extractHeight.toFloat())}
-                   • Dimensões finais (com quality): ${finalWidth}x${finalHeight}
-                   • Fator de escala: ${if (quality == ThumbnailQuality.HIGH) "1.2x (HIGH)" else "1.0x (LOW)"}
+                   • Dimensões finais: ${finalWidth}x${finalHeight}
+                   • Fator de escala: 1.2x (HIGH)
                 ═══════════════════════════════════════════════════════════
             """.trimIndent())
 
@@ -202,18 +199,44 @@ class ThumbnailExtractorBatch(
                 finalHeight
             )
 
-            val frame = if (quality == ThumbnailQuality.HIGH && rawFrame != null && (rawFrame.width != width || rawFrame.height != height)) {
-                // 🔍 ASPECT MONITOR: Log de rescale para qualidade HIGH
+            val frame = if (rawFrame != null && (rawFrame.width != width || rawFrame.height != height)) {
+                // 🔍 ASPECT MONITOR: Log de rescale/crop para qualidade HIGH
                 android.util.Log.i("ThumbnailAspectMonitor", """
-                    🔄 RESCALE HIGH QUALITY:
+                    🔄 CROP & RESCALE (Center Crop):
                        • Frame extraído: ${rawFrame.width}x${rawFrame.height} (ratio: ${String.format("%.3f", rawFrame.width.toFloat() / rawFrame.height.toFloat())})
-                       • Rescaling para: ${width}x${height} (ratio: ${String.format("%.3f", width.toFloat() / height.toFloat())})
-                       • Delta: ${rawFrame.width - width}px largura, ${rawFrame.height - height}px altura
+                       • Target: ${width}x${height} (ratio: ${String.format("%.3f", width.toFloat() / height.toFloat())})
                 """.trimIndent())
 
-                val scaled = Bitmap.createScaledBitmap(rawFrame, width, height, true)
-                if (scaled != rawFrame) rawFrame.recycle()
-                scaled
+                // Criar bitmap de destino no tamanho exato solicitado (Force RGB_565 para economizar RAM)
+                val result = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+                val canvas = android.graphics.Canvas(result)
+                
+                // Calcular área de crop centralizado
+                val srcWidth = rawFrame.width
+                val srcHeight = rawFrame.height
+                val srcAspect = srcWidth.toFloat() / srcHeight
+                val dstAspect = width.toFloat() / height
+
+                val (cropWidth, cropHeight) = if (srcAspect > dstAspect) {
+                    // Source é mais largo que o destino (e.g. 16:9 -> 1:1)
+                    (srcHeight * dstAspect).toInt() to srcHeight
+                } else {
+                    // Source é mais alto que o destino (e.g. 9:16 -> 1:1)
+                    srcWidth to (srcWidth / dstAspect).toInt()
+                }
+
+                val cropX = (srcWidth - cropWidth) / 2
+                val cropY = (srcHeight - cropHeight) / 2
+
+                val srcRect = android.graphics.Rect(cropX, cropY, cropX + cropWidth, cropY + cropHeight)
+                val dstRect = android.graphics.Rect(0, 0, width, height)
+
+                // Desenhar com filtro bilinear para anti-aliasing
+                val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+                canvas.drawBitmap(rawFrame, srcRect, dstRect, paint)
+                
+                rawFrame.recycle()
+                result
             } else {
                 rawFrame
             }

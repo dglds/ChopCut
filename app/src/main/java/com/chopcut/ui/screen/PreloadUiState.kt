@@ -38,7 +38,8 @@ data class PreloadProgress(
     val thumbnailPercent: Int = 0,
     val currentSegment: Int = 0,
     val totalSegments: Int = 0,
-    val logs: List<String> = emptyList()
+    val logs: List<String> = emptyList(),
+    val preloadedStrips: Map<Int, Bitmap> = emptyMap()
 )
 
 enum class ExtractionStage {

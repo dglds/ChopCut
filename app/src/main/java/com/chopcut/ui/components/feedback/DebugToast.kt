@@ -4,16 +4,13 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,9 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -98,7 +93,6 @@ fun DebugToast(
         modifier = modifier
             .width(320.dp)
             .clip(shape)
-            .border(1.dp, TerminalBorder, shape)
             .background(TerminalBg)
             .animateContentSize(
                 animationSpec = spring(
@@ -107,16 +101,11 @@ fun DebugToast(
                 )
             )
     ) {
-        TitleBar(
+        MinimalTitleBar(
             entryCount = entries.size,
             expanded = expanded,
             onToggleExpand = { expanded = !expanded },
             onClose = onClose
-        )
-
-        HorizontalDivider(
-            thickness = 0.5.dp,
-            color = TerminalBorder
         )
 
         LazyColumn(
@@ -124,20 +113,18 @@ fun DebugToast(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = displayHeight),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
             items(entries) { entry ->
                 DebugEntryItem(entry)
             }
         }
-
-        StatusBar(entryCount = entries.size)
     }
 }
 
 @Composable
-private fun TitleBar(
+private fun MinimalTitleBar(
     entryCount: Int,
     expanded: Boolean,
     onToggleExpand: () -> Unit,
@@ -146,73 +133,43 @@ private fun TitleBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(TitleBarBg)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(Modifier.size(6.dp).background(DotRed, CircleShape))
-            Box(Modifier.size(6.dp).background(DotYellow, CircleShape))
-            Box(Modifier.size(6.dp).background(DotGreen, CircleShape))
-
-            Spacer(Modifier.width(8.dp))
-
-            Text(
-                text = "DEBUG",
-                color = TerminalGreenMuted,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.5.sp
-            )
-
-            Spacer(Modifier.width(4.dp))
-
-            Text(
-                text = "[$entryCount]",
-                color = TerminalGreenDim,
-                fontSize = 9.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Normal,
-                letterSpacing = 0.3.sp
-            )
-        }
+        Text(
+            text = "DEBUG [$entryCount]",
+            color = TerminalGreenDim,
+            fontSize = 8.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 0.3.sp
+        )
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(20.dp)
-                    .background(
-                        if (expanded) TerminalGreenDim.copy(alpha = 0.3f) else TitleBarBg,
-                        RoundedCornerShape(4.dp)
-                    )
-                    .clip(RoundedCornerShape(4.dp))
-                    .padding(2.dp),
+                    .size(16.dp)
+                    .clickable(
+                        onClick = onToggleExpand,
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = if (expanded) "▼" else "▲",
-                    color = if (expanded) TerminalGreen else TerminalGreenDim,
-                    fontSize = 8.sp,
+                    color = TerminalGreenDim,
+                    fontSize = 7.sp,
                     fontFamily = FontFamily.Monospace
                 )
             }
 
             Box(
                 modifier = Modifier
-                    .size(20.dp)
-                    .background(
-                        TerminalBorder.copy(alpha = 0.5f),
-                        RoundedCornerShape(4.dp)
-                    )
-                    .clip(RoundedCornerShape(4.dp))
-                    .padding(2.dp)
+                    .size(16.dp)
                     .clickable(
                         onClick = onClose,
                         indication = null,
@@ -223,9 +180,8 @@ private fun TitleBar(
                 Text(
                     text = "✕",
                     color = DotRed,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 8.sp,
+                    fontFamily = FontFamily.Monospace
                 )
             }
         }
@@ -240,62 +196,26 @@ private fun DebugEntryItem(entry: DebugEntry) {
 
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(TerminalBg.copy(alpha = 0.3f))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .fillMaxWidth(),
         verticalAlignment = Alignment.Top
     ) {
         Text(
             text = "[$timestamp]",
             color = TerminalGreenDim,
-            fontSize = 9.sp,
+            fontSize = 7.sp,
             fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Normal,
-            modifier = Modifier.padding(end = 6.dp)
+            modifier = Modifier.padding(end = 4.dp)
         )
 
         Text(
             text = entry.message,
             color = TerminalGreen,
-            fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Normal,
-            lineHeight = 14.sp,
-            letterSpacing = 0.2.sp,
-            modifier = Modifier.weight(1f),
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun StatusBar(entryCount: Int) {
-    HorizontalDivider(
-        thickness = 0.5.dp,
-        color = TerminalBorder
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(TitleBarBg)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier
-                .size(5.dp)
-                .background(TerminalGreen, CircleShape)
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = "LIVE",
-            color = TerminalGreenDim,
             fontSize = 8.sp,
             fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
+            lineHeight = 11.sp,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

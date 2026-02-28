@@ -58,6 +58,7 @@ import com.chopcut.utils.FormatUtils
 import com.chopcut.data.thumbnail.ThumbnailStripManager
 import com.chopcut.data.thumbnail.ThumbnailStripManager.Companion.SEGMENT_SECONDS
 import kotlinx.coroutines.NonCancellable
+import timber.log.Timber
 import androidx.compose.animation.core.rememberInfiniteTransition
 import com.chopcut.ui.theme.ChopCutMonoFont
 import com.chopcut.data.model.ThumbnailQuality
@@ -126,7 +127,6 @@ fun TimelineEditor(
          // Sincronizar strips internas com as preloaded (para suportar carregamento progressivo)
          LaunchedEffect(preloadedStrips) {
              if (preloadedStrips.isNotEmpty()) {
-                 android.util.Log.d("ThumbnailStrip", "Updating with preloaded strips: ${preloadedStrips.size}")
                  preloadedStrips.forEach { (k, v) ->
                      strips[k] = v
                  }
@@ -137,7 +137,8 @@ fun TimelineEditor(
 
         // Máximo de strips em memória (100 × ~432KB RGB_565 ≈ 42MB)
         // Suficiente para ~16 minutos de timeline sem eviction
-        val maxStrips = 100
+        // Aumentado para 500 para suportar vídeos longos (~83 min) sem descarte agressivo
+        val maxStrips = 500
 
         // STRIP LOADING: Carregar segmentos visíveis + adjacentes por prioridade
         // IMPORTANTE: usa scope.launch (não launch) para que as coroutines
@@ -161,23 +162,14 @@ fun TimelineEditor(
             segmentsToLoad.forEach { segIdx ->
                 if (loadingStrips.containsKey(segIdx)) return@forEach
 
-                // Carga Progressiva: LOW -> HIGH
+                // Única Extração de Alta Fidelidade
                 scope.launch(Dispatchers.IO) {
                     loadingStrips[segIdx] = true
                     try {
-                        // 1. Carregar LOW quality primeiro (rápido)
-                        val lowQualityStrip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = ThumbnailQuality.LOW)
-                        if (lowQualityStrip != null && isActive) {
+                        val strip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs)
+                        if (strip != null && isActive) {
                             withContext(Dispatchers.Main) {
-                                strips[segIdx] = lowQualityStrip
-                            }
-                        }
-
-                        // 2. Carregar HIGH quality em background
-                        val highQualityStrip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = ThumbnailQuality.HIGH)
-                        if (highQualityStrip != null && isActive) {
-                            withContext(Dispatchers.Main) {
-                                strips[segIdx] = highQualityStrip
+                                strips[segIdx] = strip
                             }
                         }
                     } finally {
@@ -189,41 +181,39 @@ fun TimelineEditor(
             }
         }
 
-        // BACKGROUND LOADING: Pré-carregar até maxStrips segmentos sequencialmente
-        // Só pré-carregar em background se não houver strips pré-carregadas
-        LaunchedEffect(videoUri, videoDurationMs, preloadedStrips.isEmpty()) {
-            if (videoDurationMs == 0L || preloadedStrips.isNotEmpty()) return@LaunchedEffect
+        // BACKGROUND LOADING: Radial (da posição do scroll para as bordas)
+        LaunchedEffect(videoUri, videoDurationMs, scrollOffsetPx) {
+            if (videoDurationMs == 0L) return@LaunchedEffect
             
             val totalSegments = stripManager.getSegmentCount(videoDurationMs)
-            val toPreload = minOf(totalSegments, maxStrips)
+            val currentSecond = (scrollOffsetPx / pxPerSecond).toInt().coerceAtLeast(0)
+            val centerSegment = currentSecond / SEGMENT_SECONDS
             
-            android.util.Log.d("ThumbnailStrip", "Background: Pre-loading $toPreload segments")
+            // Criar lista de segmentos ordenada pela proximidade do scroll atual (Estratégia Radial)
+            val segmentsByPriority = (0 until totalSegments).sortedBy { 
+                kotlin.math.abs(it - centerSegment) 
+            }.take(maxStrips)
             
-            for (segIdx in 0 until toPreload) {
-                if (strips.size >= maxStrips || strips.containsKey(segIdx) || loadingStrips.containsKey(segIdx)) continue
+            for (segIdx in segmentsByPriority) {
+                if (strips.size >= maxStrips) break
+                if (strips.containsKey(segIdx) || loadingStrips.containsKey(segIdx)) continue
 
                 loadingStrips[segIdx] = true
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        // LOW quality primeiro
-                        val lowQualityStrip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = ThumbnailQuality.LOW)
-                        if (lowQualityStrip != null && isActive) {
-                            withContext(Dispatchers.Main) { strips[segIdx] = lowQualityStrip }
+                try {
+                    val strip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs)
+                    if (strip != null && isActive) {
+                        withContext(Dispatchers.Main) { 
+                            strips[segIdx] = strip 
                         }
-                        // HIGH quality em seguida
-                        val highQualityStrip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, quality = ThumbnailQuality.HIGH)
-                        if (highQualityStrip != null && isActive) {
-                            withContext(Dispatchers.Main) { strips[segIdx] = highQualityStrip }
-                        }
-                    } finally {
-                        withContext(Dispatchers.Main + NonCancellable) {
-                            loadingStrips.remove(segIdx)
-                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.w("Failed background radial pre-load of segment $segIdx")
+                } finally {
+                    withContext(Dispatchers.Main + NonCancellable) {
+                        loadingStrips.remove(segIdx)
                     }
                 }
             }
-            
-            android.util.Log.d("ThumbnailStrip", "Background: Pre-load sequence initiated")
         }
 
         // Animação de shimmer suave para placeholders de thumbnails
@@ -232,7 +222,7 @@ fun TimelineEditor(
             initialValue = -1f,
             targetValue = 2f,
             animationSpec = infiniteRepeatable(
-                animation = tween(5000, easing = FastOutSlowInEasing),
+                animation = tween(1500, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "shimmerProgress"
@@ -478,9 +468,9 @@ fun TimelineEditor(
                 val shimmerGradient = remember {
                     intArrayOf(
                         android.graphics.Color.parseColor("#1E1E1E"), // Base escuro
-                        android.graphics.Color.parseColor("#2E2E2E"), // Médio
-                        android.graphics.Color.parseColor("#3A3A3A"), // Claro
-                        android.graphics.Color.parseColor("#2E2E2E"), // Médio
+                        android.graphics.Color.parseColor("#3D3D3D"), // Médio
+                        android.graphics.Color.parseColor("#666666"), // Claro (Mais ativo)
+                        android.graphics.Color.parseColor("#3D3D3D"), // Médio
                         android.graphics.Color.parseColor("#1E1E1E")  // Base escuro
                     )
                 }
@@ -538,7 +528,6 @@ fun TimelineEditor(
                          visibleSegmentIndices.add(segIdx)
                      }
 
-                     android.util.Log.d("TimelineEditor", "Drawing ${visibleSegmentIndices.size} visible segments (optimized)")
 
                      for (sec in startSecond..endSecond) {
                           val timeMs = sec * 1000L
@@ -569,17 +558,7 @@ fun TimelineEditor(
                                    (x + thumbDisplayWidth).toInt(), (thumbnailTop + verticalOffset + thumbDisplayHeight).toInt()
                                )
 
-                               // 🔍 ASPECT MONITOR: Log de renderização (apenas primeiro frame de cada strip para reduzir spam)
-                               if (frameInStrip == 0) {
-                                   android.util.Log.d("ThumbnailAspectMonitor", """
-                                       🖼️ RENDER Strip #$segIdx | Frame ${sec}s:
-                                          • Strip: ${strip.width}x${strip.height} (ratio: ${String.format("%.2f", strip.width.toFloat() / strip.height.toFloat())})
-                                          • SrcRect: [${srcRect.left}, ${srcRect.top}, ${srcRect.right}, ${srcRect.bottom}] = ${srcRect.width()}x${srcRect.height()}
-                                          • DstRect: [${dstRect.left}, ${dstRect.top}, ${dstRect.right}, ${dstRect.bottom}] = ${dstRect.width()}x${dstRect.height()}
-                                          • Display ratio: ${String.format("%.2f", dstRect.width().toFloat() / dstRect.height().toFloat())}
-                                          • Vertical offset: ${verticalOffset}px
-                                   """.trimIndent())
-                               }
+                               // 🔍 RENDER Strip #$segIdx
 
                                drawIntoCanvas { canvas ->
                                    canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
@@ -632,7 +611,6 @@ fun TimelineEditor(
                          val waveformHeightPx = waveformHeightDp.toPx()
                          val waveformTopY = thumbnailTop + thumbnailHeightPx // Logo abaixo das thumbnails
 
-                         android.util.Log.d("TimelineEditor", "Drawing AudioWaveforms: ${audioWaveformsAmplitudes.size} bars, startX=$waveformStartX, width=$waveformWidth")
 
                          val barSlotWidth = waveformWidth / audioWaveformsAmplitudes.size.coerceAtLeast(1)
                          val barWidthPx = (barSlotWidth * 0.8f).coerceAtLeast(1f)

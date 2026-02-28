@@ -83,7 +83,9 @@ class PreloadViewModel(
                 stripManager = ThumbnailStripManager(getApplication(), thumbWidth, thumbHeight)
 
                 val totalSegments = stripManager!!.getSegmentCount(videoInfo.durationMs)
-                val preloadSegments = (totalSegments * 0.5f).toInt().coerceAtLeast(1)
+                // OTIMIZADO: Pré-carregar apenas os primeiros 5 segmentos (suficiente para o início)
+                // O carregamento radial no TimelineEditor cuidará do resto conforme o usuário navega.
+                val preloadSegments = 5.coerceAtMost(totalSegments)
 
                 updateProgress(
                     stage = ExtractionStage.Validating,
@@ -98,44 +100,25 @@ class PreloadViewModel(
                 thumbnailJob = viewModelScope.launch(Dispatchers.IO) {
                     updateProgress(
                         stage = ExtractionStage.ExtractingThumbnails,
-                        logs = listOf("Iniciando extração rápida (Low Quality)...")
+                        logs = listOf("Iniciando extração de alta fidelidade...")
                     )
 
-                    // PASSO 1: Extração rápida (LOW quality)
-                    val stripsLow = extractThumbnailsWithPriority(
+                    // Extração de alta qualidade (HIGH quality) - agora em um único passo
+                    val strips = extractThumbnailsWithPriority(
                         uri = uri,
                         stripManager = stripManager!!,
                         targetSegments = preloadSegments,
                         totalSegments = totalSegments,
-                        durationMs = videoInfo.durationMs,
-                        quality = ThumbnailQuality.LOW
+                        durationMs = videoInfo.durationMs
                     )
                     
-                    // Atualizar dados com LOW quality primeiro
-                    updateDataWithStrips(videoInfo, stripsLow, totalSegments)
-                    
-                    updateProgress(
-                        stage = ExtractionStage.ExtractingThumbnails,
-                        logs = listOf("Extração rápida concluída ✓ Iniciando alta fidelidade em background...")
-                    )
-
-                    // PASSO 2: Extração de alta qualidade (HIGH quality) - substitui as de baixo
-                    val stripsHigh = extractThumbnailsWithPriority(
-                        uri = uri,
-                        stripManager = stripManager!!,
-                        targetSegments = preloadSegments,
-                        totalSegments = totalSegments,
-                        durationMs = videoInfo.durationMs,
-                        quality = ThumbnailQuality.HIGH
-                    )
-                    
-                    // Atualizar dados com HIGH quality
-                    updateDataWithStrips(videoInfo, stripsHigh, totalSegments)
+                    // Atualizar dados com as strips extraídas
+                    updateDataWithStrips(videoInfo, strips, totalSegments)
                     
                     updateProgress(
                         stage = ExtractionStage.Ready,
                         thumbnailPercent = 100,
-                        logs = listOf("Thumbnails (Alta Qualidade): 100% ✓")
+                        logs = listOf("Thumbnails processadas: 100% ✓")
                     )
                 }
 
@@ -193,34 +176,37 @@ class PreloadViewModel(
     }
 
     private fun updateProgress(
-        stage: ExtractionStage,
-        audioPercent: Int = 0,
-        thumbnailPercent: Int = 0,
-        currentSegment: Int = 0,
-        totalSegments: Int = 0,
-        logs: List<String> = emptyList()
+        stage: ExtractionStage? = null,
+        audioPercent: Int? = null,
+        thumbnailPercent: Int? = null,
+        currentSegment: Int? = null,
+        totalSegments: Int? = null,
+        logs: List<String>? = null,
+        preloadedStrips: Map<Int, Bitmap>? = null
     ) {
         val currentState = _uiState.value
+        val currentProgress = if (currentState is PreloadUiState.Loading) {
+            currentState.progress
+        } else {
+            PreloadProgress(stage = ExtractionStage.Starting)
+        }
+
+        val newLogs = if (logs == null || logs.isEmpty()) currentProgress.logs else {
+            (currentProgress.logs + logs).takeLast(20)
+        }
         
-        if (currentState is PreloadUiState.Loading) {
-            val currentLogs = currentState.progress.logs
-            val newLogs = if (logs.isEmpty()) currentLogs else {
-                val maxLogs = 20
-                (currentLogs + logs).takeLast(maxLogs)
-            }
-            
-            _uiState.update {
-                PreloadUiState.Loading(
-                    currentState.progress.copy(
-                        stage = stage,
-                        audioPercent = audioPercent,
-                        thumbnailPercent = thumbnailPercent,
-                        currentSegment = currentSegment,
-                        totalSegments = totalSegments,
-                        logs = newLogs
-                    )
+        _uiState.update {
+            PreloadUiState.Loading(
+                currentProgress.copy(
+                    stage = stage ?: currentProgress.stage,
+                    audioPercent = audioPercent ?: currentProgress.audioPercent,
+                    thumbnailPercent = thumbnailPercent ?: currentProgress.thumbnailPercent,
+                    currentSegment = currentSegment ?: currentProgress.currentSegment,
+                    totalSegments = totalSegments ?: currentProgress.totalSegments,
+                    logs = newLogs,
+                    preloadedStrips = preloadedStrips ?: currentProgress.preloadedStrips
                 )
-            }
+            )
         }
     }
 
@@ -290,22 +276,20 @@ class PreloadViewModel(
         stripManager: ThumbnailStripManager,
         targetSegments: Int,
         totalSegments: Int,
-        durationMs: Long,
-        quality: ThumbnailQuality = ThumbnailQuality.HIGH
+        durationMs: Long
     ): Map<Int, Bitmap> {
         val strips = mutableMapOf<Int, Bitmap>()
         var lastPercent = -1
         
         // PRIORIDADE: Primeira strip com Dispatchers.Default (alta prioridade)
-        val qualityLog = if (quality == ThumbnailQuality.LOW) "LOW" else "HIGH"
         updateProgress(
             stage = ExtractionStage.ExtractingThumbnails,
             currentSegment = 1,
-            logs = listOf("Strip 1 extraída ($qualityLog)...")
+            logs = listOf("Strip 1 extraída...")
         )
         
         val strip0 = withContext(Dispatchers.Default) {
-            stripManager.extractSegment(uri, 0, durationMs, quality)
+            stripManager.extractSegment(uri, 0, durationMs)
         }
         if (strip0 != null) {
             strips[0] = strip0
@@ -313,16 +297,12 @@ class PreloadViewModel(
         
         Timber.d("First strip extracted immediately: ${strip0 != null}")
         
-        // Continuar com restante em paralelo (Dispatchers.IO, limitado por Semaphore)
+        // Continuar com restante SEQUENCIALMENTE (não saturar IO)
         if (targetSegments > 1) {
-            val remainingSegments = (1 until targetSegments).toList()
-            
-            val results = remainingSegments.map { segIdx ->
-                viewModelScope.async(Dispatchers.IO) {
-                    val strip = stripManager.extractSegment(uri, segIdx, durationMs, quality)
-                    if (strip != null) {
-                        strips[segIdx] = strip
-                    }
+            for (segIdx in 1 until targetSegments) {
+                val strip = stripManager.extractSegment(uri, segIdx, durationMs)
+                if (strip != null) {
+                    strips[segIdx] = strip
                     
                     val percent = ((segIdx + 1) * 100 / targetSegments)
                     if (percent != lastPercent) {
@@ -331,14 +311,13 @@ class PreloadViewModel(
                             thumbnailPercent = percent,
                             currentSegment = segIdx + 1,
                             totalSegments = targetSegments,
-                            logs = listOf("Strip ${segIdx + 1}/$targetSegments extraída (${percent}%)")
+                            logs = listOf("Strip ${segIdx + 1}/$targetSegments extraída (${percent}%)"),
+                            preloadedStrips = strips.toMap()
                         )
                         lastPercent = percent
                     }
-                    
-                    strip
                 }
-            }.awaitAll()
+            }
         }
         
         return strips
@@ -348,8 +327,6 @@ class PreloadViewModel(
         super.onCleared()
         preloadJob?.cancel()
         thumbnailJob?.cancel()
-        preloadedData.value?.preloadedStrips?.values?.forEach { bitmap ->
-            if (!bitmap.isRecycled) bitmap.recycle()
-        }
+        // REMOVIDO: Não reciclar bitmaps aqui, pois eles podem estar em uso no TrimScreen/PreloadDataStore
     }
 }

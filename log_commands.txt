@@ -1,7 +1,100 @@
-# Logs ChopCut
-
-# Playhead: position [range] quando dentro
-adb logcat -c && adb logcat | grep -i "Playhead"
-
-# FAB: estado atual
-adb logcat -c && adb logcat | grep -i "FAB"
+02-28 13:30:28.882 16747 17791 D SemContextManager:   .changeParameters : listener = Z.i@da34b93, service=SLocation Core
+02-28 13:30:28.883 16747 17791 D SLocation: GeofenceCoreManager - geofence core command pending size : 1
+02-28 13:30:28.883 16747 17791 D SLocation: GeofenceCoreRecovery - storeGeofenceInfo 1 id = 15000, radius = 1781
+02-28 13:30:28.883  1205  1256 I SensorsHub: context 16 0 15 1,1,55,0,11,5,7,2,0,0,0,9,3,137,23,32, 274525584384057
+02-28 13:30:28.883 16747 16982 D SensorService: setSContextDataLocked ints length 3 , byte length 5
+02-28 13:30:28.883 16747 16982 D SensorService: setSContextDataLocked 1e100ec1
+02-28 13:30:28.883 16747 17791 D SLocation: SLocationCoreSem - send to coreSem, packet length : 16 / [16, 58, 152, 238, 7, 201, 23, 225, 120, 79, 211, 0, 0, 6, 245, 1]
+02-28 13:30:28.884 16747 17791 D SemContextLocationCoreAttribute: setAttribute() mode : 0 action : 23
+02-28 13:30:28.884  1205  1205 I SensorsHub: SContextSensor::injecet_sensor_data
+02-28 13:30:28.884  1205  1205 D SensorsHub: c1 0e 10 1e 1c  
+02-28 13:30:28.884  1205  1205 D SensorsHub: inject_scontext_data: New ssp_data_injection_fd(28)
+02-28 13:30:28.884 16747 17791 D SemContextService: lock : changeParameters
+02-28 13:30:28.884 16747 17791 D SemContext.CaeProvider.LocationCoreImpl: setAttribute() mode : 0 action : 23
+02-28 13:30:28.885 16747 17791 W CAE     : setCAProperty(ContextAwareService.java:509) - [setProperty 01] Mutex is locked for SLOCATION_RUNNER
+02-28 13:30:28.885  1205  1205 D SensorsHub: SContext Data Injection return 5
+02-28 13:30:28.886 16747 17791 I CAE     : setPropertyValue(SLocationRunner.java:116) - SLocationRunner setProperty header : 16, len : 16
+02-28 13:30:28.886 16747 16980 D CAE     : onGetSensorHubData(SensorHubParserProvider.java:92) - onGetSensorHubData Event [event buffer len :10], AP_SLEEP
+02-28 13:30:28.886 16747 16980 I CAE     : parse(SensorHubParserProvider.java:188) - buffer size = 10
+02-28 13:30:28.887 16747 16982 D SensorService: setSContextDataLocked ints length 6 , byte length 19
+02-28 13:30:28.887 16747 16982 D SensorService: setSContextDataLocked 103717c1
+02-28 13:30:28.887 16747 16980 I CAE     : parse(SensorHubParserProvider.java:199) - 1, 1, 55, 0, 5, 2, 17, 0, 58, -104,
+02-28 13:30:28.887  1205  1205 I SensorsHub: SContextSensor::injecet_sensor_data
+02-28 13:30:28.887  1205  1205 D SensorsHub: c1 17 37 10 3a 98 ee 07 c9 17 e1 78 4f d3 00 00  
+02-28 13:30:28.887  1205  1205 D SensorsHub: 06 f5 01  
+02-28 13:30:28.887  1205  1205 D SensorsHub: inject_scontext_data: New ssp_data_injection_fd(28)
+02-28 13:30:28.888 16747 16980 I CAE     : parse(SLocationRunner.java:88) - SLocationRunner parse start : 3
+02-28 13:30:28.888  1205  1205 D SensorsHub: SContext Data Injection return 19
+02-28 13:30:28.889 16747 16980 D CAE     : display(ContextProvider.java:375) - ================= SLOCATION_RUNNER =================
+02-28 13:30:28.889  1205  1256 I SensorsHub: context 10 0 9 1,1,55,0,5,2,16,0,58,152, 274525590104903
+02-28 13:30:28.889 16747 16980 I CAE     : display(ContextProvider.java:391) - ExtraDataArray=[1, 1, 55, 0, 5, 2, 17, 0, 58, -104]
+02-28 13:30:28.890 16747 17791 W CAE     : setCAProperty(ContextAwareService.java:515) - [setProperty 02] Mutex is unlocked for SLOCATION_RUNNER
+02-28 13:30:28.890 16747 17791 D SemContextService: unlock : changeParameters
+02-28 13:30:28.890 16747 17791 D SemContextManager:   .changeParameters : listener = Z.i@da34b93, service=SLocation Core
+02-28 13:30:28.890 16747 16980 I CAE     : parse(SLocationRunner.java:96) - SLocationRunner parse end:10
+02-28 13:30:28.891 16747 16977 D SemContextService: Service.updateContext() : service = SLocation Core
+02-28 13:30:28.892 16747 16982 D SensorService: setSContextDataLocked ints length 3 , byte length 5
+02-28 13:30:28.892 16747 16982 D SensorService: setSContextDataLocked 1e100ec1
+02-28 13:30:28.892  1205  1205 I SensorsHub: SContextSensor::injecet_sensor_data
+02-28 13:30:28.892  1205  1205 D SensorsHub: c1 0e 10 1e 1c  
+02-28 13:30:28.892  1205  1205 D SensorsHub: inject_scontext_data: New ssp_data_injection_fd(28)
+02-28 13:30:28.893 16747 16747 D SemContextManager: onSemContextChanged() : event = SLocation Core
+02-28 13:30:28.893 16747 16747 D SLocation: SensorHubWrapper - SemContextChanged type = 47, packet received
+02-28 13:30:28.893  1205  1205 D SensorsHub: SContext Data Injection return 5
+02-28 13:30:28.893 16747 17791 D SLocation: GeofenceCoreManager - received Extra Data from core, len : 5
+02-28 13:30:28.893 16747 17791 D SLocation: GeofenceCoreManager - handleCommandCallback - GEOFENCE_REMOVE SUCCESS
+02-28 13:30:28.893 16747 17791 I SLocation: SHardwareManager - handleRemoveCallback : GEOFENCE_SUCCESS, id = 15000
+02-28 13:30:28.894 16747 17791 D SLocation: CommonCoreManager - received Extra Data from core, len : 5
+02-28 13:30:28.895 16747 16980 D CAE     : onGetSensorHubData(SensorHubParserProvider.java:92) - onGetSensorHubData Event [event buffer len :16], AP_SLEEP
+02-28 13:30:28.896 16747 16980 I CAE     : parse(SensorHubParserProvider.java:188) - buffer size = 16
+02-28 13:30:28.896 16747 16980 I CAE     : parse(SensorHubParserProvider.java:199) - 1, 1, 55, 0, 11, 5, 7, 2, 0, 0, 0, 9, 3, -119, 23, 32,
+02-28 13:30:28.897 16747 16980 I CAE     : parse(SLocationRunner.java:88) - SLocationRunner parse start : 3
+02-28 13:30:28.897 16747 16980 D CAE     : display(ContextProvider.java:375) - ================= SLOCATION_RUNNER =================
+02-28 13:30:28.898 16747 16980 I CAE     : display(ContextProvider.java:391) - ExtraDataArray=[1, 1, 55, 0, 11, 5, 7, 2, 0, 0, 0, 9, 3, -119, 23, 32]
+02-28 13:30:28.898 16747 16980 I CAE     : parse(SLocationRunner.java:96) - SLocationRunner parse end:16
+02-28 13:30:28.899 16747 16977 D SemContextService: Service.updateContext() : service = SLocation Core
+02-28 13:30:28.900 16747 16747 D SemContextManager: onSemContextChanged() : event = SLocation Core
+02-28 13:30:28.900 16747 16982 D SensorService: setSContextDataLocked ints length 3 , byte length 5
+02-28 13:30:28.900 16747 16982 D SensorService: setSContextDataLocked 1e100ec1
+02-28 13:30:28.900 16747 16747 D SLocation: SensorHubWrapper - SemContextChanged type = 47, packet received
+02-28 13:30:28.901  1205  1205 I SensorsHub: SContextSensor::injecet_sensor_data
+02-28 13:30:28.901  1205  1205 D SensorsHub: c1 0e 10 1e 1c  
+02-28 13:30:28.901  1205  1205 D SensorsHub: inject_scontext_data: New ssp_data_injection_fd(28)
+02-28 13:30:28.901  1205  1205 D SensorsHub: SContext Data Injection return 5
+02-28 13:30:28.902 16747 17791 D SLocation: GeofenceCoreManager - received Extra Data from core, len : 11
+02-28 13:30:28.902 16747 17791 D SLocation: CommonCoreManager - received Extra Data from core, len : 11
+02-28 13:30:28.902 16747 16980 D CAE     : onGetSensorHubData(SensorHubParserProvider.java:92) - onGetSensorHubData Event [event buffer len :10], AP_SLEEP
+02-28 13:30:28.903 16747 16980 I CAE     : parse(SensorHubParserProvider.java:188) - buffer size = 10
+02-28 13:30:28.903 16747 16980 I CAE     : parse(SensorHubParserProvider.java:199) - 1, 1, 55, 0, 5, 2, 16, 0, 58, -104,
+02-28 13:30:28.903 16747 16980 I CAE     : parse(SLocationRunner.java:88) - SLocationRunner parse start : 3
+02-28 13:30:28.904 16747 16980 D CAE     : display(ContextProvider.java:375) - ================= SLOCATION_RUNNER =================
+02-28 13:30:28.904 16747 16980 I CAE     : display(ContextProvider.java:391) - ExtraDataArray=[1, 1, 55, 0, 5, 2, 16, 0, 58, -104]
+02-28 13:30:28.905 16747 16980 I CAE     : parse(SLocationRunner.java:96) - SLocationRunner parse end:10
+02-28 13:30:28.905 16747 16977 D SemContextService: Service.updateContext() : service = SLocation Core
+02-28 13:30:28.906 16747 16747 D SemContextManager: onSemContextChanged() : event = SLocation Core
+02-28 13:30:28.906 16747 16747 D SLocation: SensorHubWrapper - SemContextChanged type = 47, packet received
+02-28 13:30:28.907 16747 17791 D SLocation: GeofenceCoreManager - received Extra Data from core, len : 5
+02-28 13:30:28.907 16747 17791 D SLocation: GeofenceCoreManager - handleCommandCallback - GEOFENCE_ADD SUCCESS
+02-28 13:30:28.907 16747 17791 I SLocation: SHardwareManager - handleAddCallback : GEOFENCE_SUCCESS id = 15000
+02-28 13:30:28.907 16747 17791 D SLocation: CommonCoreManager - received Extra Data from core, len : 5
+02-28 13:30:29.078 16543 16582 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,0 ,0 ,0, 16.0.0.4
+02-28 13:30:29.078 16543 16582 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+02-28 13:30:29.078 16543 16582 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+02-28 13:30:29.956 16747 17015 W DeviceStorageMonitorService: updateBroadcasts(/data) oldLevel:0, newLevel:0, seq:1
+02-28 13:30:29.958 16747 17015 D DeviceStorageMonitorService: Available File Node Number is [12324826]
+02-28 13:30:29.958 16747 17015 W DeviceStorageMonitorService: updateBroadcasts_filenode(/data) fn_oldLevel:0, fn_newLevel:0, seq:1
+02-28 13:30:30.079 16543 16582 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,0 ,0 ,0, 16.0.0.4
+02-28 13:30:30.079 16543 16582 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+02-28 13:30:30.079 16543 16582 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+02-28 13:30:30.764   638   638 D io_stats: !@ Read_top(KB): .sec.imsservice(17394) 32
+02-28 13:30:31.006 16747 16782 E Watchdog: !@Sync: 1965 heap(MB): 194 / 219 FD: 1291 [2026-02-28 13:30:31.005]
+02-28 13:30:31.080 16543 16582 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,0 ,0 ,0, 16.0.0.4
+02-28 13:30:31.080 16543 16582 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+02-28 13:30:31.080 16543 16582 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+02-28 13:30:31.126  1205  1205 I SensorsHub: queueActivate: handle 1 enable 0
+02-28 13:30:31.127  1205  1205 I SensorsHub: type : 1, enable : 0
+02-28 13:30:31.129 17449 31392 D SensorManager: unregisterListener
+02-28 13:30:31.132   674 19831 I android.system.suspend-service: !@SystemSuspend: mSuspendCounter-
+02-28 13:30:31.133   674 19831 I android.system.suspend-service: !@SystemSuspend: wakeup_count+
+02-28 13:30:31.137 17449 17449 D BoundBrokerSvc: onRebind: Intent { act=com.google.android.gms.common.telemetry.service.START dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentApiService }
+02-28 13:30:31.387 17159 17159 I wpa_supplicant: Heartbeat 5811

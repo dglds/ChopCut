@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChopCut - Relatório de Performance de Vídeos</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-is@18/umd/react-is.production.min.js"></script>
+    
+    <!-- Recharts Dependencies -->
+    <script crossorigin src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <script crossorigin src="https://unpkg.com/recharts@2.12.0/umd/Recharts.js"></script>
+    
+    <!-- Babel para JSX no navegador -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Dados do Relatório (gerado pelo script run_tests.sh) -->
+    <script src="./performance_data.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#1e40af',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen p-4 md:p-8">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Extrair Recharts do objeto global
+        const {
+            BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+            LineChart, Line
+        } = window.Recharts;
+
+        // Caso os dados não tenham sido gerados ainda
+        const data = typeof performanceData !== 'undefined' ? performanceData : [];
+        const testDate = typeof lastTestDate !== 'undefined' ? lastTestDate : 'Desconhecida';
+
+        // Parse da string de VideoInfo
+        function parseVideoInfo(infoString) {
+            if (!infoString) return { name: 'Desconhecido', details: '' };
+            // Formato esperado: "nome_do_arquivo.mp4 - 1920x1080 30.0s 1.50MB"
+            const parts = infoString.split(' - ');
+            if (parts.length >= 2) {
+                return { name: parts[0], details: parts[1] };
+            }
+            return { name: infoString, details: '' };
+        }
+
+        // Card individual de Vídeo
+        const VideoCard = ({ report, index }) => {
+            const vInfo = parseVideoInfo(report.videoInfo);
+            const { statistics, metrics } = report;
+            
+            // Agrupar métricas por categoria
+            const categories = {
+                'Extração de Metadados': metrics.filter(m => m.operationName.includes('Metadata')),
+                'Thumbnails Individuais': metrics.filter(m => m.operationName.includes('Single Thumbnail')),
+                'Processamento em Lote (Batch)': metrics.filter(m => m.operationName.includes('Batch')),
+                'Teste de Resoluções': metrics.filter(m => m.operationName.includes('Thumbnail ') && !m.operationName.includes('Single'))
+            };
+
+            return (
+                <div className="bg-white rounded-xl shadow-md overflow-hidden mb-8 border border-slate-200">
+                    {/* Header do Card */}
+                    <div className="bg-slate-800 text-white p-4 flex flex-col md:flex-row justify-between items-start md:items-center">
+                        <div>
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full mr-2">#{index + 1}</span>
+                                🎬 {vInfo.name}
+                            </h2>
+                            <p className="text-slate-300 text-sm mt-1">📐 {vInfo.details}</p>
+                        </div>
+                        <div className="mt-4 md:mt-0 text-right">
+                            <p className="text-2xl font-bold text-emerald-400">{statistics.totalDurationMs} ms</p>
+                            <p className="text-xs text-slate-400">Tempo Total de Processamento</p>
+                        </div>
+                    </div>
+
+                    {/* Estatísticas Rápidas */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 border-b border-slate-200">
+                        <div className="text-center p-2 rounded bg-white shadow-sm border border-slate-100">
+                            <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Operações</p>
+                            <p className="text-lg font-bold text-slate-700">{statistics.totalOperations}</p>
+                        </div>
+                        <div className="text-center p-2 rounded bg-white shadow-sm border border-slate-100">
+                            <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Tempo Médio</p>
+                            <p className="text-lg font-bold text-blue-600">{statistics.averageDurationMs.toFixed(1)} ms</p>
+                        </div>
+                        <div className="text-center p-2 rounded bg-white shadow-sm border border-slate-100">
+                            <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Mais Rápida</p>
+                            <p className="text-lg font-bold text-emerald-600">{statistics.minDurationMs} ms</p>
+                        </div>
+                        <div className="text-center p-2 rounded bg-white shadow-sm border border-slate-100">
+                            <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Mais Lenta</p>
+                            <p className="text-lg font-bold text-rose-600">{statistics.maxDurationMs} ms</p>
+                        </div>
+                    </div>
+
+                    {/* Detalhes de Métricas */}
+                    <div className="p-6">
+                        <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Detalhes de Execução</h3>
+                        
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {Object.entries(categories).map(([catName, catMetrics]) => {
+                                if (catMetrics.length === 0) return null;
+                                
+                                return (
+                                    <div key={catName} className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                        <h4 className="font-semibold text-slate-700 mb-3 text-sm uppercase tracking-wide">{catName}</h4>
+                                        <ul className="space-y-2">
+                                            {catMetrics.map((m, i) => {
+                                                // Exibir info extra baseada no metadata
+                                                let extraInfo = '';
+                                                if (m.metadata) {
+                                                    if (m.metadata.position !== undefined) extraInfo = `@ ${m.metadata.position}ms`;
+                                                    if (m.metadata.batchSize !== undefined) extraInfo = `${m.metadata.batchSize} items`;
+                                                    if (m.metadata.resolution !== undefined) extraInfo = `${m.metadata.resolution} (${m.metadata.quality || ''})`;
+                                                }
+
+                                                return (
+                                                    <li key={i} className="flex justify-between items-center bg-white p-2 rounded border border-slate-100 text-sm">
+                                                        <span className="text-slate-600">
+                                                            {m.operationName.replace(' Thumbnail', '')} 
+                                                            <span className="text-slate-400 ml-1 text-xs">{extraInfo}</span>
+                                                        </span>
+                                                        <span className="font-mono font-medium text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+                                                            {m.durationMs} ms
+                                                        </span>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                        
+                                        {/* Sumário do Batch vs Single (se aplicável) */}
+                                        {catName === 'Processamento em Lote (Batch)' && categories['Thumbnails Individuais'].length > 0 && (
+                                            <div className="mt-3 p-2 bg-blue-50 text-blue-800 rounded text-xs border border-blue-100">
+                                                {(() => {
+                                                    const avgSingle = categories['Thumbnails Individuais'].reduce((acc, curr) => acc + curr.durationMs, 0) / categories['Thumbnails Individuais'].length;
+                                                    const batchMetric = catMetrics.find(m => m.metadata && m.metadata.batchSize);
+                                                    if (batchMetric) {
+                                                        const batchSize = batchMetric.metadata.batchSize;
+                                                        const avgBatch = batchMetric.durationMs / batchSize;
+                                                        const speedup = (avgSingle / avgBatch).toFixed(1);
+                                                        return (
+                                                            <div className="flex justify-between font-medium">
+                                                                <span>Geração em Lote é <strong>{speedup}x</strong> mais rápida</span>
+                                                                <span>({avgBatch.toFixed(1)}ms/thumb)</span>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Dashboard = () => {
+            if (!data || data.length === 0) {
+                return (
+                    <div className="max-w-4xl mx-auto mt-10 p-8 bg-white rounded-xl shadow-md text-center border border-slate-200">
+                        <h1 className="text-2xl font-bold text-slate-800 mb-4">Nenhum dado encontrado</h1>
+                        <p className="text-slate-600 mb-6">Execute o script de testes para gerar os dados de performance.</p>
+                        <div className="bg-slate-800 text-left text-green-400 p-4 rounded-lg font-mono text-sm inline-block">
+                            cd /home/diego/mobile/ChopCut<br/>
+                            ./scripts/run_tests.sh
+                        </div>
+                    </div>
+                );
+            }
+
+            const device = data[0].device;
+
+            return (
+                <div className="max-w-6xl mx-auto">
+                    {/* Cabeçalho */}
+                    <header className="mb-8">
+                        <div className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <div>
+                                <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">
+                                    ChopCut <span className="text-blue-600 font-light">Performance Report</span>
+                                </h1>
+                                <p className="text-slate-500 mt-1 flex items-center gap-2">
+                                    🗓️ Data do Teste: <span className="font-semibold text-slate-700">{testDate}</span>
+                                </p>
+                            </div>
+                            
+                            <div className="mt-4 md:mt-0 text-right bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">📱 Dispositivo de Teste</p>
+                                <p className="font-medium text-slate-800">{device.manufacturer} {device.model}</p>
+                                <p className="text-sm text-slate-500">Android {device.androidVersion} (API {device.sdkInt})</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Gráficos Comparativos */}
+                    <div className="mb-8 bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                        <h2 className="text-xl font-bold text-slate-800 mb-6">Gráficos Comparativos</h2>
+                        
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* Gráfico 1: Tempo Total */}
+                            <div>
+                                <h3 className="text-md font-semibold text-slate-700 mb-4 text-center">Tempo Total de Processamento (ms)</h3>
+                                <div className="h-64 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={data.map(d => ({ 
+                                            name: parseVideoInfo(d.videoInfo).name.split('.')[0].substring(0, 15), 
+                                            tempo: d.statistics.totalDurationMs 
+                                        }))}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                            <XAxis dataKey="name" tick={{fontSize: 12}} />
+                                            <YAxis />
+                                            <Tooltip cursor={{fill: '#f1f5f9'}} />
+                                            <Bar dataKey="tempo" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Tempo Total (ms)" />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Gráfico 2: Single vs Batch */}
+                            <div>
+                                <h3 className="text-md font-semibold text-slate-700 mb-4 text-center">Extração Individual vs Batch (ms)</h3>
+                                <div className="h-64 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={data.map(d => {
+                                            const single = d.metrics.filter(m => m.operationName.includes('Single Thumbnail'));
+                                            const avgSingle = single.length > 0 ? single.reduce((acc, curr) => acc + curr.durationMs, 0) / single.length : 0;
+                                            
+                                            const batch = d.metrics.find(m => m.operationName.includes('Batch') && m.metadata && m.metadata.batchSize);
+                                            const avgBatch = batch ? batch.durationMs / batch.metadata.batchSize : 0;
+
+                                            return {
+                                                name: parseVideoInfo(d.videoInfo).name.split('.')[0].substring(0, 15),
+                                                'Individual (Média)': Math.round(avgSingle),
+                                                'Batch (Por Thumbnail)': Math.round(avgBatch)
+                                            };
+                                        })}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                            <XAxis dataKey="name" tick={{fontSize: 12}} />
+                                            <YAxis />
+                                            <Tooltip cursor={{fill: '#f1f5f9'}} />
+                                            <Legend />
+                                            <Bar dataKey="Individual (Média)" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey="Batch (Por Thumbnail)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Resumo Geral */}
+                    <div className="mb-8">
+                        <h2 className="text-xl font-bold text-slate-800 mb-4 px-2">Comparativo Rápido ({data.length} vídeos)</h2>
+                        <div className="bg-white rounded-xl p-1 shadow-sm border border-slate-200 overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-100 text-slate-600 text-sm">
+                                        <th className="p-3 font-semibold rounded-tl-lg">Vídeo</th>
+                                        <th className="p-3 font-semibold text-center">Tempo Total</th>
+                                        <th className="p-3 font-semibold text-center">Média Operação</th>
+                                        <th className="p-3 font-semibold text-center rounded-tr-lg">Taxa (Ops/seg)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.map((report, i) => {
+                                        const vInfo = parseVideoInfo(report.videoInfo);
+                                        const opsPerSec = ((report.statistics.totalOperations / report.statistics.totalDurationMs) * 1000).toFixed(1);
+                                        return (
+                                            <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                                <td className="p-3">
+                                                    <div className="font-medium text-slate-800 truncate max-w-xs" title={vInfo.name}>{vInfo.name}</div>
+                                                    <div className="text-xs text-slate-500">{vInfo.details}</div>
+                                                </td>
+                                                <td className="p-3 text-center font-mono text-emerald-600 font-medium">{report.statistics.totalDurationMs}ms</td>
+                                                <td className="p-3 text-center font-mono text-blue-600">{report.statistics.averageDurationMs.toFixed(1)}ms</td>
+                                                <td className="p-3 text-center font-mono text-slate-600">{opsPerSec}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Cards de Vídeos */}
+                    <div className="mt-8">
+                        {data.map((report, index) => (
+                            <VideoCard key={index} report={report} index={index} />
+                        ))}
+                    </div>
+
+                    <footer className="text-center text-slate-400 text-sm py-8 border-t border-slate-200 mt-8">
+                        Relatório gerado automaticamente pelo pipeline de testes instrumentados do ChopCut.
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Dashboard />);
+    </script>
+</body>
+</html>
