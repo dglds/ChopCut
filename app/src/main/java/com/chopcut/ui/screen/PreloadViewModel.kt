@@ -78,29 +78,33 @@ class PreloadViewModel(
                 )
 
                 // Inicializar StripManager com dimensões baseadas no aspect ratio do vídeo
+                // IMPORTANTE: Usar as mesmas dimensões do TimelineEditor (60dp de largura)
                 val thumbWidth = screenWidthDp.toInt()
-                val thumbHeight = (thumbWidth / videoInfo.aspectRatio).toInt()
+                val thumbHeight = (thumbWidth / videoInfo.aspectRatio).toInt().coerceAtLeast(1)
                 stripManager = ThumbnailStripManager(getApplication(), thumbWidth, thumbHeight)
 
+                Timber.d("ThumbnailStripManager iniciado: thumbWidth=$thumbWidth, thumbHeight=$thumbHeight, aspectRatio=${videoInfo.aspectRatio}")
+
                 val totalSegments = stripManager!!.getSegmentCount(videoInfo.durationMs)
-                // OTIMIZADO: Pré-carregar apenas os primeiros 5 segmentos (suficiente para o início)
+                // OTIMIZADO: Pré-carregar apenas os primeiros 3 segmentos (suficiente para o início)
                 // O carregamento radial no TimelineEditor cuidará do resto conforme o usuário navega.
-                val preloadSegments = 5.coerceAtMost(totalSegments)
+                // Foco em renderizar thumbs do cache em vez de extrair novas.
+                val preloadSegments = 3.coerceAtMost(totalSegments)
 
                 updateProgress(
                     stage = ExtractionStage.Validating,
                     totalSegments = totalSegments,
                     logs = listOf(
                         "Total strips: $totalSegments",
-                        "Pré-carregar: $preloadSegments (50%)"
+                        "Pré-carregar: $preloadSegments"
                     )
                 )
 
-                // Iniciar extração de thumbnails
+                // Iniciar extração de thumbnails (foco em cache)
                 thumbnailJob = viewModelScope.launch(Dispatchers.IO) {
                     updateProgress(
                         stage = ExtractionStage.ExtractingThumbnails,
-                        logs = listOf("Iniciando extração de alta fidelidade...")
+                        logs = listOf("Carregando thumbnails do cache...")
                     )
 
                     // Extração de alta qualidade (HIGH quality) - agora em um único passo
@@ -291,49 +295,33 @@ class PreloadViewModel(
         val strips = mutableMapOf<Int, Bitmap>()
         var lastPercent = -1
 
-        // PRIORIDADE: Primeira strip com Dispatchers.Default (alta prioridade)
-        updateProgress(
-            stage = ExtractionStage.ExtractingThumbnails,
-            currentSegment = 1,
-            thumbnailsExtracted = 1,
-            thumbnailsTotal = totalSegments,
-            logs = listOf("Strip 1 extraída...")
-        )
+        Timber.d("Extraindo até $targetSegments segmentos (foco em cache)")
 
-        val strip0 = withContext(Dispatchers.Default) {
-            stripManager.extractSegment(uri, 0, durationMs)
-        }
-        if (strip0 != null) {
-            strips[0] = strip0
-        }
+        for (segIdx in 0 until targetSegments) {
+            val strip = stripManager.extractSegment(uri, segIdx, durationMs)
+            if (strip != null) {
+                strips[segIdx] = strip
 
-        Timber.d("First strip extracted immediately: ${strip0 != null}")
-
-        // Continuar com restante SEQUENCIALMENTE (não saturar IO)
-        if (targetSegments > 1) {
-            for (segIdx in 1 until targetSegments) {
-                val strip = stripManager.extractSegment(uri, segIdx, durationMs)
-                if (strip != null) {
-                    strips[segIdx] = strip
-
-                    val percent = ((segIdx + 1) * 100 / targetSegments)
-                    if (percent != lastPercent) {
-                        updateProgress(
-                            stage = ExtractionStage.ExtractingThumbnails,
-                            thumbnailPercent = percent,
-                            currentSegment = segIdx + 1,
-                            totalSegments = targetSegments,
-                            thumbnailsExtracted = strips.size,
-                            thumbnailsTotal = totalSegments,
-                            logs = listOf("Strip ${segIdx + 1}/$targetSegments extraída (${percent}%)"),
-                            preloadedStrips = strips.toMap()
-                        )
-                        lastPercent = percent
-                    }
+                val percent = ((segIdx + 1) * 100 / targetSegments)
+                if (percent != lastPercent) {
+                    updateProgress(
+                        stage = ExtractionStage.ExtractingThumbnails,
+                        thumbnailPercent = percent,
+                        currentSegment = segIdx + 1,
+                        totalSegments = targetSegments,
+                        thumbnailsExtracted = strips.size,
+                        thumbnailsTotal = totalSegments,
+                        logs = listOf("Strip ${segIdx + 1}/$targetSegments carregada (${percent}%)"),
+                        preloadedStrips = strips.toMap()
+                    )
+                    lastPercent = percent
                 }
+            } else {
+                Timber.w("Strip $segIdx não carregada (continuando)")
             }
         }
 
+        Timber.d("Strips carregadas: ${strips.size}/$targetSegments")
         return strips
     }
     

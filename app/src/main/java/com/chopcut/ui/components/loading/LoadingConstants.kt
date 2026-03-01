@@ -5,13 +5,13 @@ package com.chopcut.ui.components.loading
  */
 object LoadingConstants {
 
-    // Duração do loading - ajustado para melhor UX
-    const val MIN_LOADING_DURATION_MS = 3_000L    // Mínimo 3 segundos (reduzido de 5s)
-    const val MAX_LOADING_DURATION_MS = 8_000L    // Máximo 8 segundos (reduzido de 10s)
-    const val TARGET_DURATION_MS = 5_500L         // Duração otimista para progressão
+    // Duração do loading - ajustado para renderizar thumbs existentes
+    const val MIN_LOADING_DURATION_MS = 2_000L    // Mínimo 2 segundos (mostrar thumbs extraídas)
+    const val MAX_LOADING_DURATION_MS = 5_000L    // Máximo 5 segundos (foco em renderização)
+    const val TARGET_DURATION_MS = 3_500L         // Duração otimista para progressão
 
     // Progresso mínimo de thumbnails
-    const val MINIMUM_THUMBNAIL_PROGRESS = 30f     // 30% das thumbnails (reduzido de 50%)
+    const val MINIMUM_THUMBNAIL_PROGRESS = 20f     // 20% das thumbnails (foco em renderizar o que existe)
 
     // Timings de transição
     const val CROSS_FADE_START_DELAY_MS = 100L      // Delay reduzido para iniciar cross-fade

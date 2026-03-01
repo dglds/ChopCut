@@ -53,13 +53,40 @@ fun TrimScreen(
     var saveDialogState by remember { mutableStateOf(SaveDialogState()) }
     var showSaveDialog by remember { mutableStateOf(false) }
 
+    // Verificar se dados já estão completos (cache hit)
+    val isDataAlreadyCached = remember(preloadedData) {
+        preloadedData?.let { data ->
+            val hasAudio = data.audioAmplitudes.isNotEmpty()
+            val hasThumbnails = data.preloadedStrips.isNotEmpty()
+            val sufficientThumbnails = if (data.totalSegments > 0) {
+                (data.preloadedStrips.size.toFloat() / data.totalSegments) >= 0.3f
+            } else {
+                false
+            }
+            Timber.d("Cache check: audio=$hasAudio, thumbnails=$hasThumbnails, sufficient=$sufficientThumbnails")
+            hasAudio && hasThumbnails && sufficientThumbnails
+        } ?: false
+    }
+
     // Estados de controle do overlay
-    var showLoadingOverlay by remember { mutableStateOf(true) }
+    var showLoadingOverlay by remember { mutableStateOf(!isDataAlreadyCached) }
     var elapsedTimeMs by remember { mutableStateOf(0L) }
     var isReadyToHide by remember { mutableStateOf(false) }
 
+    // Se já estiver no cache, esconder o overlay imediatamente
+    LaunchedEffect(isDataAlreadyCached) {
+        if (isDataAlreadyCached) {
+            Timber.i("Dados já em cache, pulando overlay de loading")
+            showLoadingOverlay = false
+        }
+    }
+
     // Monitoramento automático para esconder overlay
-    LaunchedEffect(preloadState, preloadedDataState) {
+    LaunchedEffect(preloadState, preloadedDataState, isDataAlreadyCached) {
+        if (isDataAlreadyCached) {
+            return@LaunchedEffect
+        }
+
         val startTime = System.currentTimeMillis()
 
         while (showLoadingOverlay) {

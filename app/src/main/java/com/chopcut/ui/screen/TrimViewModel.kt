@@ -76,8 +76,8 @@ class TrimViewModel(
     init {
         if (initialAudioAmplitudes == null && initialPreloadedStrips == null) {
             videoUri?.let { uri ->
-                val screenWidthDp = 360f
-                Timber.d("TrimViewModel: Iniciando preload (dados não fornecidos)")
+                val screenWidthDp = 60f
+                Timber.d("TrimViewModel: Iniciando preload (dados não fornecidos, screenWidthDp=$screenWidthDp)")
                 preloadViewModel.startPreload(uri, screenWidthDp)
             }
         } else {
