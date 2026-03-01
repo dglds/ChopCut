@@ -191,8 +191,10 @@ fun StageMessage(stage: ExtractionStage, progress: PreloadProgress) {
 
 /**
  * Barra de progresso baseada em dados reais (thumbnails + audio).
- * Progride de 0% a 95% durante o processamento,
- * depois completa para 100% quando isReadyToHide = true.
+ * Progride de 0% a 95% durante o processamento.
+ *
+ * NOTA: Esta função não é mais usada na tela de loading simplificada.
+ * Mantida para compatibilidade caso seja necessária futuramente.
  */
 @Composable
 fun FakeProgressBar(progress: PreloadProgress, elapsedTimeMs: Long, isReadyToHide: Boolean = false) {
@@ -215,12 +217,8 @@ fun FakeProgressBar(progress: PreloadProgress, elapsedTimeMs: Long, isReadyToHid
     val animatedProgress by animateFloatAsState(
         targetValue = realProgress.coerceAtLeast(timeBasedProgress * 0.3f),
         animationSpec = tween(
-            durationMillis = if (isReadyToHide) {
-                LoadingConstants.PROGRESS_BAR_ANIMATION_FINAL_MS
-            } else {
-                LoadingConstants.PROGRESS_BAR_ANIMATION_NORMAL_MS
-            },
-            easing = if (isReadyToHide) LinearEasing else FastOutSlowInEasing
+            durationMillis = 500,
+            easing = FastOutSlowInEasing
         ),
         label = "animated_progress"
     )

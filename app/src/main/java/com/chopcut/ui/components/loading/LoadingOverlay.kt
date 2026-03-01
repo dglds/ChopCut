@@ -6,8 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,14 +16,12 @@ import com.chopcut.ui.theme.ChopCutAnimation
 import com.chopcut.ui.theme.ChopCutEasing
 
 /**
- * Overlay de loading exibido durante o carregamento inicial da TrimScreen.
+ * Overlay de loading simplificado exibido durante o carregamento inicial da TrimScreen.
  *
  * Features:
- * - Animação Lottie
- * - Progresso circular visual
- * - Mensagem de status genérica
- * - Barra de progresso falsa baseada em tempo
- * - Transição suave (cross-fade) com TrimScreen
+ * - Animação Lottie (apenas spinner)
+ * - Mensagem de status
+ * - Transição suave com TrimScreen
  */
 
 @Composable
@@ -73,59 +69,28 @@ fun LoadingOverlay(
                 ) { /* Block clicks - não cancela ao clicar fora */ },
             contentAlignment = Alignment.Center
         ) {
-            LoadingCard(progress = progress, elapsedTimeMs = elapsedTimeMs, isReadyToHide = isReadyToHide)
+            LoadingCard(progress = progress)
         }
     }
 }
 
 @Composable
 fun LoadingCard(
-    progress: PreloadProgress,
-    elapsedTimeMs: Long = 0L,
-    isReadyToHide: Boolean = false
+    progress: PreloadProgress
 ) {
-    Card(
-        modifier = Modifier
-            .width(320.dp)
-            .wrapContentHeight()
-            .shimmerEffect(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 16.dp
-        )
+    Column(
+        modifier = Modifier.padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(32.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Animação Lottie - entra primeiro
-            AnimatedElement(delayMillis = 0) {
-                LottieLoadingAnimation()
-            }
+        // Spinner - animação Lottie
+        AnimatedElement(delayMillis = 0) {
+            LottieLoadingAnimation()
+        }
 
-            Spacer(Modifier.height(24.dp))
-
-            // Progresso circular - entra em segundo
-            AnimatedElement(delayMillis = 100) {
-                CircularProgressWithPercentage(progress = progress)
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            // Mensagem - entra em terceiro
-            AnimatedElement(delayMillis = 200) {
-                StageMessage(stage = progress.stage, progress = progress)
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // Barra de progresso real - entra por último
-            AnimatedElement(delayMillis = 300) {
-                FakeProgressBar(progress = progress, elapsedTimeMs = elapsedTimeMs, isReadyToHide = isReadyToHide)
-            }
+        // Mensagem de status
+        AnimatedElement(delayMillis = 150) {
+            StageMessage(stage = progress.stage, progress = progress)
         }
     }
 }
@@ -150,7 +115,7 @@ private fun AnimatedElement(
                 easing = FastOutSlowInEasing
             )
         ) + slideInVertically(
-            initialOffsetY = { it / 4 },
+            initialOffsetY = { it / 6 },
             animationSpec = tween(
                 durationMillis = 400,
                 easing = ChopCutEasing.Emphasized

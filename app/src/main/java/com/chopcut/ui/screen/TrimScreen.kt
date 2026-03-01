@@ -79,6 +79,9 @@ fun TrimScreen(
                 hasAudio = hasAudio
             )
 
+            Timber.v("LoadingOverlay check: elapsed=${elapsedTimeMs}ms, minTime=$minTimeReached, maxTime=$maxTimeReached, " +
+                    "thumbnails=$thumbnailProgress%, state=${preloadState::class.simpleName}")
+
             if (shouldHideOverlay) {
                 val reason = getHideReason(
                     state = preloadState,
@@ -88,13 +91,12 @@ fun TrimScreen(
                     elapsedTimeMs = elapsedTimeMs,
                     thumbnailProgress = thumbnailProgress
                 )
-                Timber.d("LoadingOverlay pronto para esconder: $reason")
+                Timber.i("LoadingOverlay pronto para esconder: $reason")
 
                 isReadyToHide = true
-                delay(LoadingConstants.PROGRESS_BAR_COMPLETE_DELAY_MS)
-                showLoadingOverlay = false
                 delay(LoadingConstants.CROSS_FADE_START_DELAY_MS)
-                Timber.d("LoadingOverlay escondido: $reason")
+                showLoadingOverlay = false
+                Timber.i("LoadingOverlay escondido: $reason")
                 break
             }
 
@@ -165,8 +167,8 @@ fun TrimScreen(
                             durationMillis = LoadingConstants.TRIM_FADE_IN_DURATION_MS,
                             easing = FastOutSlowInEasing
                         )
-                    ) + slideInVertically(
-                        initialOffsetY = { it / LoadingConstants.TRIM_SLIDE_IN_FRACTION },
+                    ) + scaleIn(
+                        initialScale = LoadingConstants.TRIM_SCALE_IN_START,
                         animationSpec = tween(
                             durationMillis = LoadingConstants.TRIM_FADE_IN_DURATION_MS,
                             easing = FastOutSlowInEasing
@@ -366,10 +368,24 @@ private fun shouldHideLoadingOverlay(
     hasAudio: Boolean
 ): Boolean {
     return when (state) {
-        is PreloadUiState.Ready -> hasSufficientThumbnails
-        is PreloadUiState.Loading -> maxTimeReached || (minTimeReached && hasSufficientThumbnails && hasAudio)
-        is PreloadUiState.Error, is PreloadUiState.Cancelled -> true
-        else -> false
+        is PreloadUiState.Ready -> {
+            Timber.v("Ready state: thumbnails=$hasSufficientThumbnails")
+            hasSufficientThumbnails
+        }
+        is PreloadUiState.Loading -> {
+            Timber.v("Loading state: maxTime=$maxTimeReached, minTime=$minTimeReached, thumbnails=$hasSufficientThumbnails, audio=$hasAudio")
+            // Sempre esconder no timeout máximo
+            maxTimeReached || (minTimeReached && hasSufficientThumbnails && hasAudio)
+        }
+        is PreloadUiState.Error, is PreloadUiState.Cancelled -> {
+            Timber.w("Error/Cancelled state: hiding overlay")
+            true
+        }
+        is PreloadUiState.Idle -> {
+            // Fallback: se está em Idle por mais de 2 segundos, esconder para não ficar preso
+            Timber.w("Idle state: hiding overlay (fallback)")
+            true
+        }
     }
 }
 
@@ -382,12 +398,13 @@ private fun getHideReason(
     thumbnailProgress: Float
 ): String {
     return when {
-        state is PreloadUiState.Error -> "Error"
-        state is PreloadUiState.Cancelled -> "Cancelled"
-        maxTimeReached -> "Timeout (${LoadingConstants.MAX_LOADING_DURATION_MS / 1000}s)"
+        state is PreloadUiState.Error -> "Error state"
+        state is PreloadUiState.Cancelled -> "Cancelled by user"
+        state is PreloadUiState.Idle -> "Idle state (fallback)"
+        maxTimeReached -> "Max timeout (${LoadingConstants.MAX_LOADING_DURATION_MS / 1000}s)"
         state is PreloadUiState.Ready -> "Ready (${elapsedTimeMs / 1000}s, ${thumbnailProgress.toInt()}% thumbnails)"
-        minTimeReached && hasSufficientThumbnails -> "Min time (${LoadingConstants.MIN_LOADING_DURATION_MS / 1000}s) + ${thumbnailProgress.toInt()}% thumbnails"
-        else -> "Unknown"
+        minTimeReached && hasSufficientThumbnails -> "Min time reached + sufficient data"
+        else -> "Unknown reason"
     }
 }
 
