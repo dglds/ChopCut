@@ -36,6 +36,9 @@ import com.chopcut.ui.screen.TrimScreen
 import com.chopcut.ui.screen.debug.AudioWaveFormsTestScreen
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import com.chopcut.ui.theme.ChopCutTheme
 import com.chopcut.BuildConfig
 
@@ -56,12 +59,20 @@ class MainActivity : ComponentActivity() {
 
                     val debugViewModel: DebugViewModel = viewModel()
 
+                    // Transições de fade rápido e agressivo (sem slide)
+                    val fastFadeIn = fadeIn(animationSpec = tween(200))
+                    val fastFadeOut = fadeOut(animationSpec = tween(150))
+
                     Box(modifier = Modifier.fillMaxSize()) {
                         NavHost(
                             navController = navController,
                             startDestination = startDestination
                         ) {
-                            composable("onboarding") {
+                            composable(
+                                route = "onboarding",
+                                enterTransition = { fastFadeIn },
+                                exitTransition = { fastFadeOut }
+                            ) {
                                 OnboardingScreen(
                                     onFinish = {
                                         preferencesManager.isFirstRun = false
@@ -72,7 +83,13 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            composable("home") {
+                            composable(
+                                route = "home",
+                                enterTransition = { fastFadeIn },
+                                exitTransition = { fastFadeOut },
+                                popEnterTransition = { fastFadeIn },
+                                popExitTransition = { fastFadeOut }
+                            ) {
                                 HomeScreen(
                                     onNavigateToEditor = { videoUri ->
                                         val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
@@ -88,13 +105,25 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            composable("audio_waveforms_test") {
+                            composable(
+                                route = "audio_waveforms_test",
+                                enterTransition = { fastFadeIn },
+                                exitTransition = { fastFadeOut },
+                                popEnterTransition = { fastFadeIn },
+                                popExitTransition = { fastFadeOut }
+                            ) {
                                 AudioWaveFormsTestScreen(
                                     debugViewModel = debugViewModel
                                 )
                             }
 
-                            composable("preferences") {
+                            composable(
+                                route = "preferences",
+                                enterTransition = { fastFadeIn },
+                                exitTransition = { fastFadeOut },
+                                popEnterTransition = { fastFadeIn },
+                                popExitTransition = { fastFadeOut }
+                            ) {
                                 PreferencesScreen(
                                     onNavigateBack = { navController.popBackStack() }
                                 )
@@ -109,10 +138,10 @@ class MainActivity : ComponentActivity() {
                                         defaultValue = null
                                     }
                                 ),
-                                enterTransition = { EnterTransition.None },
-                                exitTransition = { ExitTransition.None },
-                                popEnterTransition = { EnterTransition.None },
-                                popExitTransition = { ExitTransition.None }
+                                enterTransition = { fastFadeIn },
+                                exitTransition = { fastFadeOut },
+                                popEnterTransition = { fastFadeIn },
+                                popExitTransition = { fastFadeOut }
                             ) { backStackEntry ->
                                 val videoUriString = backStackEntry.arguments?.getString("videoUri")
                                 val videoUri = videoUriString?.let { Uri.parse(it) }
@@ -131,15 +160,22 @@ class MainActivity : ComponentActivity() {
 
                         if (BuildConfig.DEBUG) {
                             val debugState = debugViewModel.debugState.collectAsState()
-                            
+                            val debugPosition = debugViewModel.position.collectAsState()
+
                             if (debugState.value is DebugState.Active) {
+                                val alignment = when (debugPosition.value) {
+                                    com.chopcut.ui.components.feedback.DebugPosition.TOP -> Alignment.TopEnd
+                                    com.chopcut.ui.components.feedback.DebugPosition.BOTTOM -> Alignment.BottomEnd
+                                }
+
                                 DebugToast(
                                     entries = (debugState.value as DebugState.Active).entries,
                                     modifier = Modifier
-                                        .align(Alignment.BottomEnd)
+                                        .align(alignment)
                                         .navigationBarsPadding()
                                         .padding(12.dp),
-                                    onClose = { debugViewModel.clear() }
+                                    onClose = { debugViewModel.clear() },
+                                    onTogglePosition = { debugViewModel.togglePosition() }
                                 )
                             }
                         }

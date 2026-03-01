@@ -60,8 +60,9 @@ private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 fun DebugToast(
     entries: List<DebugEntry>,
     modifier: Modifier = Modifier,
-    maxHeight: Float = 350f,
-    onClose: () -> Unit = {}
+    maxHeight: Float = 300f,
+    onClose: () -> Unit = {},
+    onTogglePosition: () -> Unit = {}
 ) {
     if (!BuildConfig.DEBUG || entries.isEmpty()) return
 
@@ -105,6 +106,7 @@ fun DebugToast(
             entryCount = entries.size,
             expanded = expanded,
             onToggleExpand = { expanded = !expanded },
+            onTogglePosition = onTogglePosition,
             onClose = onClose
         )
 
@@ -113,8 +115,8 @@ fun DebugToast(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = displayHeight),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp),
-            verticalArrangement = Arrangement.spacedBy(1.dp)
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             items(entries) { entry ->
                 DebugEntryItem(entry)
@@ -128,6 +130,7 @@ private fun MinimalTitleBar(
     entryCount: Int,
     expanded: Boolean,
     onToggleExpand: () -> Unit,
+    onTogglePosition: () -> Unit,
     onClose: () -> Unit
 ) {
     Row(
@@ -149,6 +152,26 @@ private fun MinimalTitleBar(
         Row(
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
+            // Botão de alternar posição (top/bottom)
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .clickable(
+                        onClick = onTogglePosition,
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "⇅",
+                    color = DotYellow,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            // Botão de expandir/colapsar
             Box(
                 modifier = Modifier
                     .size(16.dp)
@@ -167,6 +190,7 @@ private fun MinimalTitleBar(
                 )
             }
 
+            // Botão de fechar
             Box(
                 modifier = Modifier
                     .size(16.dp)
@@ -196,7 +220,8 @@ private fun DebugEntryItem(entry: DebugEntry) {
 
     Row(
         modifier = Modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
         verticalAlignment = Alignment.Top
     ) {
         Text(
@@ -204,6 +229,7 @@ private fun DebugEntryItem(entry: DebugEntry) {
             color = TerminalGreenDim,
             fontSize = 7.sp,
             fontFamily = FontFamily.Monospace,
+            lineHeight = 9.sp,
             modifier = Modifier.padding(end = 4.dp)
         )
 
@@ -212,9 +238,9 @@ private fun DebugEntryItem(entry: DebugEntry) {
             color = TerminalGreen,
             fontSize = 8.sp,
             fontFamily = FontFamily.Monospace,
-            lineHeight = 11.sp,
+            lineHeight = 9.sp,
             modifier = Modifier.weight(1f),
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
