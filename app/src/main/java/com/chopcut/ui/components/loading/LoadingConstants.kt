@@ -8,10 +8,15 @@ object LoadingConstants {
     // Limite de duração para considerar vídeo "curto" (pular loading se cache hit)
     const val SHORT_VIDEO_THRESHOLD_MS = 60_000L   // 60 segundos
 
-    // Duração do loading - ajustado para renderizar thumbs existentes
-    const val MIN_LOADING_DURATION_MS = 2_000L    // Mínimo 2 segundos (mostrar thumbs extraídas)
+    // Duração do loading - calculado dinamicamente
+    // MIN_LOADING_DURATION_MS agora é calculado como 5% da duração do vídeo
+    // const val MIN_LOADING_DURATION_MS = 2_000L    // REMOVIDO: Agora é dinâmico
+
     const val MAX_LOADING_DURATION_MS = 5_000L    // Máximo 5 segundos (foco em renderização)
     const val TARGET_DURATION_MS = 3_500L         // Duração otimista para progressão
+
+    // Porcentagem da duração do vídeo para tempo mínimo de loading
+    const val MIN_LOADING_PERCENTAGE = 0.05f      // 5% da duração do vídeo
 
     // Progresso mínimo de thumbnails
     const val MINIMUM_THUMBNAIL_PROGRESS = 20f     // 20% das thumbnails (foco em renderizar o que existe)

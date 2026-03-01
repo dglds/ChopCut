@@ -76,6 +76,18 @@ fun TrimScreen(
     var elapsedTimeMs by remember { mutableStateOf(0L) }
     var isReadyToHide by remember { mutableStateOf(false) }
 
+    // Calcular tempo mínimo de loading dinamicamente (5% da duração do vídeo)
+    val minLoadingDurationMs = remember(preloadedData) {
+        preloadedData?.let { data ->
+            val videoDurationMs = data.videoInfo.durationMs
+            val calculatedMin = (videoDurationMs * LoadingConstants.MIN_LOADING_PERCENTAGE).toLong()
+            val clampedMin = calculatedMin.coerceIn(500L, LoadingConstants.MAX_LOADING_DURATION_MS)
+            Timber.d("Min loading duration calculado: ${clampedMin}ms (${calculatedMin}ms base, " +
+                    "video=${videoDurationMs}ms)")
+            clampedMin
+        } ?: 2_000L
+    }
+
     // Se já estiver no cache, esconder o overlay imediatamente
     LaunchedEffect(isDataAlreadyCached) {
         if (isDataAlreadyCached) {
@@ -97,7 +109,7 @@ fun TrimScreen(
 
         while (showLoadingOverlay) {
             elapsedTimeMs = System.currentTimeMillis() - startTime
-            val minTimeReached = elapsedTimeMs >= LoadingConstants.MIN_LOADING_DURATION_MS
+            val minTimeReached = elapsedTimeMs >= minLoadingDurationMs
             val maxTimeReached = elapsedTimeMs >= LoadingConstants.MAX_LOADING_DURATION_MS
 
             val thumbnailProgress = calculateThumbnailProgress(preloadedDataState)
@@ -112,8 +124,9 @@ fun TrimScreen(
                 hasAudio = hasAudio
             )
 
-            Timber.v("LoadingOverlay check: elapsed=${elapsedTimeMs}ms, minTime=$minTimeReached, maxTime=$maxTimeReached, " +
-                    "thumbnails=$thumbnailProgress%, state=${preloadState::class.simpleName}")
+            Timber.v("LoadingOverlay check: elapsed=${elapsedTimeMs}ms, minDuration=${minLoadingDurationMs}ms, " +
+                    "minTime=$minTimeReached, maxTime=$maxTimeReached, thumbnails=$thumbnailProgress%, " +
+                    "state=${preloadState::class.simpleName}")
 
             if (shouldHideOverlay) {
                 val reason = getHideReason(
