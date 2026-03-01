@@ -108,33 +108,40 @@ fun TimelineEditor(
             }
         }
      
-         // Strip-based Thumbnails State
-           // Dimensões density-aware: match exato do display = pixel-perfect, sem distorção
-           val thumbWidth = remember(density) { with(density) { 60.dp.roundToPx() } }
-           val thumbHeight = remember(thumbWidth, aspectRatio) { 
-               if (aspectRatio > 0) (thumbWidth / aspectRatio).toInt().coerceAtLeast(1) 
-               else with(density) { 40.dp.roundToPx() } 
-           }
-           val thumbsPerStrip = remember { PreferencesManager(context).thumbsPerStrip }
-           val stripManager = remember(thumbWidth, thumbHeight, thumbsPerStrip) {
-               ThumbnailStripManager(context, thumbWidth, thumbHeight, thumbsPerStrip, adaptiveStrips = true)
-           }
-         val strips = remember {
-             androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
-                 putAll(preloadedStrips)
-             }
-         }
-         
-         // Sincronizar strips internas com as preloaded (para suportar carregamento progressivo)
-         LaunchedEffect(preloadedStrips) {
-             if (preloadedStrips.isNotEmpty()) {
-                 preloadedStrips.forEach { (k, v) ->
-                     strips[k] = v
-                 }
-             }
-         }
-         val loadingStrips = remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
-         val scope = androidx.compose.runtime.rememberCoroutineScope()
+          // Strip-based Thumbnails State
+            // Dimensões density-aware: match exato do display = pixel-perfect, sem distorção
+            val thumbWidth = remember(density) { with(density) { 60.dp.roundToPx() } }
+            val thumbHeight = remember(thumbWidth, aspectRatio) { 
+                if (aspectRatio > 0) (thumbWidth / aspectRatio).toInt().coerceAtLeast(1) 
+                else with(density) { 40.dp.roundToPx() } 
+            }
+            val thumbsPerStrip = remember { PreferencesManager(context).thumbsPerStrip }
+            val stripManager = remember(thumbWidth, thumbHeight, thumbsPerStrip) {
+                // TEMPORÁRIAMENTE DESABILITADO: adaptiveStrips = false
+                // Strip adaptativas causam problemas na renderização porque cada
+                // segmento tem largura diferente. Precisamos de uma solução
+                // mais complexa para suportar isso corretamente.
+                ThumbnailStripManager(context, thumbWidth, thumbHeight, thumbsPerStrip, adaptiveStrips = false)
+            }
+          val strips = remember {
+              androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
+                  putAll(preloadedStrips)
+              }
+          }
+          
+          // Rastrear quantos tempos tem em cada segmento (para strips adaptativas)
+          val thumbsPerStripMap = remember { androidx.compose.runtime.mutableStateMapOf<Int, Int>() }
+          
+          // Sincronizar strips internas com as preloaded (para suportar carregamento progressivo)
+          LaunchedEffect(preloadedStrips) {
+              if (preloadedStrips.isNotEmpty()) {
+                  preloadedStrips.forEach { (k, v) ->
+                      strips[k] = v
+                  }
+              }
+          }
+          val loadingStrips = remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
+          val scope = androidx.compose.runtime.rememberCoroutineScope()
 
         // Máximo de strips em memória (100 × ~432KB RGB_565 ≈ 42MB)
         // Suficiente para ~16 minutos de timeline sem eviction

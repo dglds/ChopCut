@@ -84,12 +84,11 @@ class PreloadViewModel(
                 val thumbWidth = (60 * density).toInt().coerceAtLeast(1)
                 val thumbHeight = (thumbWidth / videoInfo.aspectRatio).toInt().coerceAtLeast(1)
                 val thumbsPerStrip = PreferencesManager(getApplication()).thumbsPerStrip
-                stripManager = ThumbnailStripManager(getApplication(), thumbWidth, thumbHeight, thumbsPerStrip, adaptiveStrips = true)
+                stripManager = ThumbnailStripManager(getApplication(), thumbWidth, thumbHeight, thumbsPerStrip, adaptiveStrips = false)
 
-                Timber.d("ThumbnailStripManager iniciado: thumbWidth=$thumbWidth, thumbHeight=$thumbHeight, thumbsPerStrip=$thumbsPerStrip, adaptiveStrips=true, aspectRatio=${videoInfo.aspectRatio}")
+                Timber.d("ThumbnailStripManager iniciado: thumbWidth=$thumbWidth, thumbHeight=$thumbHeight, thumbsPerStrip=$thumbsPerStrip, adaptiveStrips=false, aspectRatio=${videoInfo.aspectRatio}")
                 
                 val totalSegments = stripManager!!.getSegmentCount(videoInfo.durationMs)
-                stripManager!!.logAdaptiveStrategy(totalSegments)
                 
                 // OTIMIZAÇÃO: Extração inteligente baseada em percentual do vídeo
                 // Vídeos curtos: mais segmentos (5% pode ser muito pouco)
