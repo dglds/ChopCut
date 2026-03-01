@@ -5,6 +5,9 @@ package com.chopcut.ui.components.loading
  */
 object LoadingConstants {
 
+    // Limite de duração para considerar vídeo "curto" (pular loading se cache hit)
+    const val SHORT_VIDEO_THRESHOLD_MS = 60_000L   // 60 segundos
+
     // Duração do loading - ajustado para renderizar thumbs existentes
     const val MIN_LOADING_DURATION_MS = 2_000L    // Mínimo 2 segundos (mostrar thumbs extraídas)
     const val MAX_LOADING_DURATION_MS = 5_000L    // Máximo 5 segundos (foco em renderização)

@@ -54,6 +54,7 @@ fun TrimScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
 
     // Verificar se dados já estão completos (cache hit)
+    // E se o vídeo é curto o suficiente para pular loading
     val isDataAlreadyCached = remember(preloadedData) {
         preloadedData?.let { data ->
             val hasAudio = data.audioAmplitudes.isNotEmpty()
@@ -63,8 +64,10 @@ fun TrimScreen(
             } else {
                 false
             }
-            Timber.d("Cache check: audio=$hasAudio, thumbnails=$hasThumbnails, sufficient=$sufficientThumbnails")
-            hasAudio && hasThumbnails && sufficientThumbnails
+            val isShortVideo = data.videoInfo.durationMs < LoadingConstants.SHORT_VIDEO_THRESHOLD_MS
+            Timber.d("Cache check: audio=$hasAudio, thumbnails=$hasThumbnails, sufficient=$sufficientThumbnails, " +
+                    "duration=${data.videoInfo.durationMs / 1000}s, isShort=$isShortVideo")
+            hasAudio && hasThumbnails && sufficientThumbnails && isShortVideo
         } ?: false
     }
 
@@ -76,14 +79,17 @@ fun TrimScreen(
     // Se já estiver no cache, esconder o overlay imediatamente
     LaunchedEffect(isDataAlreadyCached) {
         if (isDataAlreadyCached) {
-            Timber.i("Dados já em cache, pulando overlay de loading")
+            Timber.i("Dados já em cache (vídeo curto), pulando overlay de loading")
             showLoadingOverlay = false
         }
     }
 
     // Monitoramento automático para esconder overlay
-    LaunchedEffect(preloadState, preloadedDataState, isDataAlreadyCached) {
-        if (isDataAlreadyCached) {
+    // FIX IMPORTANTE: Removido preloadState e preloadedDataState das dependências para evitar restart do LaunchedEffect
+    // Quando o LaunchedEffect restarta, o startTime é recalculado e o contador reseta.
+    // Agora só executa quando showLoadingOverlay muda, mantendo o contador estável.
+    LaunchedEffect(showLoadingOverlay, isDataAlreadyCached) {
+        if (!showLoadingOverlay || isDataAlreadyCached) {
             return@LaunchedEffect
         }
 
