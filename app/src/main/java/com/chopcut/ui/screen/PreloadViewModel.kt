@@ -182,7 +182,11 @@ class PreloadViewModel(
         currentSegment: Int? = null,
         totalSegments: Int? = null,
         logs: List<String>? = null,
-        preloadedStrips: Map<Int, Bitmap>? = null
+        preloadedStrips: Map<Int, Bitmap>? = null,
+        thumbnailsExtracted: Int? = null,
+        thumbnailsTotal: Int? = null,
+        audioAmplitudesCount: Int? = null,
+        audioAmplitudesTotal: Int? = null
     ) {
         val currentState = _uiState.value
         val currentProgress = if (currentState is PreloadUiState.Loading) {
@@ -194,7 +198,7 @@ class PreloadViewModel(
         val newLogs = if (logs == null || logs.isEmpty()) currentProgress.logs else {
             (currentProgress.logs + logs).takeLast(20)
         }
-        
+
         _uiState.update {
             PreloadUiState.Loading(
                 currentProgress.copy(
@@ -204,7 +208,11 @@ class PreloadViewModel(
                     currentSegment = currentSegment ?: currentProgress.currentSegment,
                     totalSegments = totalSegments ?: currentProgress.totalSegments,
                     logs = newLogs,
-                    preloadedStrips = preloadedStrips ?: currentProgress.preloadedStrips
+                    preloadedStrips = preloadedStrips ?: currentProgress.preloadedStrips,
+                    thumbnailsExtracted = thumbnailsExtracted ?: currentProgress.thumbnailsExtracted,
+                    thumbnailsTotal = thumbnailsTotal ?: currentProgress.thumbnailsTotal,
+                    audioAmplitudesCount = audioAmplitudesCount ?: currentProgress.audioAmplitudesCount,
+                    audioAmplitudesTotal = audioAmplitudesTotal ?: currentProgress.audioAmplitudesTotal
                 )
             )
         }
@@ -223,9 +231,9 @@ class PreloadViewModel(
         targetBarCount: Int
     ): AudioRawData {
         var lastPercent = -1
-        
+
         val audioData = audioDataExtractor.extractRawPcmData(uri, targetBarCount)
-        
+
         val totalSteps = 5
         for (i in 1..totalSteps) {
             val percent = (i * 100 / totalSteps)
@@ -233,12 +241,14 @@ class PreloadViewModel(
                 updateProgress(
                     stage = ExtractionStage.ExtractingAudio,
                     audioPercent = percent,
+                    audioAmplitudesCount = (audioData.pcmSamples.size * percent / 100),
+                    audioAmplitudesTotal = audioData.pcmSamples.size,
                     logs = listOf("Extraindo áudio: $percent%")
                 )
                 lastPercent = percent
             }
         }
-        
+
         return audioData
     }
 
@@ -280,30 +290,32 @@ class PreloadViewModel(
     ): Map<Int, Bitmap> {
         val strips = mutableMapOf<Int, Bitmap>()
         var lastPercent = -1
-        
+
         // PRIORIDADE: Primeira strip com Dispatchers.Default (alta prioridade)
         updateProgress(
             stage = ExtractionStage.ExtractingThumbnails,
             currentSegment = 1,
+            thumbnailsExtracted = 1,
+            thumbnailsTotal = totalSegments,
             logs = listOf("Strip 1 extraída...")
         )
-        
+
         val strip0 = withContext(Dispatchers.Default) {
             stripManager.extractSegment(uri, 0, durationMs)
         }
         if (strip0 != null) {
             strips[0] = strip0
         }
-        
+
         Timber.d("First strip extracted immediately: ${strip0 != null}")
-        
+
         // Continuar com restante SEQUENCIALMENTE (não saturar IO)
         if (targetSegments > 1) {
             for (segIdx in 1 until targetSegments) {
                 val strip = stripManager.extractSegment(uri, segIdx, durationMs)
                 if (strip != null) {
                     strips[segIdx] = strip
-                    
+
                     val percent = ((segIdx + 1) * 100 / targetSegments)
                     if (percent != lastPercent) {
                         updateProgress(
@@ -311,6 +323,8 @@ class PreloadViewModel(
                             thumbnailPercent = percent,
                             currentSegment = segIdx + 1,
                             totalSegments = targetSegments,
+                            thumbnailsExtracted = strips.size,
+                            thumbnailsTotal = totalSegments,
                             logs = listOf("Strip ${segIdx + 1}/$targetSegments extraída (${percent}%)"),
                             preloadedStrips = strips.toMap()
                         )
@@ -319,7 +333,7 @@ class PreloadViewModel(
                 }
             }
         }
-        
+
         return strips
     }
     

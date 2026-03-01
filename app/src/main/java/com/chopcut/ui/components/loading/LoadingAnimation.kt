@@ -157,7 +157,7 @@ fun CircularProgressWithPercentage(
  * Usa mensagens amigáveis ao invés de termos técnicos.
  */
 @Composable
-fun StageMessage(stage: ExtractionStage) {
+fun StageMessage(stage: ExtractionStage, progress: PreloadProgress) {
     val infiniteTransition = rememberInfiniteTransition(label = "message_pulse")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.7f,
@@ -170,7 +170,7 @@ fun StageMessage(stage: ExtractionStage) {
     )
 
     AnimatedContent(
-        targetState = getStageMessage(stage),
+        targetState = getStageMessage(stage, progress),
         transitionSpec = {
             (fadeIn(tween(ChopCutAnimation.Normal)) +
                 slideInVertically { height -> height / 3 }) togetherWith
@@ -190,13 +190,14 @@ fun StageMessage(stage: ExtractionStage) {
 }
 
 /**
- * Barra de progresso falsa baseada em tempo decorrido.
- * Progride de 0% a 95% durante 7 segundos (tempo otimista),
+ * Barra de progresso baseada em dados reais (thumbnails + audio).
+ * Progride de 0% a 95% durante o processamento,
  * depois completa para 100% quando isReadyToHide = true.
  */
 @Composable
-fun FakeProgressBar(elapsedTimeMs: Long, isReadyToHide: Boolean = false) {
-    val fakeProgress = remember(elapsedTimeMs, isReadyToHide) {
+fun FakeProgressBar(progress: PreloadProgress, elapsedTimeMs: Long, isReadyToHide: Boolean = false) {
+    val realProgress = calculateRealProgress(progress)
+    val timeBasedProgress = remember(elapsedTimeMs, isReadyToHide) {
         if (isReadyToHide) 1f else calculateFakeProgress(elapsedTimeMs)
     }
 
@@ -212,7 +213,7 @@ fun FakeProgressBar(elapsedTimeMs: Long, isReadyToHide: Boolean = false) {
     )
 
     val animatedProgress by animateFloatAsState(
-        targetValue = fakeProgress,
+        targetValue = realProgress.coerceAtLeast(timeBasedProgress * 0.3f),
         animationSpec = tween(
             durationMillis = if (isReadyToHide) {
                 LoadingConstants.PROGRESS_BAR_ANIMATION_FINAL_MS
@@ -231,7 +232,7 @@ fun FakeProgressBar(elapsedTimeMs: Long, isReadyToHide: Boolean = false) {
             .height(4.dp)
             .clip(RoundedCornerShape(2.dp))
             .graphicsLayer {
-                alpha = if (fakeProgress < 1f) glowAlpha else 1f
+                alpha = if (animatedProgress < 1f) glowAlpha else 1f
             },
         color = MaterialTheme.colorScheme.primary,
         trackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -239,6 +240,32 @@ fun FakeProgressBar(elapsedTimeMs: Long, isReadyToHide: Boolean = false) {
 }
 
 // Funções auxiliares
+
+/**
+ * Calcula progresso real baseado em dados extraídos.
+ *
+ * Estratégia:
+ * - Thumbnails: 60% do progresso total
+ * - Audio: 40% do progresso total
+ * - Usando pesos definidos em LoadingConstants
+ */
+private fun calculateRealProgress(progress: PreloadProgress): Float {
+    val thumbnailProgress = if (progress.thumbnailsTotal > 0) {
+        progress.thumbnailsExtracted.toFloat() / progress.thumbnailsTotal.toFloat()
+    } else {
+        progress.thumbnailPercent / 100f
+    }
+
+    val audioProgress = if (progress.audioAmplitudesTotal > 0) {
+        progress.audioAmplitudesCount.toFloat() / progress.audioAmplitudesTotal.toFloat()
+    } else {
+        progress.audioPercent / 100f
+    }
+
+    return (thumbnailProgress * LoadingConstants.THUMBNAIL_PROGRESS_WEIGHT +
+            audioProgress * LoadingConstants.AUDIO_PROGRESS_WEIGHT)
+        .coerceIn(0f, LoadingConstants.PROGRESS_BAR_MAX_VALUE)
+}
 
 /**
  * Calcula progresso falso baseado em tempo decorrido.
@@ -268,12 +295,24 @@ private fun calculateFakeProgress(elapsedTimeMs: Long): Float {
  * Retorna mensagem genérica baseada no estágio de extração.
  * Usa linguagem amigável ao invés de termos técnicos.
  */
-private fun getStageMessage(stage: ExtractionStage): String {
+private fun getStageMessage(stage: ExtractionStage, progress: PreloadProgress): String {
     return when (stage) {
         ExtractionStage.Starting,
         ExtractionStage.Validating -> "Preparando vídeo..."
-        ExtractionStage.ExtractingAudio,
-        ExtractionStage.ExtractingThumbnails -> "Carregando recursos..."
+        ExtractionStage.ExtractingAudio -> {
+            if (progress.audioAmplitudesTotal > 0) {
+                "Extraíndo áudio: ${progress.audioAmplitudesCount}/${progress.audioAmplitudesTotal}"
+            } else {
+                "Extraíndo áudio..."
+            }
+        }
+        ExtractionStage.ExtractingThumbnails -> {
+            if (progress.thumbnailsTotal > 0) {
+                "Extraíndo ${progress.thumbnailsExtracted}/${progress.thumbnailsTotal} thumbnails"
+            } else {
+                "Extraíndo thumbnails..."
+            }
+        }
         ExtractionStage.Ready -> "Pronto!"
     }
 }

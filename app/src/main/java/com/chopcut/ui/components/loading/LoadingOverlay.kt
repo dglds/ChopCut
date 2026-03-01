@@ -117,14 +117,14 @@ fun LoadingCard(
 
             // Mensagem - entra em terceiro
             AnimatedElement(delayMillis = 200) {
-                StageMessage(stage = progress.stage)
+                StageMessage(stage = progress.stage, progress = progress)
             }
 
             Spacer(Modifier.height(16.dp))
 
-            // Barra de progresso falsa - entra por último
+            // Barra de progresso real - entra por último
             AnimatedElement(delayMillis = 300) {
-                FakeProgressBar(elapsedTimeMs = elapsedTimeMs, isReadyToHide = isReadyToHide)
+                FakeProgressBar(progress = progress, elapsedTimeMs = elapsedTimeMs, isReadyToHide = isReadyToHide)
             }
         }
     }

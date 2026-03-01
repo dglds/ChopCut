@@ -21,9 +21,15 @@ object LoadingConstants {
     const val OVERLAY_FADE_OUT_DURATION_MS = 700       // Fade out do overlay
     const val OVERLAY_SCALE_OUT_TARGET = 0.97f         // Scale final do overlay
 
-    // Animações - TrimScreen
-    const val TRIM_FADE_IN_DURATION_MS = 600           // Fade in da TrimScreen
+    // Animações - TrimScreen (sincronizado com overlay)
+    const val TRIM_FADE_IN_DURATION_MS = 700           // Fade in da TrimScreen (igual ao overlay fade out)
     const val TRIM_SLIDE_IN_FRACTION = 20              // Slide de 5% (1/20)
+
+    // Animações - Navegação (mais suaves para shared element transition)
+    const val NAV_FADE_IN_DURATION_MS = 400            // Fade in de navegação (atual 200ms)
+    const val NAV_FADE_OUT_DURATION_MS = 400           // Fade out de navegação (atual 150ms)
+    const val NAV_SCALE_START = 0.95f                  // Scale inicial suave
+    const val NAV_SCALE_END = 1.0f                      // Scale final
 
     // Animações - Barra de progresso
     const val PROGRESS_BAR_ANIMATION_NORMAL_MS = 500   // Animação normal
@@ -32,4 +38,8 @@ object LoadingConstants {
 
     // Intervalo de verificação
     const val LOADING_CHECK_INTERVAL_MS = 100L         // Verificar a cada 100ms
+
+    // Pesos para cálculo de progresso real
+    const val THUMBNAIL_PROGRESS_WEIGHT = 0.6f        // Thumbnails contribuem 60%
+    const val AUDIO_PROGRESS_WEIGHT = 0.4f             // Audio contribui 40%
 }

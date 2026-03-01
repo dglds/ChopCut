@@ -38,9 +38,13 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import com.chopcut.ui.theme.ChopCutTheme
 import com.chopcut.BuildConfig
+import com.chopcut.ui.components.loading.LoadingConstants
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,9 +63,19 @@ class MainActivity : ComponentActivity() {
 
                     val debugViewModel: DebugViewModel = viewModel()
 
-                    // Transições de fade rápido e agressivo (sem slide)
-                    val fastFadeIn = fadeIn(animationSpec = tween(200))
-                    val fastFadeOut = fadeOut(animationSpec = tween(150))
+                    // Transições de fade suaves e sincronizadas com LoadingOverlay
+                    val navFadeIn = fadeIn(
+                        animationSpec = tween(LoadingConstants.NAV_FADE_IN_DURATION_MS, easing = FastOutSlowInEasing)
+                    ) + scaleIn(
+                        initialScale = LoadingConstants.NAV_SCALE_START,
+                        animationSpec = tween(LoadingConstants.NAV_FADE_IN_DURATION_MS, easing = FastOutSlowInEasing)
+                    )
+                    val navFadeOut = fadeOut(
+                        animationSpec = tween(LoadingConstants.NAV_FADE_OUT_DURATION_MS, easing = FastOutSlowInEasing)
+                    ) + scaleOut(
+                        targetScale = LoadingConstants.NAV_SCALE_START,
+                        animationSpec = tween(LoadingConstants.NAV_FADE_OUT_DURATION_MS, easing = FastOutSlowInEasing)
+                    )
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         NavHost(
@@ -70,8 +84,8 @@ class MainActivity : ComponentActivity() {
                         ) {
                             composable(
                                 route = "onboarding",
-                                enterTransition = { fastFadeIn },
-                                exitTransition = { fastFadeOut }
+                                enterTransition = { navFadeIn },
+                                exitTransition = { navFadeOut }
                             ) {
                                 OnboardingScreen(
                                     onFinish = {
@@ -85,10 +99,10 @@ class MainActivity : ComponentActivity() {
 
                             composable(
                                 route = "home",
-                                enterTransition = { fastFadeIn },
-                                exitTransition = { fastFadeOut },
-                                popEnterTransition = { fastFadeIn },
-                                popExitTransition = { fastFadeOut }
+                                enterTransition = { navFadeIn },
+                                exitTransition = { navFadeOut },
+                                popEnterTransition = { navFadeIn },
+                                popExitTransition = { navFadeOut }
                             ) {
                                 HomeScreen(
                                     onNavigateToEditor = { videoUri ->
@@ -107,10 +121,10 @@ class MainActivity : ComponentActivity() {
 
                             composable(
                                 route = "audio_waveforms_test",
-                                enterTransition = { fastFadeIn },
-                                exitTransition = { fastFadeOut },
-                                popEnterTransition = { fastFadeIn },
-                                popExitTransition = { fastFadeOut }
+                                enterTransition = { navFadeIn },
+                                exitTransition = { navFadeOut },
+                                popEnterTransition = { navFadeIn },
+                                popExitTransition = { navFadeOut }
                             ) {
                                 AudioWaveFormsTestScreen(
                                     debugViewModel = debugViewModel
@@ -119,10 +133,10 @@ class MainActivity : ComponentActivity() {
 
                             composable(
                                 route = "preferences",
-                                enterTransition = { fastFadeIn },
-                                exitTransition = { fastFadeOut },
-                                popEnterTransition = { fastFadeIn },
-                                popExitTransition = { fastFadeOut }
+                                enterTransition = { navFadeIn },
+                                exitTransition = { navFadeOut },
+                                popEnterTransition = { navFadeIn },
+                                popExitTransition = { navFadeOut }
                             ) {
                                 PreferencesScreen(
                                     onNavigateBack = { navController.popBackStack() }
@@ -138,10 +152,10 @@ class MainActivity : ComponentActivity() {
                                         defaultValue = null
                                     }
                                 ),
-                                enterTransition = { fastFadeIn },
-                                exitTransition = { fastFadeOut },
-                                popEnterTransition = { fastFadeIn },
-                                popExitTransition = { fastFadeOut }
+                                enterTransition = { navFadeIn },
+                                exitTransition = { navFadeOut },
+                                popEnterTransition = { navFadeIn },
+                                popExitTransition = { navFadeOut }
                             ) { backStackEntry ->
                                 val videoUriString = backStackEntry.arguments?.getString("videoUri")
                                 val videoUri = videoUriString?.let { Uri.parse(it) }
