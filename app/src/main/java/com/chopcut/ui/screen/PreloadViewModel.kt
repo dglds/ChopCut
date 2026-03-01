@@ -84,15 +84,28 @@ class PreloadViewModel(
                 val thumbWidth = (60 * density).toInt().coerceAtLeast(1)
                 val thumbHeight = (thumbWidth / videoInfo.aspectRatio).toInt().coerceAtLeast(1)
                 val thumbsPerStrip = PreferencesManager(getApplication()).thumbsPerStrip
-                stripManager = ThumbnailStripManager(getApplication(), thumbWidth, thumbHeight, thumbsPerStrip)
+                stripManager = ThumbnailStripManager(getApplication(), thumbWidth, thumbHeight, thumbsPerStrip, adaptiveStrips = true)
 
-                Timber.d("ThumbnailStripManager iniciado: thumbWidth=$thumbWidth, thumbHeight=$thumbHeight, thumbsPerStrip=$thumbsPerStrip, aspectRatio=${videoInfo.aspectRatio}")
-
+                Timber.d("ThumbnailStripManager iniciado: thumbWidth=$thumbWidth, thumbHeight=$thumbHeight, thumbsPerStrip=$thumbsPerStrip, adaptiveStrips=true, aspectRatio=${videoInfo.aspectRatio}")
+                
                 val totalSegments = stripManager!!.getSegmentCount(videoInfo.durationMs)
-                // OTIMIZADO: Pré-carregar apenas os primeiros 3 segmentos (suficiente para o início)
-                // O carregamento radial no TimelineEditor cuidará do resto conforme o usuário navega.
-                // Foco em renderizar thumbs do cache em vez de extrair novas.
-                val preloadSegments = 3.coerceAtMost(totalSegments)
+                stripManager!!.logAdaptiveStrategy(totalSegments)
+                
+                // OTIMIZAÇÃO: Extração inteligente baseada em percentual do vídeo
+                // Vídeos curtos: mais segmentos (5% pode ser muito pouco)
+                // Vídeos longos: segmentos suficientes sem exagerar
+                val preloadPercent = 0.05f  // 5% do vídeo
+                val preloadSeconds = ((videoInfo.durationMs / 1000f) * preloadPercent).toLong()
+                val minPreloadSeconds = 30L  // Mínimo de 30 segundos para UX boa
+                val effectivePreloadSeconds = maxOf(preloadSeconds, minPreloadSeconds)
+                
+                // Calcular segmentos baseado em thumbs/strip inicial (5) para UX rápida
+                val thumbsPerStripInitial = 5
+                val preloadSegments = (effectivePreloadSeconds / thumbsPerStripInitial).toInt()
+                    .coerceAtLeast(3)  // Mínimo de 3 segmentos
+                    .coerceAtMost(totalSegments)  // Não ultrapassar total
+                
+                Timber.d("Extração inteligente: ${effectivePreloadSeconds}s (${preloadPercent * 100}%) = $preloadSegments segmentos")
 
                 updateProgress(
                     stage = ExtractionStage.Validating,
@@ -301,7 +314,7 @@ class PreloadViewModel(
         Timber.d("Extraindo até $targetSegments segmentos (foco em cache)")
 
         for (segIdx in 0 until targetSegments) {
-            val strip = stripManager.extractSegment(uri, segIdx, durationMs)
+            val strip = stripManager.extractSegment(uri, segIdx, durationMs, totalSegments)
             if (strip != null) {
                 strips[segIdx] = strip
 

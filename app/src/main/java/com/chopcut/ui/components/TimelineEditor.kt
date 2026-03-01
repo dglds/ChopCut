@@ -117,7 +117,7 @@ fun TimelineEditor(
            }
            val thumbsPerStrip = remember { PreferencesManager(context).thumbsPerStrip }
            val stripManager = remember(thumbWidth, thumbHeight, thumbsPerStrip) {
-               ThumbnailStripManager(context, thumbWidth, thumbHeight, thumbsPerStrip)
+               ThumbnailStripManager(context, thumbWidth, thumbHeight, thumbsPerStrip, adaptiveStrips = true)
            }
          val strips = remember {
              androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
@@ -163,22 +163,22 @@ fun TimelineEditor(
             segmentsToLoad.forEach { segIdx ->
                 if (loadingStrips.containsKey(segIdx)) return@forEach
 
-                // Única Extração de Alta Fidelidade
-                scope.launch(Dispatchers.IO) {
-                    loadingStrips[segIdx] = true
-                    try {
-                        val strip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs)
-                        if (strip != null && isActive) {
-                            withContext(Dispatchers.Main) {
-                                strips[segIdx] = strip
-                            }
-                        }
-                    } finally {
-                        withContext(Dispatchers.Main + NonCancellable) {
-                            loadingStrips.remove(segIdx)
-                        }
-                    }
-                }
+                 // Única Extração de Alta Fidelidade
+                 scope.launch(Dispatchers.IO) {
+                     loadingStrips[segIdx] = true
+                     try {
+                         val strip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, totalSegments)
+                         if (strip != null && isActive) {
+                             withContext(Dispatchers.Main) {
+                                 strips[segIdx] = strip
+                             }
+                         }
+                     } finally {
+                         withContext(Dispatchers.Main + NonCancellable) {
+                             loadingStrips.remove(segIdx)
+                         }
+                     }
+                 }
             }
         }
 
@@ -201,7 +201,7 @@ fun TimelineEditor(
 
                 loadingStrips[segIdx] = true
                 try {
-                    val strip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs)
+                    val strip = stripManager.extractSegment(videoUri, segIdx, videoDurationMs, totalSegments)
                     if (strip != null && isActive) {
                         withContext(Dispatchers.Main) { 
                             strips[segIdx] = strip 

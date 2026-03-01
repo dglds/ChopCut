@@ -283,6 +283,113 @@ private suspend fun saveToCache(...): Boolean = withContext(Dispatchers.IO) {
 - ✅ Até 3 strips podem ser salvas simultaneamente
 - ✅ Threads de extração não ficam ociosas
 
+### Fase 2.3: Implementar Strips Adaptativas
+
+**Arquivo:** `ThumbnailStripManager.kt`
+
+**Mudanças:**
+```kotlin
+class ThumbnailStripManager(
+    private val context: Context,
+    val thumbWidth: Int,
+    val thumbHeight: Int,
+    val thumbsPerStrip: Int = 10,
+    val adaptiveStrips: Boolean = true  // NOVO
+) {
+    private val minThumbsPerStrip = 5  // Mínimo para início rápido
+    
+    companion object {
+        /**
+         * Calcula thumbsPerStrip para um segmento específico usando estratégia adaptativa.
+         * 
+         * Estratégia: Começa pequena (5) para carregar rápido o início, cresce suavemente
+         * até o limite máximo usando curva de potência (exponencial suave).
+         */
+        fun calculateAdaptiveThumbsPerStrip(
+            segmentIndex: Int,
+            totalSegments: Int,
+            maxThumbsPerStrip: Int,
+            minThumbsPerStrip: Int = 5
+        ): Int {
+            if (totalSegments <= 1) return maxThumbsPerStrip
+            
+            val progress = segmentIndex.toFloat() / (totalSegments - 1).toFloat()
+            val power = 0.5f
+            val adjustedProgress = progress.coerceIn(0f, 1f).pow(power)
+            
+            val range = maxThumbsPerStrip - minThumbsPerStrip
+            val thumbsForSegment = (minThumbsPerStrip + (range * adjustedProgress)).toInt()
+            
+            return thumbsForSegment.coerceIn(minThumbsPerStrip, maxThumbsPerStrip)
+        }
+    }
+    
+    fun getThumbsPerStripForSegment(segmentIndex: Int, totalSegments: Int): Int {
+        return if (adaptiveStrips) {
+            calculateAdaptiveThumbsPerStrip(segmentIndex, totalSegments, thumbsPerStrip, minThumbsPerStrip)
+        } else {
+            thumbsPerStrip
+        }
+    }
+}
+```
+
+**Exemplo de uso:**
+```kotlin
+// Vídeo de 15 minutos (900 segundos) com thumbsPerStrip=20:
+// - Segmento 0 (0-5s): 5 thumbs   (instantâneo)
+// - Segmento 10 (50s): 7 thumbs   (rápido)
+// - Segmento 20 (100s): 11 thumbs  (médio)
+// - Segmento 40 (800s): 20 thumbs (eficiente no cache)
+```
+
+**Benefícios:**
+- ✅ Carregamento inicial instantâneo (primeiros segundos em ~1s)
+- ✅ Cache mais eficiente no meio/fim (menos arquivos)
+- ✅ Melhor UX em vídeos longos
+
+### Fase 2.4: Extração Inteligente e Adaptativa
+
+**Arquivo:** `PreloadViewModel.kt`
+
+**Mudanças:**
+```kotlin
+// AO INVÉS de extrair apenas 3 segmentos fixos:
+val preloadSegments = 3.coerceAtMost(totalSegments)
+
+// IMPLEMENTAR extração baseada em percentual do vídeo:
+val preloadPercent = 0.05  // 5% do vídeo
+val preloadSeconds = ((durationMs / 1000) * preloadPercent).toLong()
+val minPreloadSeconds = 30L  // Mínimo de 30 segundos
+val effectivePreloadSeconds = maxOf(preloadSeconds, minPreloadSeconds)
+
+// Calcular segmentos baseado em thumbs/strip inicial (5)
+val thumbsPerStripInitial = 5
+val preloadSegments = (effectivePreloadSeconds / thumbsPerStripInitial).toInt()
+    .coerceAtLeast(3)
+    .coerceAtMost(totalSegments)
+```
+
+**Exemplo de uso:**
+```kotlin
+// Vídeos CURTOS (1 minuto):
+// - 5% = 3 segundos (muito pouco)
+// - Usa mínimo: 30 segundos = 6 segmentos
+
+// Vídeos MÉDIOS (5 minutos):
+// - 5% = 15 segundos
+// - Usa mínimo: 30 segundos = 6 segmentos
+
+// Vídeos LONGOS (15 minutos):
+// - 5% = 45 segundos
+// - Usa calculado: 45 segundos = 9 segmentos
+```
+
+**Benefícios:**
+- ✅ Vídeos curtos: carrega mais segmentos (5% pode ser pouco)
+- ✅ Vídeos longos: carrega segmentos suficientes sem exagerar
+- ✅ Sempre garante UX inicial rápida
+
 ---
 
 ## 🎯 FASE 3: Cancelamento Inteligente

@@ -24,6 +24,7 @@ import java.io.FileOutputStream
 import java.io.FileInputStream
 import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
+import kotlin.math.pow
 
 /**
  * Gerenciador de strips segmentadas de thumbnails para o timeline.
@@ -36,22 +37,28 @@ import kotlin.coroutines.coroutineContext
  * - [Bitmap.Config.RGB_565]: 50% menos memória (thumbs não precisam de alpha)
  * - [Paint.isFilterBitmap]: interpolação bilinear no CenterCrop (evita blocos)
  * - Dimensões density-aware: aspecto 3:2 matching o display (sem distorção)
+ * - Strips adaptativas: começam pequenas (5) e crescem até o limite para melhor UX
  *
  * @param context Context do Android
  * @param thumbWidth Largura de cada thumbnail em pixels (deve corresponder a pxPerSecond)
  * @param thumbHeight Altura de cada thumbnail em pixels (deve corresponder a thumbnailHeightPx)
- * @param thumbsPerStrip Quantidade de thumbnails por strip (padrão: 10)
+ * @param thumbsPerStrip Quantidade máxima de thumbnails por strip (padrão: 10)
+ * @param adaptiveStrips Se true, usa strips adaptativas que crescem de 5 até thumbsPerStrip
  */
 class ThumbnailStripManager(
     private val context: Context,
     val thumbWidth: Int,
     val thumbHeight: Int,
-    val thumbsPerStrip: Int = 10
+    val thumbsPerStrip: Int = 10,
+    val adaptiveStrips: Boolean = true
 ) {
     /** Gerenciador de preferências para verificar se cache está habilitado */
     private val prefsManager = PreferencesManager(context)
+    
+    /** Configuração de strips adaptativas */
+    private val minThumbsPerStrip = 5  // Mínimo para início rápido
+    
     companion object {
-        
         /** Limite de concorrência global para não saturar hardware decoders (3-4 é seguro para maioria dos devices) */
         private val extractSemaphore = Semaphore(3)
 
@@ -62,11 +69,53 @@ class ThumbnailStripManager(
         private const val MAX_CACHE_SIZE = 200L * 1024 * 1024
 
         /** Versão do cache para invalidação manual ao mudar formatos/lógica */
-        private const val CACHE_VERSION = 2 // v1=JPEG, v2=WEBP
+        private const val CACHE_VERSION = 3 // v1=JPEG, v2=WEBP, v3=AdaptiveStrips
 
         /** Qualidade para compressão das strips (70% = excelente equilíbrio qualidade/tamanho para tiras) */
         private const val COMPRESSION_QUALITY = 70
-
+        
+        /**
+         * Calcula thumbsPerStrip para um segmento específico usando estratégia adaptativa.
+         * 
+         * Estratégia: Começa pequena (5) para carregar rápido o início, cresce suavemente
+         * até o limite máximo usando curva de potência (exponencial suave).
+         * 
+         * Exemplo para vídeo de 15min com max=20:
+         * - Segmento 0 (0%): 5 thumbs
+         * - Segmento 10 (25%): ~7 thumbs
+         * - Segmento 20 (50%): ~11 thumbs
+         * - Segmento 30 (75%): ~14 thumbs
+         * - Segmento 40+ (100%): 20 thumbs
+         * 
+         * @param segmentIndex Índice do segmento (0-based)
+         * @param totalSegments Número total de segmentos
+         * @param maxThumbsPerStrip Limite máximo de thumbs por strip
+         * @param minThumbsPerStrip Mínimo de thumbs por strip (padrão: 5)
+         * @return Número de thumbs para este segmento
+         */
+        fun calculateAdaptiveThumbsPerStrip(
+            segmentIndex: Int,
+            totalSegments: Int,
+            maxThumbsPerStrip: Int,
+            minThumbsPerStrip: Int = 5
+        ): Int {
+            if (totalSegments <= 1) return maxThumbsPerStrip
+            
+            // Progresso normalizado (0.0 a 1.0)
+            val progress = segmentIndex.toFloat() / (totalSegments - 1).toFloat()
+            
+            // Curva de potência suave (ex: progress^0.5)
+            // Isso faz o crescimento ser mais rápido no início, mais lento depois
+            val power = 0.5f
+            val adjustedProgress = progress.coerceIn(0f, 1f).pow(power)
+            
+            // Calcular thumbsPerStrip ajustado
+            val range = maxThumbsPerStrip - minThumbsPerStrip
+            val thumbsForSegment = (minThumbsPerStrip + (range * adjustedProgress)).toInt()
+            
+            return thumbsForSegment.coerceIn(minThumbsPerStrip, maxThumbsPerStrip)
+        }
+        
         /**
          * Limpa todo o cache de thumbnails do disco.
          * Deve ser chamado em background (IO).
@@ -92,7 +141,56 @@ class ThumbnailStripManager(
 
     /** Lock para operações de cache */
     private val cacheLock = Any()
-
+    
+    /**
+     * Obtém o número de thumbs por strip para um segmento específico.
+     * Se adaptiveStrips está habilitado, usa estratégia de crescimento.
+     * Caso contrário, usa thumbsPerStrip fixo.
+     * 
+     * @param segmentIndex Índice do segmento (0-based)
+     * @param totalSegments Número total de segmentos
+     * @return Número de thumbs para este segmento
+     */
+    fun getThumbsPerStripForSegment(segmentIndex: Int, totalSegments: Int): Int {
+        val result = if (adaptiveStrips) {
+            calculateAdaptiveThumbsPerStrip(
+                segmentIndex = segmentIndex,
+                totalSegments = totalSegments,
+                maxThumbsPerStrip = thumbsPerStrip,
+                minThumbsPerStrip = minThumbsPerStrip
+            )
+        } else {
+            thumbsPerStrip
+        }
+        
+        if (adaptiveStrips && (segmentIndex == 0 || segmentIndex == totalSegments / 2 || segmentIndex == totalSegments - 1)) {
+            Timber.d("AdaptiveStrip: Segment $segmentIndex/$totalSegments -> $result thumbs")
+        }
+        
+        return result
+    }
+    
+    /**
+     * Loga a estratégia de strips adaptativas para debug.
+     */
+    fun logAdaptiveStrategy(totalSegments: Int) {
+        if (!adaptiveStrips) {
+            Timber.i("AdaptiveStrip: DISABLED - using fixed $thumbsPerStrip thumbs per strip")
+            return
+        }
+        
+        Timber.i("╔═════════════════════════════════════════════════════════╗")
+        Timber.i("║      ADAPTIVE STRIP STRATEGY - $totalSegments segments    ║")
+        Timber.i("╚═════════════════════════════════════════════════════════╝")
+        
+        val sampleSegments = listOf(0, 1, 2, 5, 10, 15, 20, 30, 40, totalSegments - 1)
+        sampleSegments.filter { it in 0 until totalSegments }.forEach { segIdx ->
+            val thumbs = getThumbsPerStripForSegment(segIdx, totalSegments)
+            val progress = (segIdx.toFloat() / (totalSegments - 1) * 100).toInt()
+            Timber.i("   Segment $segIdx (progress: $progress%) → $thumbs thumbs/strip")
+        }
+    }
+    
     /**
      * Gera uma chave única de cache baseada no URI do vídeo
      * Usa lastModified + tamanho do arquivo para detectar modificações
@@ -232,12 +330,11 @@ class ThumbnailStripManager(
                 Timber.d("ThumbnailStrip: Cache size ${(currentSize / 1024 / 1024)}MB exceeds limit, trimming...")
                 
                 // Ordenar por lastModified (mais antigos primeiro)
-                val filesToDelete = cacheFiles
-                    .sortedBy { it.lastModified() }
-                    .take(cacheFiles.size / 4) // Remover 25% mais antigos
+                val sortedFiles: List<File> = cacheFiles.sortedBy { file -> file.lastModified() }
+                val filesToDelete: List<File> = sortedFiles.take(cacheFiles.size / 4)
                 
                 var deletedSize = 0L
-                filesToDelete.forEach { file ->
+                filesToDelete.forEach { file: File ->
                     try {
                         deletedSize += file.length()
                         file.delete()
@@ -265,9 +362,10 @@ class ThumbnailStripManager(
      * MELHORIA: Usa ThumbnailExtractorBatch para reutilizar a instância do MediaMetadataRetriever,
      * reduzindo o tempo de extração de ~300-500ms por frame para ~100-150ms por frame (67% mais rápido).
      *
+     * Se adaptiveStrips está habilitado, usa strips adaptativas que começam pequenas (5)
+     * e crescem até o limite (thumbsPerStrip) para melhor UX.
+     *
      * A strip final usa RGB_565 (2 bytes/pixel vs 4 do ARGB_8888).
-     * Para um thumbWidth=180, thumbHeight=120, segment=10:
-     *   1800 × 120 × 2 bytes = 432KB por strip
      *
      * @param uri URI do vídeo
      * @param segmentIndex Índice do segmento (0-based)
@@ -278,6 +376,33 @@ class ThumbnailStripManager(
         uri: Uri,
         segmentIndex: Int,
         durationMs: Long
+    ): Bitmap? {
+        val totalSegments = getSegmentCount(durationMs)
+        return extractSegment(uri, segmentIndex, durationMs, totalSegments)
+    }
+    
+    /**
+     * Extrai uma strip para o segmento especificado usando batch extraction.
+     *
+     * MELHORIA: Usa ThumbnailExtractorBatch para reutilizar a instância do MediaMetadataRetriever,
+     * reduzindo o tempo de extração de ~300-500ms por frame para ~100-150ms por frame (67% mais rápido).
+     *
+     * Se adaptiveStrips está habilitado, usa strips adaptativas que começam pequenas (5)
+     * e crescem até o limite (thumbsPerStrip) para melhor UX.
+     *
+     * A strip final usa RGB_565 (2 bytes/pixel vs 4 do ARGB_8888).
+     *
+     * @param uri URI do vídeo
+     * @param segmentIndex Índice do segmento (0-based)
+     * @param durationMs Duração total do vídeo em milissegundos
+     * @param totalSegments Número total de segmentos (obrigatório para strips adaptativas)
+     * @return Bitmap horizontal RGB_565 com frames stitchados, ou null se falhar
+     */
+    suspend fun extractSegment(
+        uri: Uri,
+        segmentIndex: Int,
+        durationMs: Long,
+        totalSegments: Int
     ): Bitmap? = withContext(Dispatchers.IO) {
         // Fail-fast se o job já foi cancelado
         coroutineContext.ensureActive()
@@ -299,11 +424,14 @@ class ThumbnailStripManager(
             // Verificar novamente após adquirir permissão (pode ter demorado na fila)
             coroutineContext.ensureActive()
 
-            val startSec = segmentIndex * thumbsPerStrip
+            // Calcular thumbsPerStrip adaptativo se habilitado
+            val currentThumbsPerStrip = getThumbsPerStripForSegment(segmentIndex, totalSegments)
+            
             val totalSeconds = ((durationMs + 999) / 1000).toInt()
+            val startSec = segmentIndex * currentThumbsPerStrip
             if (startSec >= totalSeconds) return@withPermit null
 
-            val framesInSegment = minOf(thumbsPerStrip, totalSeconds - startSec)
+            val framesInSegment = minOf(currentThumbsPerStrip, totalSeconds - startSec)
 
              try {
                 coroutineContext.ensureActive()
@@ -319,8 +447,8 @@ class ThumbnailStripManager(
                     ║ CRIAÇÃO DE STRIP - Segmento: $segmentIndex
                     ╚═════════════════════════════════════════════════════════╝
                     📊 STRIP INFO:
-                       • Thumbs por strip: $thumbsPerStrip
-                       • Frames no segmento: $framesInSegment
+                       • Thumbs por strip: $currentThumbsPerStrip${if (adaptiveStrips) " (Adaptativo)" else ""}
+                        • Frames no segmento: $framesInSegment
                        • Dimensões da strip: ${stripWidth}x${thumbHeight}
                        • Config: RGB_565 (2 bytes/pixel)
                        • Tamanho estimado: ${(stripWidth * thumbHeight * 2) / 1024}KB
@@ -412,9 +540,22 @@ class ThumbnailStripManager(
 
     /**
      * Calcula o número total de segmentos para um vídeo.
+     * 
+     * Para strips adaptativas, usa o valor médio de thumbsPerStrip (~2/3 do máximo)
+     * para fazer uma aproximação do número de segmentos.
      */
     fun getSegmentCount(durationMs: Long): Int {
         val totalSeconds = ((durationMs + 999) / 1000).toInt()
-        return (totalSeconds + thumbsPerStrip - 1) / thumbsPerStrip
+        
+        // Para strips adaptativas, usar valor médio para aproximação
+        val effectiveThumbsPerStrip = if (adaptiveStrips) {
+            // Valor médio da função adaptativa é aproximadamente 2/3 do máximo
+            // para curva de potência com exponent 0.5
+            ((thumbsPerStrip + minThumbsPerStrip * 2) / 3).coerceAtLeast(1)
+        } else {
+            thumbsPerStrip
+        }
+        
+        return (totalSeconds + effectiveThumbsPerStrip - 1) / effectiveThumbsPerStrip
     }
 }

@@ -133,11 +133,12 @@ class PreferencesViewModel(
     /**
      * Limpa todo o cache de thumbnails do disco
      */
-    fun clearThumbnailCache() {
+     fun clearThumbnailCache() {
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = PreferencesUiState.Loading
             try {
-                ThumbnailStripManager.clearCache(getApplication())
+                val context: android.content.Context = getApplication()
+                ThumbnailStripManager.clearCache(context)
                 _uiState.value = PreferencesUiState.Success(
                     message = "Cache de thumbnails limpo com sucesso."
                 )
