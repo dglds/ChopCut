@@ -52,6 +52,7 @@ fun PreferencesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isCacheEnabled by viewModel.isCacheEnabled.collectAsStateWithLifecycle()
+    val isDebugEnabled by viewModel.isDebugEnabled.collectAsStateWithLifecycle()
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var cacheSizeMB by remember { mutableStateOf(0.0) }
@@ -186,6 +187,46 @@ fun PreferencesScreen(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = cacheSizeMB > 0.01 && !isLoadingCacheSize
                     )
+                }
+            }
+
+            Spacer(Modifier.height(ChopCutSpacing.md))
+
+            // Configurações de Debug
+            com.chopcut.ui.components.cards.ChopCutCard(
+                modifier = Modifier.fillMaxWidth(),
+                showShadow = true
+            ) {
+                Column(
+                    modifier = Modifier.padding(ChopCutSpacing.md),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Configurações de Debug",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.height(ChopCutSpacing.md))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Mostrar Debugger",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "Toast de debug para desenvolvedores",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = isDebugEnabled,
+                            onCheckedChange = { viewModel.setDebugEnabled(it) }
+                        )
+                    }
                 }
             }
 

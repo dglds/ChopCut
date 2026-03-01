@@ -3,6 +3,7 @@ package com.chopcut.ui.components.feedback
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.chopcut.data.local.PreferencesManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,12 +19,21 @@ sealed interface DebugState {
     data class Active(val entries: List<DebugEntry>) : DebugState
 }
 
+enum class DebugPosition {
+    TOP, BOTTOM
+}
+
 class DebugViewModel(application: Application) : AndroidViewModel(application) {
+    private val prefsManager = PreferencesManager(application)
+
     private val _debugState = MutableStateFlow<DebugState>(DebugState.Idle)
     val debugState: StateFlow<DebugState> = _debugState.asStateFlow()
 
-    private val _isEnabled = MutableStateFlow(true)
+    private val _isEnabled = MutableStateFlow(prefsManager.debugEnabled)
     val isEnabled: StateFlow<Boolean> = _isEnabled.asStateFlow()
+
+    private val _position = MutableStateFlow(DebugPosition.BOTTOM)
+    val position: StateFlow<DebugPosition> = _position.asStateFlow()
 
     private var maxEntries = 50
 
@@ -50,9 +60,18 @@ class DebugViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setEnabled(enabled: Boolean) {
+        prefsManager.debugEnabled = enabled
         _isEnabled.value = enabled
         if (!enabled) {
             clear()
+        }
+    }
+
+    fun togglePosition() {
+        _position.value = if (_position.value == DebugPosition.TOP) {
+            DebugPosition.BOTTOM
+        } else {
+            DebugPosition.TOP
         }
     }
 }

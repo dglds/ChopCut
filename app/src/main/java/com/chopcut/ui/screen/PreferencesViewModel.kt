@@ -35,10 +35,20 @@ class PreferencesViewModel(
     private val _isCacheEnabled = MutableStateFlow(prefsManager.thumbnailCacheEnabled)
     val isCacheEnabled: StateFlow<Boolean> = _isCacheEnabled.asStateFlow()
 
+    /** Estado do debugger (reactivo) */
+    private val _isDebugEnabled = MutableStateFlow(prefsManager.debugEnabled)
+    val isDebugEnabled: StateFlow<Boolean> = _isDebugEnabled.asStateFlow()
+
     fun setCacheEnabled(enabled: Boolean) {
         prefsManager.thumbnailCacheEnabled = enabled
         _isCacheEnabled.value = enabled
         Timber.i("Thumbnail cache ${if (enabled) "enabled" else "disabled"}")
+    }
+
+    fun setDebugEnabled(enabled: Boolean) {
+        prefsManager.debugEnabled = enabled
+        _isDebugEnabled.value = enabled
+        Timber.i("Debug toast ${if (enabled) "enabled" else "disabled"}")
     }
 
     fun deleteSavedVideos() {
