@@ -55,15 +55,17 @@ fun PreferencesScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var cacheSizeMB by remember { mutableStateOf(0.0) }
+    var cachedVideoCount by remember { mutableStateOf(0) }
     var isLoadingCacheSize by remember { mutableStateOf(false) }
     var shouldRefreshCacheSize by remember { mutableStateOf(false) }
 
-    // Calcular tamanho do cache ao entrar na tela e quando solicitado
+    // Calcular tamanho do cache e quantidade de vídeos ao entrar na tela e quando solicitado
     LaunchedEffect(Unit, shouldRefreshCacheSize) {
         if (shouldRefreshCacheSize) {
             isLoadingCacheSize = true
         }
         cacheSizeMB = viewModel.getThumbnailCacheSize()
+        cachedVideoCount = viewModel.getCachedVideoCount()
         isLoadingCacheSize = false
     }
 
@@ -122,11 +124,28 @@ fun PreferencesScreen(
                             )
                         } else {
                             Text(
-                                text = if (cacheSizeMB < 1.0) "< 1 MB" else "${cacheSizeMB.roundToInt()} MB",
+                                text = String.format("%.2f MB", cacheSizeMB),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
+                    }
+                    Spacer(Modifier.height(ChopCutSpacing.sm))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Vídeos cacheados:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "$cachedVideoCount vídeo(s)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     Spacer(Modifier.height(ChopCutSpacing.sm))
                     Text(
@@ -305,7 +324,12 @@ fun PreferencesScreen(
                     Text("Tem certeza que deseja limpar o cache de thumbnails?")
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Tamanho atual: ${if (cacheSizeMB < 1.0) "< 1 MB" else "${cacheSizeMB.roundToInt()} MB"}",
+                        text = "Tamanho atual: ${String.format("%.2f MB", cacheSizeMB)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Vídeos cacheados: $cachedVideoCount",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )

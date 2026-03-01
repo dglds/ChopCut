@@ -89,6 +89,38 @@ class PreferencesViewModel(
     }
 
     /**
+     * Conta quantos vídeos têm cache
+     * Baseia-se no fileInfo único nos nomes dos arquivos de cache
+     */
+    suspend fun getCachedVideoCount(): Int = withContext(Dispatchers.IO) {
+        try {
+            val cacheDir = File(getApplication<Application>().cacheDir, "thumbnail_strips")
+            if (!cacheDir.exists()) {
+                return@withContext 0
+            }
+
+            val videoIds = mutableSetOf<String>()
+            cacheDir.listFiles()?.forEach { file ->
+                if (file.isFile && file.name.endsWith(".webp")) {
+                    val parts = file.name.removeSuffix(".webp").split("_")
+                    if (parts.size >= 4 && parts[0] == "strip" && parts[1].startsWith("v")) {
+                        val fileInfo = parts.drop(3).joinToString("_")
+                        if (fileInfo.isNotEmpty()) {
+                            videoIds.add(fileInfo)
+                        }
+                    }
+                }
+            }
+
+            Timber.d("Found ${videoIds.size} videos with cache")
+            videoIds.size
+        } catch (e: Exception) {
+            Timber.e(e, "Error counting cached videos")
+            0
+        }
+    }
+
+    /**
      * Limpa todo o cache de thumbnails do disco
      */
     fun clearThumbnailCache() {
