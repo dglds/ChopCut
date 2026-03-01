@@ -110,6 +110,8 @@ fun HomeScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedUri by viewModel.selectedVideoUri.collectAsStateWithLifecycle()
+    val preloadState by viewModel.preloadState.collectAsStateWithLifecycle()
+    val preloadedData by viewModel.preloadedData.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showGallery by remember { mutableStateOf(false) }
@@ -168,7 +170,10 @@ fun HomeScreen(
                                 videoInfo = (uiState as HomeUiState.VideoLoaded).videoInfo,
                                 videoUri = uri,
                                 onChangeVideo = requestGallery,
-                                onOpenEditor = { onNavigateToEditor(uri) }
+                                onOpenEditor = {
+                                    // NAVEGAR IMEDIATAMENTE (sem esperar)
+                                    onNavigateToEditor(uri)
+                                }
                             )
                         }
                         uri != null && uiState is HomeUiState.Loading -> {
@@ -197,11 +202,11 @@ fun HomeScreen(
         
                 item { Spacer(Modifier.height(ChopCutSpacing.md)) }
             }
-            
-            if (com.chopcut.BuildConfig.DEBUG) {
-                val preloadState = viewModel.preloadState.collectAsStateWithLifecycle().value
-                if (preloadState is com.chopcut.ui.screen.PreloadUiState.Loading && debugViewModel != null) {
-                    val progress = (preloadState as com.chopcut.ui.screen.PreloadUiState.Loading).progress
+
+            // Debug logging de preload
+            if (com.chopcut.BuildConfig.DEBUG && debugViewModel != null) {
+                if (preloadState is PreloadUiState.Loading) {
+                    val progress = (preloadState as PreloadUiState.Loading).progress
                     LaunchedEffect(progress.logs) {
                         progress.logs.forEach { log ->
                             debugViewModel.log(log)

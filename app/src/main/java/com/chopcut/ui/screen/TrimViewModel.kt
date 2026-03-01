@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.data.audio.WaveFormGenerator
 import com.chopcut.data.audio.WaveformQuality
+import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.TrimPosition
 import com.chopcut.ui.components.WaveformData
 import kotlinx.coroutines.Dispatchers
@@ -22,18 +23,20 @@ import timber.log.Timber
 
 class TrimViewModel(
     application: Application,
+    private val videoUri: Uri?,
     private val initialAudioAmplitudes: List<Float>? = null,
     private val initialPreloadedStrips: Map<Int, Bitmap>? = null
 ) : AndroidViewModel(application) {
 
     class TrimViewModelFactory(
+        private val videoUri: Uri?,
         private val preloadedData: PreloadedData?
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(TrimViewModel::class.java)) {
                 @Suppress("DEPRECATION")
-                val app = modelClass.classLoader?.let { 
+                val app = modelClass.classLoader?.let {
                     try {
                         java.lang.Class.forName("android.app.ActivityThread")
                             .getMethod("currentApplication")
@@ -42,10 +45,11 @@ class TrimViewModel(
                         null
                     }
                 }
-                
+
                 if (app != null) {
                     return TrimViewModel(
                         application = app,
+                        videoUri = videoUri,
                         initialAudioAmplitudes = preloadedData?.audioAmplitudes,
                         initialPreloadedStrips = preloadedData?.preloadedStrips
                     ) as T
@@ -61,9 +65,33 @@ class TrimViewModel(
     private var waveformQuality: WaveformQuality = WaveformQuality.Medium
 
     private val audioDataExtractor = AudioDataExtractor(application)
+
+    // Preload management
+    private val videoRepository = VideoRepository(application)
+    private val preloadViewModel = PreloadViewModel(application, videoRepository)
+
+    val preloadState: StateFlow<PreloadUiState> = preloadViewModel.uiState
+    val preloadedDataFlow: StateFlow<PreloadedData?> = preloadViewModel.preloadedData
+
+    init {
+        if (initialAudioAmplitudes == null && initialPreloadedStrips == null) {
+            videoUri?.let { uri ->
+                val screenWidthDp = 360f
+                Timber.d("TrimViewModel: Iniciando preload (dados não fornecidos)")
+                preloadViewModel.startPreload(uri, screenWidthDp)
+            }
+        } else {
+            Timber.d("TrimViewModel: preloadedData já disponível, pulando preload")
+        }
+    }
+
+    fun cancelPreload() {
+        preloadViewModel.cancelPreload()
+    }
     
     override fun onCleared() {
         super.onCleared()
+        preloadViewModel.cancelPreload()
     }
 
     fun setWaveformQuality(quality: WaveformQuality) {

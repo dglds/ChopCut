@@ -2,6 +2,9 @@ package com.chopcut.ui.screen
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -9,11 +12,15 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.chopcut.ui.components.loading.LoadingConstants
+import com.chopcut.ui.components.loading.LoadingOverlay
+import kotlinx.coroutines.delay
 import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.data.pipeline.TrimProgress
 import com.chopcut.data.repository.VideoRepository
@@ -35,14 +42,72 @@ fun TrimScreen(
     videoUri: Uri,
     preloadedData: PreloadedData? = null,
     viewModel: TrimViewModel = viewModel(
-        factory = TrimViewModel.TrimViewModelFactory(preloadedData)
+        factory = TrimViewModel.TrimViewModelFactory(videoUri, preloadedData)
     ),
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
+    val preloadState by viewModel.preloadState.collectAsState()
+    val preloadedDataState by viewModel.preloadedDataFlow.collectAsState()
     var saveDialogState by remember { mutableStateOf(SaveDialogState()) }
     var showSaveDialog by remember { mutableStateOf(false) }
+
+    // Estados de controle do overlay
+    var showLoadingOverlay by remember { mutableStateOf(true) }
+    var elapsedTimeMs by remember { mutableStateOf(0L) }
+    var isReadyToHide by remember { mutableStateOf(false) }
+
+    // Monitoramento automático para esconder overlay
+    LaunchedEffect(preloadState, preloadedDataState) {
+        val startTime = System.currentTimeMillis()
+
+        while (showLoadingOverlay) {
+            elapsedTimeMs = System.currentTimeMillis() - startTime
+            val minTimeReached = elapsedTimeMs >= LoadingConstants.MIN_LOADING_DURATION_MS
+            val maxTimeReached = elapsedTimeMs >= LoadingConstants.MAX_LOADING_DURATION_MS
+
+            val thumbnailProgress = calculateThumbnailProgress(preloadedDataState)
+            val hasSufficientThumbnails = thumbnailProgress > LoadingConstants.MINIMUM_THUMBNAIL_PROGRESS
+            val hasAudio = preloadedDataState?.audioAmplitudes?.isNotEmpty() ?: false
+
+            val shouldHideOverlay = shouldHideLoadingOverlay(
+                state = preloadState,
+                minTimeReached = minTimeReached,
+                maxTimeReached = maxTimeReached,
+                hasSufficientThumbnails = hasSufficientThumbnails,
+                hasAudio = hasAudio
+            )
+
+            if (shouldHideOverlay) {
+                val reason = getHideReason(
+                    state = preloadState,
+                    maxTimeReached = maxTimeReached,
+                    minTimeReached = minTimeReached,
+                    hasSufficientThumbnails = hasSufficientThumbnails,
+                    elapsedTimeMs = elapsedTimeMs,
+                    thumbnailProgress = thumbnailProgress
+                )
+                Timber.d("LoadingOverlay pronto para esconder: $reason")
+
+                isReadyToHide = true
+                delay(LoadingConstants.PROGRESS_BAR_COMPLETE_DELAY_MS)
+                showLoadingOverlay = false
+                delay(LoadingConstants.CROSS_FADE_START_DELAY_MS)
+                Timber.d("LoadingOverlay escondido: $reason")
+                break
+            }
+
+            delay(LoadingConstants.LOADING_CHECK_INTERVAL_MS)
+        }
+    }
+
+    // Cancelar preload ao pressionar voltar durante loading
+    BackHandler(enabled = showLoadingOverlay) {
+        viewModel.cancelPreload()
+        showLoadingOverlay = false
+        onNavigateBack()
+    }
 
     val scope = rememberCoroutineScope()
 
@@ -90,9 +155,33 @@ fun TrimScreen(
             )
         }
         else -> {
-            Scaffold(
-                topBar = {
-                    TopAppBar(
+            // Box wrapper para permitir overlay
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Animação de entrada suave para TrimScreen
+                AnimatedVisibility(
+                    visible = !showLoadingOverlay,
+                    enter = fadeIn(
+                        animationSpec = tween(
+                            durationMillis = LoadingConstants.TRIM_FADE_IN_DURATION_MS,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + slideInVertically(
+                        initialOffsetY = { it / LoadingConstants.TRIM_SLIDE_IN_FRACTION },
+                        animationSpec = tween(
+                            durationMillis = LoadingConstants.TRIM_FADE_IN_DURATION_MS,
+                            easing = FastOutSlowInEasing
+                        )
+                    ),
+                    exit = fadeOut(
+                        animationSpec = tween(
+                            durationMillis = 300,
+                            easing = LinearEasing
+                        )
+                    )
+                ) {
+                    Scaffold(
+                        topBar = {
+                        TopAppBar(
                         title = {
                             Column {
                                 Text("Editor de Trim")
@@ -175,6 +264,20 @@ fun TrimScreen(
                     Spacer(modifier = Modifier.height(ChopCutSpacing.xxl))
                 }
             }
+                } // Fecha AnimatedVisibility
+
+                // LoadingOverlay renderizado quando visível
+                if (showLoadingOverlay) {
+                    LoadingOverlay(
+                        progress = when (val state = preloadState) {
+                            is PreloadUiState.Loading -> state.progress
+                            else -> PreloadProgress(stage = ExtractionStage.Starting)
+                        },
+                        elapsedTimeMs = elapsedTimeMs,
+                        isReadyToHide = isReadyToHide
+                    )
+                }
+            }
         }
     }
 
@@ -242,6 +345,49 @@ fun TrimScreen(
             },
             onNavigateBack = onNavigateBack
         )
+    }
+}
+
+// Funções auxiliares para lógica de loading
+
+private fun calculateThumbnailProgress(preloadedData: PreloadedData?): Float {
+    return preloadedData?.let { data ->
+        if (data.totalSegments > 0) {
+            (data.preloadedStrips.size.toFloat() / data.totalSegments) * 100f
+        } else 0f
+    } ?: 0f
+}
+
+private fun shouldHideLoadingOverlay(
+    state: PreloadUiState,
+    minTimeReached: Boolean,
+    maxTimeReached: Boolean,
+    hasSufficientThumbnails: Boolean,
+    hasAudio: Boolean
+): Boolean {
+    return when (state) {
+        is PreloadUiState.Ready -> hasSufficientThumbnails
+        is PreloadUiState.Loading -> maxTimeReached || (minTimeReached && hasSufficientThumbnails && hasAudio)
+        is PreloadUiState.Error, is PreloadUiState.Cancelled -> true
+        else -> false
+    }
+}
+
+private fun getHideReason(
+    state: PreloadUiState,
+    maxTimeReached: Boolean,
+    minTimeReached: Boolean,
+    hasSufficientThumbnails: Boolean,
+    elapsedTimeMs: Long,
+    thumbnailProgress: Float
+): String {
+    return when {
+        state is PreloadUiState.Error -> "Error"
+        state is PreloadUiState.Cancelled -> "Cancelled"
+        maxTimeReached -> "Timeout (${LoadingConstants.MAX_LOADING_DURATION_MS / 1000}s)"
+        state is PreloadUiState.Ready -> "Ready (${elapsedTimeMs / 1000}s, ${thumbnailProgress.toInt()}% thumbnails)"
+        minTimeReached && hasSufficientThumbnails -> "Min time (${LoadingConstants.MIN_LOADING_DURATION_MS / 1000}s) + ${thumbnailProgress.toInt()}% thumbnails"
+        else -> "Unknown"
     }
 }
 
