@@ -71,21 +71,21 @@ class ThumbnailRenderingPerformanceTest {
         ) {
             // Cria a strip inteiramente em memória preenchendo com pixels
             // para isolar o teste do MediaMetadataRetriever que possui restrições de permissão no Runner
-            val framesInSegment = ThumbnailStripManager.SEGMENT_SECONDS
+            val framesInSegment = stripManager.thumbsPerStrip
             testStrip = Bitmap.createBitmap(stripManager.thumbWidth * framesInSegment, stripManager.thumbHeight, Bitmap.Config.RGB_565)
             val canvas = Canvas(testStrip!!)
-            
+
             // Pinta com um checkerboard simulando o conteúdo
             val paint1 = Paint().apply { color = android.graphics.Color.DKGRAY }
             val paint2 = Paint().apply { color = android.graphics.Color.LTGRAY }
-            
+
             for (i in 0 until framesInSegment) {
                 val paint = if (i % 2 == 0) paint1 else paint2
                 canvas.drawRect(
-                    (i * stripManager.thumbWidth).toFloat(), 
-                    0f, 
-                    ((i + 1) * stripManager.thumbWidth).toFloat(), 
-                    stripManager.thumbHeight.toFloat(), 
+                    (i * stripManager.thumbWidth).toFloat(),
+                    0f,
+                    ((i + 1) * stripManager.thumbWidth).toFloat(),
+                    stripManager.thumbHeight.toFloat(),
                     paint
                 )
             }
@@ -111,7 +111,7 @@ class ThumbnailRenderingPerformanceTest {
         // 3. Simular o evento de renderização de múltiplos quadros (como em um scroll violento a 60fps)
         // 60 frames = 1 segundo de animação suave
         val framesToSimulate = 60
-        val framesInStrip = ThumbnailStripManager.SEGMENT_SECONDS // 10
+        val framesInStrip = stripManager.thumbsPerStrip // 10 (padrão)
 
         performanceMeasurer.measure(
             operationName = "2. Render - 60 FPS Scroll Simulation",
@@ -124,7 +124,7 @@ class ThumbnailRenderingPerformanceTest {
             for (frame in 0 until framesToSimulate) {
                 // Simula o cálculo de offset baseado no scroll atual
                 val scrollOffsetX = (frame * 10) % displayWidth
-                
+
                 // Desenha todos os frames visíveis na strip atual para a tela
                 for (frameIdx in 0 until framesInStrip) {
                     val srcX = frameIdx * stripManager.thumbWidth
@@ -135,10 +135,10 @@ class ThumbnailRenderingPerformanceTest {
 
                     // Calcula destino na tela simulada
                     val dstX = (frameIdx * stripManager.thumbWidth) - scrollOffsetX
-                    
+
                     // Otimização de culling (não desenha se estiver fora da tela)
                     if (dstX + stripManager.thumbWidth < 0 || dstX > displayWidth) continue
-                    
+
                     dstRect.set(
                         dstX, 0,
                         dstX + stripManager.thumbWidth, stripManager.thumbHeight

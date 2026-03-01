@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMerge
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Crop
@@ -163,7 +164,7 @@ fun HomeScreen(
                 item {
                     Spacer(Modifier.height(ChopCutSpacing.xs))
         
-                    val uri = selectedUri
+                     val uri = selectedUri
                     when {
                         uri != null && uiState is HomeUiState.VideoLoaded -> {
                             VideoPickerLoaded(
@@ -173,6 +174,9 @@ fun HomeScreen(
                                 onOpenEditor = {
                                     // NAVEGAR IMEDIATAMENTE (sem esperar)
                                     onNavigateToEditor(uri)
+                                },
+                                onRemoveVideo = {
+                                    viewModel.clearSelectedVideo()
                                 }
                             )
                         }
@@ -333,7 +337,8 @@ private fun VideoPickerLoaded(
     videoInfo: VideoInfo,
     videoUri: Uri,
     onChangeVideo: () -> Unit,
-    onOpenEditor: () -> Unit
+    onOpenEditor: () -> Unit,
+    onRemoveVideo: () -> Unit
 ) {
     val context = LocalContext.current
     val imageLoader = remember {
@@ -459,6 +464,24 @@ private fun VideoPickerLoaded(
                     Icon(
                         imageVector = Icons.Default.VideoLibrary,
                         contentDescription = "Trocar vídeo",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .height(40.dp)
+                        .width(50.dp)
+                        .background(
+                            Color.Red.copy(alpha = 0.8f),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickable(onClick = onRemoveVideo),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remover vídeo",
                         tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )

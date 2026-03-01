@@ -28,7 +28,7 @@ import kotlin.coroutines.coroutineContext
 /**
  * Gerenciador de strips segmentadas de thumbnails para o timeline.
  *
- * Combina thumbnails em strips horizontais de [SEGMENT_SECONDS] segundos cada.
+ * Combina thumbnails em strips horizontais de [thumbsPerStrip] segundos cada.
  * Dimensões dos thumbnails são calculadas pelo chamador baseado na densidade
  * do display, garantindo rendering pixel-perfect sem upscaling.
  *
@@ -40,17 +40,17 @@ import kotlin.coroutines.coroutineContext
  * @param context Context do Android
  * @param thumbWidth Largura de cada thumbnail em pixels (deve corresponder a pxPerSecond)
  * @param thumbHeight Altura de cada thumbnail em pixels (deve corresponder a thumbnailHeightPx)
+ * @param thumbsPerStrip Quantidade de thumbnails por strip (padrão: 10)
  */
 class ThumbnailStripManager(
     private val context: Context,
     val thumbWidth: Int,
-    val thumbHeight: Int
+    val thumbHeight: Int,
+    val thumbsPerStrip: Int = 10
 ) {
     /** Gerenciador de preferências para verificar se cache está habilitado */
     private val prefsManager = PreferencesManager(context)
     companion object {
-        /** Número de thumbnails (segundos) por strip */
-        const val SEGMENT_SECONDS = 10
         
         /** Limite de concorrência global para não saturar hardware decoders (3-4 é seguro para maioria dos devices) */
         private val extractSemaphore = Semaphore(3)
@@ -299,13 +299,13 @@ class ThumbnailStripManager(
             // Verificar novamente após adquirir permissão (pode ter demorado na fila)
             coroutineContext.ensureActive()
 
-            val startSec = segmentIndex * SEGMENT_SECONDS
+            val startSec = segmentIndex * thumbsPerStrip
             val totalSeconds = ((durationMs + 999) / 1000).toInt()
             if (startSec >= totalSeconds) return@withPermit null
 
-            val framesInSegment = minOf(SEGMENT_SECONDS, totalSeconds - startSec)
+            val framesInSegment = minOf(thumbsPerStrip, totalSeconds - startSec)
 
-            try {
+             try {
                 coroutineContext.ensureActive()
 
                 // Strip RGB_565: metade da memória de ARGB_8888
@@ -319,6 +319,7 @@ class ThumbnailStripManager(
                     ║ CRIAÇÃO DE STRIP - Segmento: $segmentIndex
                     ╚═════════════════════════════════════════════════════════╝
                     📊 STRIP INFO:
+                       • Thumbs por strip: $thumbsPerStrip
                        • Frames no segmento: $framesInSegment
                        • Dimensões da strip: ${stripWidth}x${thumbHeight}
                        • Config: RGB_565 (2 bytes/pixel)
@@ -350,7 +351,7 @@ class ThumbnailStripManager(
                     return@withPermit null
                 }
 
-                android.util.Log.i("ThumbnailAspectMonitor", "   ✅ Extraídos ${extractedFrames.size}/${framesInSegment} frames com sucesso")
+                android.util.Log.i("ThumbnailAspectMonitor", "   ✅ Extraídos ${extractedFrames.size}/$framesInSegment frames com sucesso")
 
                 // Stitch frames na strip
                 for (frameIdx in 0 until framesInSegment) {
@@ -414,6 +415,6 @@ class ThumbnailStripManager(
      */
     fun getSegmentCount(durationMs: Long): Int {
         val totalSeconds = ((durationMs + 999) / 1000).toInt()
-        return (totalSeconds + SEGMENT_SECONDS - 1) / SEGMENT_SECONDS
+        return (totalSeconds + thumbsPerStrip - 1) / thumbsPerStrip
     }
 }

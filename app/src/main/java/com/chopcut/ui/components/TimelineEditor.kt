@@ -56,7 +56,7 @@ import com.chopcut.ui.components.timeline.CurrentTimeDisplay
 import com.chopcut.ui.components.timeline.VideoFileInfo
 import com.chopcut.utils.FormatUtils
 import com.chopcut.data.thumbnail.ThumbnailStripManager
-import com.chopcut.data.thumbnail.ThumbnailStripManager.Companion.SEGMENT_SECONDS
+import com.chopcut.data.local.PreferencesManager
 import kotlinx.coroutines.NonCancellable
 import timber.log.Timber
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -108,16 +108,17 @@ fun TimelineEditor(
             }
         }
      
-        // Strip-based Thumbnails State
-        // Dimensões density-aware: match exato do display = pixel-perfect, sem distorção
-        val thumbWidth = remember(density) { with(density) { 60.dp.roundToPx() } }
-        val thumbHeight = remember(thumbWidth, aspectRatio) { 
-            if (aspectRatio > 0) (thumbWidth / aspectRatio).toInt().coerceAtLeast(1) 
-            else with(density) { 40.dp.roundToPx() } 
-        }
-         val stripManager = remember(thumbWidth, thumbHeight) {
-             ThumbnailStripManager(context, thumbWidth, thumbHeight)
-         }
+         // Strip-based Thumbnails State
+           // Dimensões density-aware: match exato do display = pixel-perfect, sem distorção
+           val thumbWidth = remember(density) { with(density) { 60.dp.roundToPx() } }
+           val thumbHeight = remember(thumbWidth, aspectRatio) { 
+               if (aspectRatio > 0) (thumbWidth / aspectRatio).toInt().coerceAtLeast(1) 
+               else with(density) { 40.dp.roundToPx() } 
+           }
+           val thumbsPerStrip = remember { PreferencesManager(context).thumbsPerStrip }
+           val stripManager = remember(thumbWidth, thumbHeight, thumbsPerStrip) {
+               ThumbnailStripManager(context, thumbWidth, thumbHeight, thumbsPerStrip)
+           }
          val strips = remember {
              androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
                  putAll(preloadedStrips)
@@ -148,7 +149,7 @@ fun TimelineEditor(
 
             val totalSegments = stripManager.getSegmentCount(videoDurationMs)
             val currentSecond = (scrollOffsetPx / pxPerSecond).toInt().coerceAtLeast(0)
-            val visibleSegment = currentSecond / SEGMENT_SECONDS
+            val visibleSegment = currentSecond / thumbsPerStrip
 
             val segmentsToLoad = listOf(
                 visibleSegment,       // prioridade 1: visível agora
@@ -187,7 +188,7 @@ fun TimelineEditor(
             
             val totalSegments = stripManager.getSegmentCount(videoDurationMs)
             val currentSecond = (scrollOffsetPx / pxPerSecond).toInt().coerceAtLeast(0)
-            val centerSegment = currentSecond / SEGMENT_SECONDS
+            val centerSegment = currentSecond / thumbsPerStrip
             
             // Criar lista de segmentos ordenada pela proximidade do scroll atual (Estratégia Radial)
             val segmentsByPriority = (0 until totalSegments).sortedBy { 
@@ -503,105 +504,104 @@ fun TimelineEditor(
                      val rulerTopY = 0f
                      val rulerThumbGap = 6.dp.toPx()
 
-                     // DRAW THUMBNAIL STRIPS
-                      val thumbnailHeightPx = thumbnailsHeightDp.toPx()
-                      val thumbnailTop = rulerHeight + rulerThumbGap
-                     val thumbW = stripManager.thumbWidth.toFloat()
-                     val thumbH = stripManager.thumbHeight.toFloat()
+                      // DRAW THUMBNAIL STRIPS
+                       val thumbnailHeightPx = thumbnailsHeightDp.toPx()
+                       val thumbnailTop = rulerHeight + rulerThumbGap
+                      val thumbW = stripManager.thumbWidth.toFloat()
+                      val thumbH = stripManager.thumbHeight.toFloat()
 
+                      // Clip para não ultrapassar a duração do vídeo
+                      drawContext.canvas.save()
+                      val clipEnd = centerOffset + (videoDurationMs / 1000f * pxPerSecond) - currentScroll
+                      drawContext.canvas.clipRect(0f, thumbnailTop, clipEnd, thumbnailTop + thumbnailHeightPx)
 
-                     // Clip para não ultrapassar a duração do vídeo
-                     drawContext.canvas.save()
-                     val clipEnd = centerOffset + (videoDurationMs / 1000f * pxPerSecond) - currentScroll
-                     drawContext.canvas.clipRect(0f, thumbnailTop, clipEnd, thumbnailTop + thumbnailHeightPx)
+                      // Range de segundos visíveis na tela
+                      // Otimização: calcular apenas os visíveis + buffer pequeno (segurança visual)
+                      val startSecond = ((currentScroll - centerOffset) / pxPerSecond).toInt().coerceAtLeast(0)
+                       // OTIMIZAÇÃO: Culling agressivo - sem buffer para renderizar ~30% menos strips
+                       val endSecond = ((currentScroll - centerOffset + timelineWidth) / pxPerSecond).toInt()
 
-                     // Range de segundos visíveis na tela
-                     // Otimização: calcular apenas os visíveis + buffer pequeno (segurança visual)
-                     val startSecond = ((currentScroll - centerOffset) / pxPerSecond).toInt().coerceAtLeast(0)
-                      // OTIMIZAÇÃO: Culling agressivo - sem buffer para renderizar ~30% menos strips
-                      val endSecond = ((currentScroll - centerOffset + timelineWidth) / pxPerSecond).toInt()
-
-                      // OTIMIZAÇÃO: Calcular segmentos visíveis para buscar strips uma vez
-                     val visibleSegmentIndices = mutableSetOf<Int>()
-                     for (sec in startSecond..endSecond) {
-                         val segIdx = sec / SEGMENT_SECONDS
-                         visibleSegmentIndices.add(segIdx)
-                     }
-
-
-                     for (sec in startSecond..endSecond) {
-                          val timeMs = sec * 1000L
-                          if (timeMs >= videoDurationMs) break
-
-                          val segIdx = sec / SEGMENT_SECONDS
-                          val frameInStrip = sec % SEGMENT_SECONDS
-                          val x = centerOffset + (sec * pxPerSecond) - currentScroll
-
-                          if (x > size.width || x + pxPerSecond < 0) continue
-
-                          val strip = strips[segIdx]
-                           if (strip != null && !strip.isRecycled) {
-                               // Recortar o frame correto da strip (mantendo aspect ratio 1:1)
-                               srcRect.set(
-                                   (frameInStrip * thumbW).toInt(), 0,
-                                   ((frameInStrip + 1) * thumbW).toInt(), thumbH.toInt()
-                               )
-                               // Manter largura original do thumb para evitar distorção
-                               val thumbDisplayWidth = thumbW
-                               val thumbDisplayHeight = thumbH
-
-                               // Centralizar verticalmente na área de thumbnails (48dp)
-                               val verticalOffset = (thumbnailHeightPx - thumbDisplayHeight) / 2f
-
-                               dstRect.set(
-                                   x.toInt(), (thumbnailTop + verticalOffset).toInt(),
-                                   (x + thumbDisplayWidth).toInt(), (thumbnailTop + verticalOffset + thumbDisplayHeight).toInt()
-                               )
-
-                               // 🔍 RENDER Strip #$segIdx
-
-                               drawIntoCanvas { canvas ->
-                                   canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
-                               }
-                           } else {
-                               // Strip não carregada - shimmer effect diagonal suave
-                               drawIntoCanvas { canvas ->
-                                   // Draw base background
-                                   canvas.nativeCanvas.drawRect(
-                                       x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
-                                       bgPaint
-                                   )
-
-                                   // Draw shimmer com gradiente diagonal
-                                   val shimmerPaint = android.graphics.Paint().apply {
-                                       // Gradiente diagonal (45°) que se move suavemente
-                                       val width = pxPerSecond
-                                       val height = thumbnailHeightPx
-                                       val gradientSize = (width + height) * 0.8f
-
-                                       // Calcular posição do gradiente baseado no shimmerProgress
-                                       val offsetX = shimmerProgress * (width + gradientSize) - gradientSize
-                                       val offsetY = shimmerProgress * (height + gradientSize) - gradientSize
-
-                                       shader = android.graphics.LinearGradient(
-                                           x + offsetX,
-                                           thumbnailTop + offsetY,
-                                           x + offsetX + gradientSize,
-                                           thumbnailTop + offsetY + gradientSize,
-                                           shimmerGradient,
-                                           shimmerPositions,
-                                           android.graphics.Shader.TileMode.CLAMP
-                                       )
-                                   }
-
-                                   canvas.nativeCanvas.drawRect(
-                                       x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
-                                       shimmerPaint
-                                   )
-                               }
-                           }
+                       // OTIMIZAÇÃO: Calcular segmentos visíveis para buscar strips uma vez
+                      val visibleSegmentIndices = mutableSetOf<Int>()
+                      for (sec in startSecond..endSecond) {
+                          val segIdx = sec / thumbsPerStrip
+                          visibleSegmentIndices.add(segIdx)
                       }
-                     drawContext.canvas.restore()
+
+
+                      for (sec in startSecond..endSecond) {
+                           val timeMs = sec * 1000L
+                           if (timeMs >= videoDurationMs) break
+
+                           val segIdx = sec / thumbsPerStrip
+                           val frameInStrip = sec % thumbsPerStrip
+                           val x = centerOffset + (sec * pxPerSecond) - currentScroll
+
+                           if (x > size.width || x + pxPerSecond < 0) continue
+
+                           val strip = strips[segIdx]
+                            if (strip != null && !strip.isRecycled) {
+                                // Recortar o frame correto da strip (mantendo aspect ratio 1:1)
+                                srcRect.set(
+                                    (frameInStrip * thumbW).toInt(), 0,
+                                    ((frameInStrip + 1) * thumbW).toInt(), thumbH.toInt()
+                                )
+                                // Manter largura original do thumb para evitar distorção
+                                val thumbDisplayWidth = thumbW
+                                val thumbDisplayHeight = thumbH
+
+                                // Centralizar verticalmente na área de thumbnails (48dp)
+                                val verticalOffset = (thumbnailHeightPx - thumbDisplayHeight) / 2f
+
+                                dstRect.set(
+                                    x.toInt(), (thumbnailTop + verticalOffset).toInt(),
+                                    (x + thumbDisplayWidth).toInt(), (thumbnailTop + verticalOffset + thumbDisplayHeight).toInt()
+                                )
+
+                                // 🔍 RENDER Strip #$segIdx
+
+                                drawIntoCanvas { canvas ->
+                                    canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
+                                }
+                             } else {
+                                // Strip não carregada - shimmer effect diagonal suave
+                                drawIntoCanvas { canvas ->
+                                    // Draw base background
+                                    canvas.nativeCanvas.drawRect(
+                                        x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
+                                        bgPaint
+                                    )
+
+                                    // Draw shimmer com gradiente diagonal
+                                    val shimmerPaint = android.graphics.Paint().apply {
+                                        // Gradiente diagonal (45°) que se move suavemente
+                                        val width = pxPerSecond
+                                        val height = thumbnailHeightPx
+                                        val gradientSize = (width + height) * 0.8f
+
+                                        // Calcular posição do gradiente baseado no shimmerProgress
+                                        val offsetX = shimmerProgress * (width + gradientSize) - gradientSize
+                                        val offsetY = shimmerProgress * (height + gradientSize) - gradientSize
+
+                                        shader = android.graphics.LinearGradient(
+                                            x + offsetX,
+                                            thumbnailTop + offsetY,
+                                            x + offsetX + gradientSize,
+                                            thumbnailTop + offsetY + gradientSize,
+                                            shimmerGradient,
+                                            shimmerPositions,
+                                            android.graphics.Shader.TileMode.CLAMP
+                                        )
+                                    }
+
+                                         canvas.nativeCanvas.drawRect(
+                                             x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
+                                             shimmerPaint
+                                         )
+                                     }
+                                 }
+                           }
+                      drawContext.canvas.restore()
 
                      // DRAW AUDIO WAVEFORMS (sincronizado com thumbnails)
                      // ⚠️ TEMPORARIAMENTE DESATIVADO para testes de thumbnail

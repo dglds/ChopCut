@@ -11,6 +11,7 @@ import com.chopcut.data.model.VideoInfo
 import com.chopcut.data.model.ThumbnailQuality
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.data.thumbnail.ThumbnailStripManager
+import com.chopcut.data.local.PreferencesManager
 import com.chopcut.util.DispatcherProvider
 import com.chopcut.utils.VideoConstraints
 import kotlinx.coroutines.Dispatchers
@@ -79,11 +80,13 @@ class PreloadViewModel(
 
                 // Inicializar StripManager com dimensões baseadas no aspect ratio do vídeo
                 // IMPORTANTE: Usar as mesmas dimensões do TimelineEditor (60dp de largura)
-                val thumbWidth = screenWidthDp.toInt()
+                val density = getApplication<Application>().resources.displayMetrics.density
+                val thumbWidth = (60 * density).toInt().coerceAtLeast(1)
                 val thumbHeight = (thumbWidth / videoInfo.aspectRatio).toInt().coerceAtLeast(1)
-                stripManager = ThumbnailStripManager(getApplication(), thumbWidth, thumbHeight)
+                val thumbsPerStrip = PreferencesManager(getApplication()).thumbsPerStrip
+                stripManager = ThumbnailStripManager(getApplication(), thumbWidth, thumbHeight, thumbsPerStrip)
 
-                Timber.d("ThumbnailStripManager iniciado: thumbWidth=$thumbWidth, thumbHeight=$thumbHeight, aspectRatio=${videoInfo.aspectRatio}")
+                Timber.d("ThumbnailStripManager iniciado: thumbWidth=$thumbWidth, thumbHeight=$thumbHeight, thumbsPerStrip=$thumbsPerStrip, aspectRatio=${videoInfo.aspectRatio}")
 
                 val totalSegments = stripManager!!.getSegmentCount(videoInfo.durationMs)
                 // OTIMIZADO: Pré-carregar apenas os primeiros 3 segmentos (suficiente para o início)

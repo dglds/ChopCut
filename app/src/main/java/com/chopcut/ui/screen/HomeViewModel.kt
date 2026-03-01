@@ -53,6 +53,11 @@ class HomeViewModel(
         loadVideoMetadata(uri)
     }
     
+    fun clearSelectedVideo() {
+        _selectedVideoUri.value = null
+        resetState()
+    }
+    
     // Iniciar preload em background após vídeo ser validado
     private fun startPreloadInBackground(uri: Uri) {
         viewModelScope.launch {
