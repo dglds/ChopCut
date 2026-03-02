@@ -211,7 +211,7 @@ class ThumbnailViewModel(
         targetSegments: Int,
         totalSegments: Int,
         durationMs: Long
-    ): Map<Int, Bitmap> {
+    ): Map<Int, Bitmap> = kotlinx.coroutines.withContext(Dispatchers.IO) {
         val strips = mutableMapOf<Int, Bitmap>()
         val progressStages = listOf(0.0f, 0.25f, 0.5f, 0.75f, 1.0f)
         var lastReportedStage = -1
@@ -219,6 +219,7 @@ class ThumbnailViewModel(
         Timber.d("Extraindo $targetSegments segmentos com progresso em estágios")
         
         for (segIdx in 0 until targetSegments) {
+            // Verificar se a coroutine ainda está ativa
             kotlinx.coroutines.ensureActive()
             
             val strip = stripManager!!.extractSegment(uri, segIdx, durationMs, totalSegments)
