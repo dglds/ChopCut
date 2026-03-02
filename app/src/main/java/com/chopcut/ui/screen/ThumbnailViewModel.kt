@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.ensureActive
 import timber.log.Timber
 
 /**
@@ -219,9 +218,6 @@ class ThumbnailViewModel(
         Timber.d("Extraindo $targetSegments segmentos com progresso em estágios")
         
         for (segIdx in 0 until targetSegments) {
-            // Verificar se a coroutine ainda está ativa
-            kotlinx.coroutines.ensureActive()
-            
             val strip = stripManager!!.extractSegment(uri, segIdx, durationMs, totalSegments)
             if (strip != null) {
                 strips[segIdx] = strip
