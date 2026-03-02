@@ -1,6 +1,5 @@
 package com.chopcut
 
-import android.app.Application
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -31,10 +30,8 @@ import com.chopcut.ui.components.feedback.DebugToast
 import com.chopcut.ui.components.feedback.DebugViewModel
 import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.HomeScreen
+import com.chopcut.ui.screen.PreloadDataStore
 import com.chopcut.ui.screen.PreferencesScreen
-import com.chopcut.ui.screen.ThumbnailViewModel
-import com.chopcut.ui.screen.AudioViewModel
-import com.chopcut.ui.screen.PreloadViewModel
 import com.chopcut.ui.screen.TrimScreen
 import com.chopcut.ui.screen.debug.AudioWaveFormsTestScreen
 import androidx.compose.animation.EnterTransition
@@ -60,25 +57,9 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val context = LocalContext.current
-                    val application = context.applicationContext as Application
                     val preferencesManager = remember { PreferencesManager(context) }
                     val startDestination = if (preferencesManager.isFirstRun) "onboarding" else "home"
                     val navController = rememberNavController()
-
-                    // Criar as 3 ViewModels no escopo da Activity (persistem entre navegações)
-                    val thumbnailViewModel: ThumbnailViewModel = viewModel(
-                        factory = ThumbnailViewModel.ThumbnailViewModelFactory(application)
-                    )
-                    val audioViewModel: AudioViewModel = viewModel(
-                        factory = AudioViewModel.AudioViewModelFactory(application)
-                    )
-                    val preloadViewModel: PreloadViewModel = viewModel(
-                        factory = PreloadViewModel.PreloadViewModelFactory(
-                            application,
-                            thumbnailViewModel,
-                            audioViewModel
-                        )
-                    )
 
                     val debugViewModel: DebugViewModel = viewModel()
 
@@ -178,13 +159,13 @@ class MainActivity : ComponentActivity() {
                             ) { backStackEntry ->
                                 val videoUriString = backStackEntry.arguments?.getString("videoUri")
                                 val videoUri = videoUriString?.let { Uri.parse(it) }
+                                val preloadedData = PreloadDataStore.getData()
 
                                 TrimScreen(
                                     videoUri = videoUri ?: Uri.EMPTY,
-                                    preloadViewModel = preloadViewModel,
-                                    thumbnailViewModel = thumbnailViewModel,
-                                    audioViewModel = audioViewModel,
+                                    preloadedData = preloadedData,
                                     onNavigateBack = {
+                                        PreloadDataStore.clearData()
                                         navController.popBackStack()
                                     }
                                 )
