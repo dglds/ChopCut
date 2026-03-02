@@ -1,6 +1,7 @@
 package com.chopcut
 
 import android.app.Application
+import com.chopcut.data.thumbnail.ThumbnailCacheManager
 import com.chopcut.util.logging.FileLoggingTree
 import com.chopcut.util.logging.LocalFileLoggingTree
 import timber.log.Timber
@@ -25,5 +26,8 @@ class ChopCutApplication : Application() {
             Timber.e(throwable, "FATAL: Uncaught Exception in thread: ${thread.name}")
             defaultHandler?.uncaughtException(thread, throwable)
         }
+        
+        // Inicializar ThumbnailCacheManager singleton
+        ThumbnailCacheManager.init(this)
     }
 }

@@ -1,0 +1,109 @@
+03-02 10:38:24.457  5390  5390 I TrimScreenKt$TrimScreen: === TrimScreen INITIALIZATION ===
+03-02 10:38:24.458  5390  5390 I TrimScreenKt$TrimScreen: preloadedData = null
+03-02 10:38:24.458  5390  5390 I TrimScreenKt$TrimScreen: isDataAlreadyCached = false
+03-02 10:38:24.459  5390  5390 I TrimScreenKt$TrimScreen: showLoadingOverlay = true
+03-02 10:38:24.459  5390  5390 I TrimScreenKt$TrimScreen: preloadUiState initial = Loading
+03-02 10:38:24.459  5390  5390 I TrimScreenKt$TrimScreen: isDataAlreadyCached mudou para: false
+03-02 10:38:24.460  5390  5390 I TrimScreenKt$TrimScreen: === LoadingOverlay LaunchedEffect STARTED ===
+03-02 10:38:24.460  5390  5390 I TrimScreenKt$TrimScreen: showLoadingOverlay = true, isDataAlreadyCached = false
+03-02 10:38:24.460  5390  5390 I TrimScreenKt$TrimScreen: Monitorando overlay (startTime = 1772458704460, minLoadingDuration = 2000ms)
+03-02 10:38:24.460  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:24.461  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=0ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:24.571  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:24.571  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=111ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:24.717  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:24.717  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=256ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:24.840  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:24.841  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=379ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:24.947  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:24.948  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=486ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:25.053  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:25.053  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=592ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:25.165  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:25.166  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=704ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:25.272  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:25.272  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=811ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:25.378  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:25.379  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=918ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:25.481  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:25.482  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=1020ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:25.588  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:25.588  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=1127ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:25.692  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:25.693  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=1231ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:25.800  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:25.801  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=1340ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:25.902  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:25.903  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=1441ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:26.010  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:26.010  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=1549ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:26.112  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:26.112  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=1652ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:26.214  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:26.215  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=1754ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:26.321  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:26.321  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=1861ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:26.423  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=false, thumbnails=false, audio=false
+03-02 10:38:26.424  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=1962ms, minDuration=2000ms, minTime=false, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:26.533  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:26.534  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=2072ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:26.636  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:26.636  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=2174ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:26.743  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:26.744  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=2283ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:26.845  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:26.846  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=2385ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:26.948  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:26.948  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=2487ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:27.053  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:27.054  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=2593ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:27.155  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:27.155  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=2694ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:27.257  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:27.257  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=2796ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:27.364  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:27.364  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=2903ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:27.466  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:27.466  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=3005ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:27.568  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:27.568  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=3107ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:27.675  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:27.675  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=3214ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:27.777  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:27.777  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=3316ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:27.880  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:27.881  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=3419ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:27.986  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:27.986  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=3526ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:28.088  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:28.088  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=3627ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:28.189  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:28.191  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=3729ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:28.297  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:28.298  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=3837ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:28.399  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:28.400  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=3939ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:28.502  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:28.502  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=4041ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:28.607  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:28.608  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=4147ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:28.709  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:28.709  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=4249ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:28.811  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:28.811  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=4350ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:28.912  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:28.913  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=4452ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:29.019  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:29.020  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=4559ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:29.122  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:29.122  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=4661ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:29.229  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:29.230  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=4769ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:29.331  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:29.332  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=4871ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:29.434  5390  5390 V TrimScreenKt: Loading state: maxTime=false, minTime=true, thumbnails=false, audio=false
+03-02 10:38:29.434  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=4973ms, minDuration=2000ms, minTime=true, maxTime=false, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:29.540  5390  5390 V TrimScreenKt: Loading state: maxTime=true, minTime=true, thumbnails=false, audio=false
+03-02 10:38:29.541  5390  5390 V TrimScreenKt$TrimScreen: LoadingOverlay check: elapsed=5079ms, minDuration=2000ms, minTime=true, maxTime=true, thumbnails=0.0%, hasAudio=false, state=Loading
+03-02 10:38:29.541  5390  5390 I TrimScreenKt$TrimScreen: LoadingOverlay pronto para esconder: Max timeout (5s)
+03-02 10:38:29.642  5390  5390

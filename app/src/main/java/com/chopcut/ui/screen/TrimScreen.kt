@@ -40,42 +40,100 @@ import timber.log.Timber
 @Composable
 fun TrimScreen(
     videoUri: Uri,
-    preloadedData: PreloadedData? = null,
-    viewModel: TrimViewModel = viewModel(
-        factory = TrimViewModel.TrimViewModelFactory(videoUri, preloadedData)
-    ),
+    preloadViewModel: PreloadViewModel,
+    thumbnailViewModel: ThumbnailViewModel,
+    audioViewModel: AudioViewModel,
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
-    val preloadState by viewModel.preloadState.collectAsState()
-    val preloadedDataState by viewModel.preloadedDataFlow.collectAsState()
+    
+    // Observar PreloadViewModel (para LoadingOverlay)
+    val preloadUiState by preloadViewModel.uiState.collectAsStateWithLifecycle()
+    
+    // Observar ThumbnailViewModel (para TimelineEditor)
+    val thumbnailStrips by thumbnailViewModel.strips.collectAsStateWithLifecycle()
+    val thumbnailProgress by thumbnailViewModel.thumbnailProgress.collectAsStateWithLifecycle()
+    
+    // Observar AudioViewModel (para waveform UI)
+    val audioAmplitudes by audioViewModel.amplitudes.collectAsStateWithLifecycle()
+    val audioWaveform by audioViewModel.waveform.collectAsStateWithLifecycle()
+    
+    // Valores derivados
+    val isPreloading = preloadUiState is PreloadUiState.Loading
+    val hasAudio = audioAmplitudes.isNotEmpty()
+    val audioWaveformReady = audioViewModel.isReady()
+    
     var saveDialogState by remember { mutableStateOf(SaveDialogState()) }
     var showSaveDialog by remember { mutableStateOf(false) }
+    
+    // Criar TrimViewModel com preloadedData inicial (se disponível)
+    val viewModel: TrimViewModel = remember(videoUri) {
+        val app = context.applicationContext as Application
+        val videoRepo = VideoRepository(app)
+        
+        // Criar PreloadedData temporário com dados das ViewModels
+        val tempPreloadedData = if (thumbnailStrips.isNotEmpty() || audioAmplitudes.isNotEmpty()) {
+            PreloadedData(
+                videoInfo = com.chopcut.data.model.VideoInfo(
+                    uri = videoUri,
+                    fileName = "video.mp4",
+                    durationMs = 0,
+                    width = 0,
+                    height = 0,
+                    aspectRatio = 16f / 9f,
+                    rotation = 0,
+                    sizeBytes = 0
+                ),
+                audioAmplitudes = audioAmplitudes.toList(),
+                preloadedStrips = thumbnailStrips,
+                totalSegments = thumbnailStrips.size,
+                preloadPercentage = 1f
+            )
+        } else {
+            null
+        }
+        
+        TrimViewModel.TrimViewModelFactory(
+            videoUri = videoUri,
+            preloadedData = tempPreloadedData
+        ).create(TrimViewModel::class.java) as TrimViewModel
+    }
+    
+    // Sincronizar dados das ViewModels especializadas para TrimViewModel
+    LaunchedEffect(thumbnailStrips, audioAmplitudes) {
+        // Passar dados do AudioViewModel para TrimViewModel
+        if (audioAmplitudes.isNotEmpty()) {
+            viewModel.updateAudioAmplitudes(audioAmplitudes)
+        }
+    }
 
     // Verificar se dados já estão completos (cache hit)
-    // E se o vídeo é curto o suficiente para pular loading
-    val isDataAlreadyCached = remember(preloadedData) {
-        preloadedData?.let { data ->
-            val hasAudio = data.audioAmplitudes.isNotEmpty()
-            val hasThumbnails = data.preloadedStrips.isNotEmpty()
-            val sufficientThumbnails = if (data.totalSegments > 0) {
-                (data.preloadedStrips.size.toFloat() / data.totalSegments) >= 0.3f
-            } else {
-                false
-            }
-            val isShortVideo = data.videoInfo.durationMs < LoadingConstants.SHORT_VIDEO_THRESHOLD_MS
-            Timber.d("Cache check: audio=$hasAudio, thumbnails=$hasThumbnails, sufficient=$sufficientThumbnails, " +
-                    "duration=${data.videoInfo.durationMs / 1000}s, isShort=$isShortVideo")
-            hasAudio && hasThumbnails && sufficientThumbnails && isShortVideo
-        } ?: false
+    // Verificar apenas strips fixas (6), independente da duração do vídeo
+    val isDataAlreadyCached = remember(thumbnailStrips, audioAmplitudes) {
+        val hasThumbnails = thumbnailStrips.isNotEmpty()
+        val requiredStrips = 6  // FIXO: 6 strips
+        val sufficientThumbnails = thumbnailStrips.size >= requiredStrips
+        
+        Timber.d("Cache check: thumbnails=${thumbnailStrips.size}, " +
+                "required=$requiredStrips, sufficient=$sufficientThumbnails")
+        
+        sufficientThumbnails
     }
 
     // Estados de controle do overlay
     var showLoadingOverlay by remember { mutableStateOf(!isDataAlreadyCached) }
     var elapsedTimeMs by remember { mutableStateOf(0L) }
     var isReadyToHide by remember { mutableStateOf(false) }
-
+    
+    // DEBUG: Logar estado inicial
+    LaunchedEffect(Unit) {
+        Timber.i("=== TrimScreen INITIALIZATION ===")
+        Timber.i("preloadedData = ${preloadedData?.let { "ready (${it.videoInfo.fileName}, ${it.preloadedStrips.size} strips)" } ?: "null"}")
+        Timber.i("isDataAlreadyCached = $isDataAlreadyCached")
+        Timber.i("showLoadingOverlay = $showLoadingOverlay")
+        Timber.i("preloadUiState initial = ${preloadUiState::class.simpleName}")
+    }
     // Calcular tempo mínimo de loading dinamicamente (5% da duração do vídeo)
     val minLoadingDurationMs = remember(preloadedData) {
         preloadedData?.let { data ->
@@ -90,6 +148,7 @@ fun TrimScreen(
 
     // Se já estiver no cache, esconder o overlay imediatamente
     LaunchedEffect(isDataAlreadyCached) {
+        Timber.i("isDataAlreadyCached mudou para: $isDataAlreadyCached")
         if (isDataAlreadyCached) {
             Timber.i("Dados já em cache (vídeo curto), pulando overlay de loading")
             showLoadingOverlay = false
@@ -97,40 +156,45 @@ fun TrimScreen(
     }
 
     // Monitoramento automático para esconder overlay
-    // FIX IMPORTANTE: Removido preloadState e preloadedDataState das dependências para evitar restart do LaunchedEffect
+    // FIX IMPORTANTE: Removido preloadUiState e preloadedData das dependências para evitar restart do LaunchedEffect
     // Quando o LaunchedEffect restarta, o startTime é recalculado e o contador reseta.
     // Agora só executa quando showLoadingOverlay muda, mantendo o contador estável.
     LaunchedEffect(showLoadingOverlay, isDataAlreadyCached) {
+        Timber.i("=== LoadingOverlay LaunchedEffect STARTED ===")
+        Timber.i("showLoadingOverlay = $showLoadingOverlay, isDataAlreadyCached = $isDataAlreadyCached")
+        
         if (!showLoadingOverlay || isDataAlreadyCached) {
+            Timber.i("Pulando monitoramento do overlay")
             return@LaunchedEffect
         }
-
+ 
         val startTime = System.currentTimeMillis()
-
+        Timber.i("Monitorando overlay (startTime = $startTime, minLoadingDuration = ${minLoadingDurationMs}ms)")
+ 
         while (showLoadingOverlay) {
             elapsedTimeMs = System.currentTimeMillis() - startTime
             val minTimeReached = elapsedTimeMs >= minLoadingDurationMs
             val maxTimeReached = elapsedTimeMs >= LoadingConstants.MAX_LOADING_DURATION_MS
-
-            val thumbnailProgress = calculateThumbnailProgress(preloadedDataState)
+ 
+            val thumbnailProgress = calculateThumbnailProgress(preloadedData)
             val hasSufficientThumbnails = thumbnailProgress > LoadingConstants.MINIMUM_THUMBNAIL_PROGRESS
-            val hasAudio = preloadedDataState?.audioAmplitudes?.isNotEmpty() ?: false
-
+            val hasAudio = preloadedData?.audioAmplitudes?.isNotEmpty() ?: false
+ 
             val shouldHideOverlay = shouldHideLoadingOverlay(
-                state = preloadState,
+                state = preloadUiState,
                 minTimeReached = minTimeReached,
                 maxTimeReached = maxTimeReached,
                 hasSufficientThumbnails = hasSufficientThumbnails,
                 hasAudio = hasAudio
             )
-
+ 
             Timber.v("LoadingOverlay check: elapsed=${elapsedTimeMs}ms, minDuration=${minLoadingDurationMs}ms, " +
                     "minTime=$minTimeReached, maxTime=$maxTimeReached, thumbnails=$thumbnailProgress%, " +
-                    "state=${preloadState::class.simpleName}")
-
+                    "hasAudio=$hasAudio, state=${preloadUiState::class.simpleName}")
+ 
             if (shouldHideOverlay) {
                 val reason = getHideReason(
-                    state = preloadState,
+                    state = preloadUiState,
                     maxTimeReached = maxTimeReached,
                     minTimeReached = minTimeReached,
                     hasSufficientThumbnails = hasSufficientThumbnails,
@@ -138,17 +202,18 @@ fun TrimScreen(
                     thumbnailProgress = thumbnailProgress
                 )
                 Timber.i("LoadingOverlay pronto para esconder: $reason")
-
+ 
                 isReadyToHide = true
                 delay(LoadingConstants.CROSS_FADE_START_DELAY_MS)
                 showLoadingOverlay = false
                 Timber.i("LoadingOverlay escondido: $reason")
                 break
             }
-
+ 
             delay(LoadingConstants.LOADING_CHECK_INTERVAL_MS)
         }
     }
+
 
     // Cancelar preload ao pressionar voltar durante loading
     BackHandler(enabled = showLoadingOverlay) {
@@ -317,7 +382,7 @@ fun TrimScreen(
                 // LoadingOverlay renderizado quando visível
                 if (showLoadingOverlay) {
                     LoadingOverlay(
-                        progress = when (val state = preloadState) {
+                        progress = when (val state = preloadUiState) {
                             is PreloadUiState.Loading -> state.progress
                             else -> PreloadProgress(stage = ExtractionStage.Starting)
                         },
