@@ -99,6 +99,7 @@ import timber.log.Timber
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    preloadViewModel: PreloadViewModel,
     onNavigateToEditor: (Uri) -> Unit = {},
     onNavigateToTests: () -> Unit = {},
     onNavigateToPreferences: () -> Unit = {},
@@ -111,8 +112,9 @@ fun HomeScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedUri by viewModel.selectedVideoUri.collectAsStateWithLifecycle()
-    val preloadState by viewModel.preloadState.collectAsStateWithLifecycle()
-    val preloadedData by viewModel.preloadedData.collectAsStateWithLifecycle()
+    
+    // Observar PreloadViewModel
+    val preloadUiState by preloadViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showGallery by remember { mutableStateOf(false) }
@@ -165,17 +167,31 @@ fun HomeScreen(
                     Spacer(Modifier.height(ChopCutSpacing.xs))
         
                      val uri = selectedUri
+                    
+                    // Iniciar preload ao selecionar vídeo
+                    LaunchedEffect(uri) {
+                        if (uri != null && uiState is HomeUiState.VideoLoaded) {
+                            Timber.d("Video loaded, starting preload with 6 strips")
+                            preloadViewModel.startPreload(uri, stripsToPreload = 6)
+                        }
+                    }
+                    
                     when {
                         uri != null && uiState is HomeUiState.VideoLoaded -> {
                             VideoPickerLoaded(
                                 videoInfo = (uiState as HomeUiState.VideoLoaded).videoInfo,
                                 videoUri = uri,
+                                isPreloading = preloadUiState is PreloadUiState.Loading,
+                                isReady = preloadViewModel.isPreloadReady(6),
                                 onChangeVideo = requestGallery,
                                 onOpenEditor = {
-                                    // NAVEGAR IMEDIATAMENTE (sem esperar)
-                                    onNavigateToEditor(uri)
+                                    // Só navegar se estiver pronto
+                                    if (preloadViewModel.isPreloadReady(6)) {
+                                        onNavigateToEditor(uri)
+                                    }
                                 },
                                 onRemoveVideo = {
+                                    preloadViewModel.cancelPreload()
                                     viewModel.clearSelectedVideo()
                                 }
                             )
@@ -206,11 +222,11 @@ fun HomeScreen(
         
                 item { Spacer(Modifier.height(ChopCutSpacing.md)) }
             }
-
+ 
             // Debug logging de preload
             if (com.chopcut.BuildConfig.DEBUG && debugViewModel != null) {
-                if (preloadState is PreloadUiState.Loading) {
-                    val progress = (preloadState as PreloadUiState.Loading).progress
+                if (preloadUiState is PreloadUiState.Loading) {
+                    val progress = (preloadUiState as PreloadUiState.Loading).progress
                     LaunchedEffect(progress.logs) {
                         progress.logs.forEach { log ->
                             debugViewModel.log(log)
@@ -336,6 +352,8 @@ private fun VideoPickerLoading() {
 private fun VideoPickerLoaded(
     videoInfo: VideoInfo,
     videoUri: Uri,
+    isPreloading: Boolean,
+    isReady: Boolean,
     onChangeVideo: () -> Unit,
     onOpenEditor: () -> Unit,
     onRemoveVideo: () -> Unit
@@ -428,26 +446,37 @@ private fun VideoPickerLoaded(
                     modifier = Modifier
                         .weight(1f)
                         .height(40.dp)
-                        .background(Primary, RoundedCornerShape(12.dp))
-                        .clickable(onClick = onOpenEditor),
+                        .background(
+                            if (isReady) Primary else Color.Gray,
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickable(enabled = isReady, onClick = onOpenEditor),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xxs),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = OnPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "Editar",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Medium,
+                    if (isPreloading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
                             color = OnPrimary
                         )
+                    } else {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xxs),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = OnPrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Editar",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Medium,
+                                color = OnPrimary
+                            )
+                        }
                     }
                 }
                 Box(
