@@ -30,8 +30,10 @@ import com.chopcut.ui.components.feedback.DebugToast
 import com.chopcut.ui.components.feedback.DebugViewModel
 import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.HomeScreen
-import com.chopcut.ui.screen.PreloadDataStore
 import com.chopcut.ui.screen.PreferencesScreen
+import com.chopcut.ui.screen.ThumbnailViewModel
+import com.chopcut.ui.screen.AudioViewModel
+import com.chopcut.ui.screen.PreloadViewModel
 import com.chopcut.ui.screen.TrimScreen
 import com.chopcut.ui.screen.debug.AudioWaveFormsTestScreen
 import androidx.compose.animation.EnterTransition
@@ -60,6 +62,21 @@ class MainActivity : ComponentActivity() {
                     val preferencesManager = remember { PreferencesManager(context) }
                     val startDestination = if (preferencesManager.isFirstRun) "onboarding" else "home"
                     val navController = rememberNavController()
+
+                    // Criar as 3 ViewModels no escopo da Activity (persistem entre navegações)
+                    val thumbnailViewModel: ThumbnailViewModel = viewModel(
+                        factory = ThumbnailViewModel.ThumbnailViewModelFactory(context)
+                    )
+                    val audioViewModel: AudioViewModel = viewModel(
+                        factory = AudioViewModel.AudioViewModelFactory(context)
+                    )
+                    val preloadViewModel: PreloadViewModel = viewModel(
+                        factory = PreloadViewModel.PreloadViewModelFactory(
+                            context,
+                            thumbnailViewModel,
+                            audioViewModel
+                        )
+                    )
 
                     val debugViewModel: DebugViewModel = viewModel()
 
@@ -105,6 +122,7 @@ class MainActivity : ComponentActivity() {
                                 popExitTransition = { navFadeOut }
                             ) {
                                 HomeScreen(
+                                    preloadViewModel = preloadViewModel,
                                     onNavigateToEditor = { videoUri ->
                                         val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
                                         navController.navigate("editor?videoUri=$encodedUri")
@@ -159,13 +177,13 @@ class MainActivity : ComponentActivity() {
                             ) { backStackEntry ->
                                 val videoUriString = backStackEntry.arguments?.getString("videoUri")
                                 val videoUri = videoUriString?.let { Uri.parse(it) }
-                                val preloadedData = PreloadDataStore.getData()
 
                                 TrimScreen(
                                     videoUri = videoUri ?: Uri.EMPTY,
-                                    preloadedData = preloadedData,
+                                    preloadViewModel = preloadViewModel,
+                                    thumbnailViewModel = thumbnailViewModel,
+                                    audioViewModel = audioViewModel,
                                     onNavigateBack = {
-                                        PreloadDataStore.clearData()
                                         navController.popBackStack()
                                     }
                                 )
