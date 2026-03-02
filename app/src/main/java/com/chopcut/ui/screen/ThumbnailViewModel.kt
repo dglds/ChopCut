@@ -237,7 +237,7 @@ class ThumbnailViewModel(
                 }
             }
         }
-        
+         
         // Garantir que 100% seja reportado
         if (lastReportedStage < progressStages.size - 1) {
             _thumbnailProgress.value = 1f
@@ -245,7 +245,7 @@ class ThumbnailViewModel(
         }
         
         Timber.d("Strips carregadas: ${strips.size}/$targetSegments")
-        return strips
+        strips  // withContext retorna isso automaticamente
     }
     
     override fun onCleared() {

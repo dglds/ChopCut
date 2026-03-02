@@ -124,7 +124,6 @@ class MainActivity : ComponentActivity() {
                                 popExitTransition = { navFadeOut }
                             ) {
                                 HomeScreen(
-                                    preloadViewModel = preloadViewModel,
                                     onNavigateToEditor = { videoUri ->
                                         val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
                                         navController.navigate("editor?videoUri=$encodedUri")
