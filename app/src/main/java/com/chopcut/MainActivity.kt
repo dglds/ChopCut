@@ -59,20 +59,21 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val context = LocalContext.current
+                    val application = context.applicationContext as Application
                     val preferencesManager = remember { PreferencesManager(context) }
                     val startDestination = if (preferencesManager.isFirstRun) "onboarding" else "home"
                     val navController = rememberNavController()
 
                     // Criar as 3 ViewModels no escopo da Activity (persistem entre navegações)
                     val thumbnailViewModel: ThumbnailViewModel = viewModel(
-                        factory = ThumbnailViewModel.ThumbnailViewModelFactory(context)
+                        factory = ThumbnailViewModel.ThumbnailViewModelFactory(application)
                     )
                     val audioViewModel: AudioViewModel = viewModel(
-                        factory = AudioViewModel.AudioViewModelFactory(context)
+                        factory = AudioViewModel.AudioViewModelFactory(application)
                     )
                     val preloadViewModel: PreloadViewModel = viewModel(
                         factory = PreloadViewModel.PreloadViewModelFactory(
-                            context,
+                            application,
                             thumbnailViewModel,
                             audioViewModel
                         )

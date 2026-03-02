@@ -219,7 +219,7 @@ class ThumbnailViewModel(
         Timber.d("Extraindo $targetSegments segmentos com progresso em estágios")
         
         for (segIdx in 0 until targetSegments) {
-            ensureActive()
+            kotlinx.coroutines.ensureActive()
             
             val strip = stripManager!!.extractSegment(uri, segIdx, durationMs, totalSegments)
             if (strip != null) {

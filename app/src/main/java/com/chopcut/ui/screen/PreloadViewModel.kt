@@ -119,8 +119,29 @@ class PreloadViewModel(
                 
                 Timber.d("Step 4: Audio waveform loaded")
                 
-                // 3. Marcar como Ready
-                _uiState.value = PreloadUiState.Ready(null)
+                // 3. Marcar como Ready (criar PreloadedData com dados das ViewModels)
+                val preloadedData = PreloadedData(
+                    videoInfo = com.chopcut.data.model.VideoInfo(
+                        uri = uri,
+                        fileName = "video.mp4",
+                        mimeType = "video/mp4",
+                        durationUs = 0,
+                        width = 0,
+                        height = 0,
+                        rotation = 0,
+                        bitrate = 0,
+                        frameRate = 30,
+                        videoCodec = null,
+                        audioCodec = null,
+                        hasAudio = audioVM.amplitudes.value.size > 0,
+                        sizeBytes = 0
+                    ),
+                    audioAmplitudes = audioVM.amplitudes.value,
+                    preloadedStrips = thumbnailVM.strips.value,
+                    totalSegments = thumbnailVM.strips.value.size,
+                    preloadPercentage = 1f
+                )
+                _uiState.value = PreloadUiState.Ready(preloadedData)
                 
                 Timber.d("=== PreloadViewModel.startPreload COMPLETED ===")
                 

@@ -1,6 +1,7 @@
 package com.chopcut.ui.screen
 
 import android.net.Uri
+import android.app.Application
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -16,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.chopcut.ui.components.loading.LoadingConstants
@@ -46,7 +48,7 @@ fun TrimScreen(
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val state by viewModel.state.collectAsState()
+    val app = remember { context.applicationContext as Application }
     
     // Observar PreloadViewModel (para LoadingOverlay)
     val preloadUiState by preloadViewModel.uiState.collectAsStateWithLifecycle()
@@ -59,30 +61,26 @@ fun TrimScreen(
     val audioAmplitudes by audioViewModel.amplitudes.collectAsStateWithLifecycle()
     val audioWaveform by audioViewModel.waveform.collectAsStateWithLifecycle()
     
-    // Valores derivados
-    val isPreloading = preloadUiState is PreloadUiState.Loading
-    val hasAudio = audioAmplitudes.isNotEmpty()
-    val audioWaveformReady = audioViewModel.isReady()
-    
-    var saveDialogState by remember { mutableStateOf(SaveDialogState()) }
-    var showSaveDialog by remember { mutableStateOf(false) }
-    
     // Criar TrimViewModel com preloadedData inicial (se disponível)
     val viewModel: TrimViewModel = remember(videoUri) {
-        val app = context.applicationContext as Application
         val videoRepo = VideoRepository(app)
         
         // Criar PreloadedData temporário com dados das ViewModels
-        val tempPreloadedData = if (thumbnailStrips.isNotEmpty() || audioAmplitudes.isNotEmpty()) {
+        val tempPreloadedData = if (!thumbnailStrips.isEmpty() || !audioAmplitudes.isEmpty()) {
             PreloadedData(
                 videoInfo = com.chopcut.data.model.VideoInfo(
                     uri = videoUri,
                     fileName = "video.mp4",
-                    durationMs = 0,
+                    mimeType = "video/mp4",
+                    durationUs = 0,
                     width = 0,
                     height = 0,
-                    aspectRatio = 16f / 9f,
                     rotation = 0,
+                    bitrate = 0,
+                    frameRate = 30,
+                    videoCodec = null,
+                    audioCodec = null,
+                    hasAudio = !audioAmplitudes.isEmpty(),
                     sizeBytes = 0
                 ),
                 audioAmplitudes = audioAmplitudes.toList(),
@@ -100,10 +98,20 @@ fun TrimScreen(
         ).create(TrimViewModel::class.java) as TrimViewModel
     }
     
+    val state by viewModel.state.collectAsState()
+    
+    // Valores derivados
+    val isPreloading = preloadUiState is PreloadUiState.Loading
+    val hasAudio = !audioAmplitudes.isEmpty()
+    val audioWaveformReady = audioViewModel.isReady()
+    
+    var saveDialogState by remember { mutableStateOf(SaveDialogState()) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    
     // Sincronizar dados das ViewModels especializadas para TrimViewModel
     LaunchedEffect(thumbnailStrips, audioAmplitudes) {
         // Passar dados do AudioViewModel para TrimViewModel
-        if (audioAmplitudes.isNotEmpty()) {
+        if (!audioAmplitudes.isEmpty()) {
             viewModel.updateAudioAmplitudes(audioAmplitudes)
         }
     }
@@ -111,7 +119,7 @@ fun TrimScreen(
     // Verificar se dados já estão completos (cache hit)
     // Verificar apenas strips fixas (6), independente da duração do vídeo
     val isDataAlreadyCached = remember(thumbnailStrips, audioAmplitudes) {
-        val hasThumbnails = thumbnailStrips.isNotEmpty()
+        val hasThumbnails = !thumbnailStrips.isEmpty()
         val requiredStrips = 6  // FIXO: 6 strips
         val sufficientThumbnails = thumbnailStrips.size >= requiredStrips
         
