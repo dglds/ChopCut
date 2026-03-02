@@ -4,13 +4,10 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.chopcut.data.audio.AudioDataExtractor
-import com.chopcut.data.audio.WaveFormGenerator
-import com.chopcut.ui.components.WaveformData
-import com.chopcut.data.repository.VideoRepository
 import com.chopcut.data.model.TimeRange
 import com.chopcut.data.model.VideoInfo
 import com.chopcut.data.pipeline.TransformerPipeline
+import com.chopcut.data.repository.VideoRepository
 import com.chopcut.util.DispatcherProvider
 import com.chopcut.util.error.ErrorHandler
 import com.chopcut.util.error.RecoveryStrategy
@@ -19,20 +16,27 @@ import com.chopcut.utils.VideoConstraints
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
+/**
+ * ViewModel para HomeScreen.
+ * 
+ * Responsabilidades:
+ * - Gerenciar seleção de vídeo
+ * - Carregar metadados do vídeo
+ * - Gerenciar estado da UI (Loading, VideoLoaded, Error)
+ * - Testar funcionalidade de trim
+ * 
+ * NOTA: O pré-carregamento de thumbnails e áudio é gerenciado
+ * pela PreloadViewModel (Activity-scoped), não por esta ViewModel.
+ */
 class HomeViewModel(
     application: Application,
     private val videoRepository: VideoRepository
 ) : AndroidViewModel(application) {
 
     private val transformerPipeline = TransformerPipeline(application, videoRepository)
-    private val audioDataExtractor = AudioDataExtractor(application)
-    
-    // PreloadViewModel para extração em background
-    private val preloadViewModel = PreloadViewModel(application, videoRepository)
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Initial)
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -40,11 +44,6 @@ class HomeViewModel(
     private val _selectedVideoUri = MutableStateFlow<Uri?>(null)
     val selectedVideoUri: StateFlow<Uri?> = _selectedVideoUri.asStateFlow()
     
-    // Estado do preload
-    val preloadState = preloadViewModel.uiState
-    val preloadedData = preloadViewModel.preloadedData
-
-    // Structured error state
     private val _errorState = MutableStateFlow<ErrorHandler.ErrorState?>(null)
     val errorState: StateFlow<ErrorHandler.ErrorState?> = _errorState.asStateFlow()
 
@@ -58,24 +57,6 @@ class HomeViewModel(
         resetState()
     }
     
-    // Iniciar preload em background após vídeo ser validado
-    private fun startPreloadInBackground(uri: Uri) {
-        viewModelScope.launch {
-            // Aguardar um pouco para UI atualizar primeiro
-            kotlinx.coroutines.delay(100)
-            preloadViewModel.startPreload(uri, 180f)
-            
-            // Observar o preloadState para salvar os dados no PreloadDataStore quando prontos
-            preloadViewModel.uiState.collectLatest { state ->
-                if (state is PreloadUiState.Ready) {
-                    // Salvar dados no PreloadDataStore para TrimScreen
-                    PreloadDataStore.setData(state.data)
-                    Timber.d("Preloaded data saved to PreloadDataStore: ${state.data.preloadedStrips.size} strips")
-                }
-            }
-        }
-    }
-
     private fun loadVideoMetadata(uri: Uri) {
         viewModelScope.launch(DispatcherProvider.io) {
             _uiState.value = HomeUiState.Loading
@@ -103,8 +84,7 @@ class HomeViewModel(
                         } else {
                             _uiState.value = HomeUiState.VideoLoaded(metadata)
                             Timber.d("Video loaded: ${metadata.fileName}")
-                            // INICIAR PRELOAD EM BACKGROUND IMEDIATAMENTE
-                            startPreloadInBackground(uri)
+                            // NOTA: HomeScreen vai chamar PreloadViewModel.startPreload()
                         }
                     } else {
                         _errorState.value = ErrorHandler.ErrorState(
@@ -128,7 +108,7 @@ class HomeViewModel(
             _errorState.value = ErrorHandler.ErrorState(
                 title = "Nenhum vídeo selecionado",
                 message = "Selecione um vídeo primeiro",
-                recovery = com.chopcut.util.error.RecoveryStrategy.SelectAnotherVideo
+                recovery = RecoveryStrategy.SelectAnotherVideo
             )
             return
         }
@@ -173,17 +153,6 @@ class HomeViewModel(
 
     fun resetState() {
         _uiState.value = HomeUiState.Initial
-        // Cancelar preload ao resetar
-        preloadViewModel.cancelPreload()
-        PreloadDataStore.clearData()
-    }
-    
-    fun cancelPreload() {
-        preloadViewModel.cancelPreload()
-    }
-    
-    fun isPreloadReady(): Boolean {
-        return preloadState.value is PreloadUiState.Ready
     }
 }
 
