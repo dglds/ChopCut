@@ -21,6 +21,18 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
+/**
+ * ViewModel para TrimScreen.
+ * 
+ * Responsabilidades:
+ * - Gerenciar estado do editor de trim (posições, duração, trim ranges)
+ * - Carregar waveform de áudio
+ * - Gerenciar posição atual do playhead
+ * - Receber dados preloaded de AudioViewModel
+ * 
+ * NOTA: O pré-carregamento de thumbnails e áudio é gerenciado
+ * pela PreloadViewModel (Activity-scoped), não por esta ViewModel.
+ */
 class TrimViewModel(
     application: Application,
     private val videoUri: Uri?,
@@ -63,35 +75,17 @@ class TrimViewModel(
     val state: StateFlow<TrimEditorState> = _state.asStateFlow()
 
     private var waveformQuality: WaveformQuality = WaveformQuality.Medium
-
     private val audioDataExtractor = AudioDataExtractor(application)
-
-    // Preload management
     private val videoRepository = VideoRepository(application)
-    private val preloadViewModel = PreloadViewModel(application, videoRepository)
-
-    val preloadState: StateFlow<PreloadUiState> = preloadViewModel.uiState
-    val preloadedDataFlow: StateFlow<PreloadedData?> = preloadViewModel.preloadedData
 
     init {
-        if (initialAudioAmplitudes == null && initialPreloadedStrips == null) {
-            videoUri?.let { uri ->
-                val screenWidthDp = 60f
-                Timber.d("TrimViewModel: Iniciando preload (dados não fornecidos, screenWidthDp=$screenWidthDp)")
-                preloadViewModel.startPreload(uri, screenWidthDp)
-            }
-        } else {
-            Timber.d("TrimViewModel: preloadedData já disponível, pulando preload")
-        }
-    }
-
-    fun cancelPreload() {
-        preloadViewModel.cancelPreload()
-    }
-    
-    override fun onCleared() {
-        super.onCleared()
-        preloadViewModel.cancelPreload()
+        Timber.d("=== TrimViewModel INIT ===")
+        Timber.d("initialAudioAmplitudes = ${initialAudioAmplitudes?.size ?: "null"}")
+        Timber.d("initialPreloadedStrips = ${initialPreloadedStrips?.size ?: "null"}")
+        Timber.d("videoUri = $videoUri")
+        
+        // NOTA: PreloadViewModel (Activity-scoped) gerencia o preload
+        // Esta ViewModel não inicia preload próprio
     }
 
     fun setWaveformQuality(quality: WaveformQuality) {
@@ -167,6 +161,18 @@ class TrimViewModel(
                 _state.update { it.copy(audioWaveformsAmplitudes = emptyList(), isAudioWaveformsLoading = false) }
             }
         }
+    }
+    
+    /**
+     * Atualiza as amplitudes de áudio.
+     * Usado para sincronizar dados do AudioViewModel.
+     */
+    fun updateAudioAmplitudes(amplitudes: List<Float>) {
+        Timber.d("TrimViewModel: Updating audio amplitudes - ${amplitudes.size} samples")
+        
+        _state.update { it.copy(
+            audioWaveformsAmplitudes = amplitudes
+        ) }
     }
 
     fun addPosition(pos: Long) {
