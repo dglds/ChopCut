@@ -41,8 +41,7 @@ class TrimViewModel(
 ) : AndroidViewModel(application) {
 
     class TrimViewModelFactory(
-        private val videoUri: Uri?,
-        private val preloadedData: PreloadedData?
+        private val videoUri: Uri?
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -62,8 +61,8 @@ class TrimViewModel(
                     return TrimViewModel(
                         application = app,
                         videoUri = videoUri,
-                        initialAudioAmplitudes = preloadedData?.audioAmplitudes,
-                        initialPreloadedStrips = preloadedData?.preloadedStrips
+                        initialAudioAmplitudes = null,
+                        initialPreloadedStrips = null
                     ) as T
                 }
             }

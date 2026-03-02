@@ -38,7 +38,7 @@ class PreferencesManager(context: Context) {
      * Cache de thumbnails habilitado (INATIVO por padrão)
      */
     var thumbnailCacheEnabled: Boolean
-        get() = prefs.getBoolean(KEY_THUMBNAIL_CACHE_ENABLED, false)
+        get() = prefs.getBoolean(KEY_THUMBNAIL_CACHE_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_THUMBNAIL_CACHE_ENABLED, value).apply()
 
     /**

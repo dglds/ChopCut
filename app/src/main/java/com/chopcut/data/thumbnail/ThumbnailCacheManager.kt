@@ -8,6 +8,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -282,20 +285,41 @@ object ThumbnailCacheManager {
         }
         
         val strips = mutableMapOf<Int, Bitmap>()
-        
-        // Carregar segmentos iniciais prioritários de forma síncrona
-        Timber.d("Starting preload for $uri: $initialSegments initial segments out of $segmentCount total")
-        for (segIdx in 0 until minOf(initialSegments, segmentCount)) {
-            val strip = getStrip(uri, segIdx, durationMs, thumbWidth, thumbHeight, thumbsPerStrip)
-            if (strip != null) {
-                strips[segIdx] = strip
-                Timber.d("Preloaded segment $segIdx/$segmentCount")
-            } else {
-                Timber.w("Failed to preload segment $segIdx/$segmentCount")
+
+        // Carregar segmentos iniciais prioritários de forma PARALELA
+        Timber.d("Starting PARALLEL preload for $uri: $initialSegments initial segments out of $segmentCount total")
+        val preloadStartTime = System.currentTimeMillis()
+
+        // Usar coroutineScope para criar escopo estruturado para async
+        coroutineScope {
+            // Lançar todas as extrações em paralelo usando async
+            val jobs = (0 until minOf(initialSegments, segmentCount)).map { segIdx ->
+                async(Dispatchers.IO) {
+                    try {
+                        val strip = getStrip(uri, segIdx, durationMs, thumbWidth, thumbHeight, thumbsPerStrip)
+                        if (strip != null) {
+                            segIdx to strip
+                        } else {
+                            Timber.w("Failed to preload segment $segIdx/$segmentCount")
+                            null
+                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "Error preloading segment $segIdx")
+                        null
+                    }
+                }
+            }
+
+            // Aguardar conclusão de todas as extrações e adicionar ao mapa
+            jobs.awaitAll().filterNotNull().forEach { (idx, bitmap) ->
+                strips[idx] = bitmap
+                Timber.d("Preloaded segment $idx/$segmentCount")
             }
         }
-        
-        Timber.d("Preload completed: ${strips.size} segments loaded")
+
+        val preloadElapsedMs = System.currentTimeMillis() - preloadStartTime
+        val avgTimePerStrip = if (strips.isNotEmpty()) preloadElapsedMs / strips.size else 0
+        Timber.i("⚡ PARALLEL PRELOAD completed: ${strips.size}/${initialSegments} segments in ${preloadElapsedMs}ms (avg: ${avgTimePerStrip}ms/strip)")
         
         return strips
     }

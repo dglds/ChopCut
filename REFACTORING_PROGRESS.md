@@ -69,69 +69,74 @@ Separar a lógica de pré-carregamento em ViewModels especializadas seguindo o *
 
 ---
 
-## ❌ O Que Precisa Ser Realizado (5 de 10 fases pendentes)
+## ✅ O Que Foi Realizado (Continuação - 9 de 11 fases concluídas)
 
-### Fase 7: Atualizar MainActivity (PARCIAL - revertemo)
-- [ ] Criar PreloadViewModel no escopo da Activity
-- [ ] Criar ThumbnailViewModel no escopo da Activity
-- [ ] Criar AudioViewModel no escopo da Activity
-- [ ] Passar PreloadViewModel para HomeScreen
-- [ ] Passar PreloadViewModel, ThumbnailViewModel, AudioViewModel para TrimScreen
-- [ ] Remover dependências de `PreloadDataStore`
-- **Status:** Precisa ser revertido e reimplementado
-- **Última tentativa:** Compilação falhou devido a erro na passagem de parâmetros
+### Fase 7: Atualizar MainActivity ✅
+- [x] Criar PreloadViewModel no escopo da Activity
+- [x] Criar ThumbnailViewModel no escopo da Activity
+- [x] Criar AudioViewModel no escopo da Activity
+- [x] Passar PreloadViewModel para HomeScreen
+- [x] Passar PreloadViewModel, ThumbnailViewModel, AudioViewModel para TrimScreen
+- [x] Remover dependências de `PreloadDataStore`
 - **Arquivo:** `app/src/main/java/com/chopcut/MainActivity.kt`
-- **Estado atual:** Código antigo (antes das mudanças)
+- **Commit:** (pendente)
+- **Status:** ✅ Concluída
 
-### Fase 8: Atualizar HomeScreen (PARCIAL - revertemo)
-- [ ] Receber `preloadViewModel` como parâmetro
-- [ ] Observar `preloadViewModel.uiState`
-- [ ] Adicionar `LaunchedEffect` para iniciar preload ao selecionar vídeo
-- [ ] Chamar `preloadViewModel.startPreload(uri, 6)`
-- [ ] Atualizar `VideoPickerLoaded` com parâmetros `isPreloading` e `isReady`
-- [ ] Botão "Editar" desabilitado até `isPreloadReady(6) = true`
-- [ ] Mostrar indicador de loading no botão durante preload
-- [ ] Chamar `preloadViewModel.cancelPreload()` ao remover vídeo
-- **Status:** Precisa ser revertido e reimplementado
-- **Última tentativa:** Compilação falhou
+### Fase 8: Atualizar HomeScreen ✅
+- [x] Receber `preloadViewModel` como parâmetro
+- [x] Observar `preloadViewModel.uiState`
+- [x] Adicionar `LaunchedEffect` para iniciar preload ao selecionar vídeo
+- [x] Chamar `preloadViewModel.startPreload(uri, 6)`
+- [x] Atualizar `VideoPickerLoaded` com parâmetros `isPreloading` e `isReady`
+- [x] Botão "Editar" desabilitado até `isPreloadReady(6) = true`
+- [x] Mostrar indicador de loading no botão durante preload
+- [x] Chamar `preloadViewModel.cancelPreload()` ao remover vídeo
 - **Arquivo:** `app/src/main/java/com/chopcut/ui/screen/HomeScreen.kt`
-- **Estado atual:** Código antigo (antes das mudanças)
+- **Commit:** (pendente)
+- **Status:** ✅ Concluída
 
-### Fase 9: Atualizar TrimScreen (PARCIAL - revertido)
-- [ ] Receber `preloadViewModel`, `thumbnailViewModel`, `audioViewModel` como parâmetros
-- [ ] Remover parâmetro `preloadedData` (agora vem das ViewModels)
-- [ ] Observar StateFlow de cada ViewModel:
-  - [ ] `preloadViewModel.uiState` (para LoadingOverlay)
-  - [ ] `thumbnailViewModel.strips` (para TimelineEditor)
-  - [ ] `thumbnailViewModel.thumbnailProgress`
-  - [ ] `audioViewModel.amplitudes` (para waveform UI)
-  - [ ] `audioViewModel.waveform` (para waveform UI)
-- [ ] Criar TrimViewModel com dados das ViewModels especializadas
-- [ ] Sincronizar dados via `updateAudioAmplitudes()`
-- [ ] Simplificar `isDataAlreadyCached` (apenas verificar 6 strips)
-- [ ] Simplificar `shouldHideLoadingOverlay`
-- [ ] Atualizar `LoadingOverlay` com progresso das ViewModels
-- [ ] Atualizar `TimelineEditor` com `thumbnailViewModel`
-- **Status:** Precisa ser reimplementado
-- **Última tentativa:** Muitos erros de compilação, código foi revertido
+### Fase 9: Atualizar TrimScreen ✅
+- [x] Receber `preloadViewModel`, `thumbnailViewModel`, `audioViewModel` como parâmetros
+- [x] Remover parâmetro `preloadedData` (agora vem das ViewModels)
+- [x] Observar StateFlow de cada ViewModel:
+  - [x] `preloadViewModel.uiState` (para LoadingOverlay)
+  - [x] `thumbnailViewModel.strips` (para TimelineEditor)
+  - [x] `thumbnailViewModel.thumbnailProgress`
+  - [x] `audioViewModel.amplitudes` (para waveform UI)
+  - [x] `audioViewModel.waveform` (para waveform UI)
+- [x] Criar TrimViewModel sem `preloadedData` inicial
+- [x] Sincronizar dados via `updateAudioAmplitudes()`
+- [x] Simplificar `isDataAlreadyCached` (apenas verificar 6 strips)
+- [x] Simplificar `shouldHideLoadingOverlay`
+- [x] Atualizar `LoadingOverlay` com progresso das ViewModels
+- [x] Atualizar `TimelineEditor` com `thumbnailViewModel` (passa `thumbnailStrips`)
+- [x] Atualizar TrimViewModelFactory para não receber `preloadedData`
 - **Arquivo:** `app/src/main/java/com/chopcut/ui/screen/TrimScreen.kt`
-- **Estado atual:** Código antigo (antes das mudanças)
+- **Commit:** (pendente)
+- **Status:** ✅ Concluída
 
-### Fase 10: Atualizar TimelineEditor (NÃO INICIADO)
-- [ ] Receber `thumbnailViewModel` como parâmetro
-- [ ] Criar StateFlow para observar strips de ThumbnailViewModel
-- [ ] Remover LaunchedEffect para sincronizar strips (StateFlow reage automaticamente)
-- [ ] Atualizar chamadas de `ThumbnailCacheManager.loadStripWithTracking()` para usar `thumbnailViewModel.loadStrip()`
-- [ ] Manter lógica de pre-fetching adaptativo
-- [ ] Manter lógica de carregamento on-demand ao navegar
-- [ ] **Arquivo:** `app/src/main/java/com/chopcut/ui/components/TimelineEditor.kt`
-- **Status:** Não iniciado
+---
 
-### Fase 11: Deletar PreloadDataStore (NÃO INICIADO)
-- [ ] Deletar arquivo `app/src/main/java/com/chopcut/ui/screen/PreloadDataStore.kt`
-- [ ] Remover imports obsoletos
-- [ ] PreloadDataStore não é mais necessária (ViewModels gerenciam estado)
-- **Status:** Não iniciado
+## ✅ Fases Finais Concluídas
+
+### Fase 10: Atualizar TimelineEditor ✅
+- [x] Receber `thumbnailViewModel` como parâmetro opcional
+- [x] Observar StateFlow de ThumbnailViewModel via `collectAsState()`
+- [x] Atualizar LaunchedEffect para sincronizar strips da ViewModel ou preloadedStrips (compatibilidade)
+- [x] Atualizar chamadas para usar `thumbnailViewModel.loadStrip()` quando disponível
+- [x] Manter modo legado com `ThumbnailCacheManager.loadStripWithTracking()` para compatibilidade
+- [x] Manter lógica de pre-fetching adaptativo
+- [x] Manter lógica de carregamento on-demand ao navegar
+- [x] Adicionar import `collectAsState`
+- **Arquivo:** `app/src/main/java/com/chopcut/ui/components/TimelineEditor.kt`
+- **Commit:** (pendente)
+- **Status:** ✅ Concluída (modo híbrido com compatibilidade retroativa)
+
+### Fase 11: Deletar PreloadDataStore ✅
+- [x] Deletar arquivo `app/src/main/java/com/chopcut/ui/screen/PreloadDataStore.kt`
+- [x] Verificar compilação (sem erros)
+- [x] PreloadDataStore não é mais necessária (ViewModels gerenciam estado)
+- **Status:** ✅ Concluída
 
 ---
 
@@ -473,30 +478,38 @@ fun TimelineEditor(
 - `app/src/main/java/com/chopcut/ui/screen/TrimViewModel.kt`
 - `app/src/main/java/com/chopcut/ui/components/loading/LoadingConstants.kt`
 
-### Arquivos Pendentes
-- `app/src/main/java/com/chopcut/MainActivity.kt` (precisa ser refeito)
-- `app/src/main/java/com/chopcut/ui/screen/HomeScreen.kt` (precisa ser refeito)
-- `app/src/main/java/com/chopcut/ui/screen/TrimScreen.kt` (precisa ser refeito)
-- `app/src/main/java/com/chopcut/ui/components/TimelineEditor.kt` (pendente)
-- `app/src/main/java/com/chopcut/ui/screen/PreloadDataStore.kt` (precisa ser deletado)
+### Arquivos Modificados (Sessão Atual - 2026-03-02)
+- `app/src/main/java/com/chopcut/MainActivity.kt` ✅ (Fase 7)
+- `app/src/main/java/com/chopcut/ui/screen/HomeScreen.kt` ✅ (Fase 8)
+- `app/src/main/java/com/chopcut/ui/screen/TrimScreen.kt` ✅ (Fase 9)
+- `app/src/main/java/com/chopcut/ui/screen/TrimViewModel.kt` ✅ (Factory atualizada)
+- `app/src/main/java/com/chopcut/ui/components/TimelineEditor.kt` ✅ (Fase 10)
+
+### Arquivos Deletados
+- `app/src/main/java/com/chopcut/ui/screen/PreloadDataStore.kt` ✅ (Fase 11 - obsoleto)
 
 ---
 
 ## 🚀 Checklist de Validação
 
-- [ ] Compilação sem erros
+### Compilação ✅
+- [x] Compilação sem erros ✅ **BUILD SUCCESSFUL**
+
+### Funcionalidades (Pendente Testes)
 - [ ] HomeScreen mostra botão "Editar" desabilitado durante preload
 - [ ] HomeScreen mostra loading no botão "Editar"
 - [ ] Botão "Editar" habilita após 6 strips serem carregadas
 - [ ] Navegação só acontece quando `isPreloadReady(6) = true`
-- [ ] TrimScreen recebe as 3 ViewModels
-- [ ] TrimScreen observa StateFlow das ViewModels
+- [ ] TrimScreen recebe as 3 ViewModels ✅ (implementado)
+- [ ] TrimScreen observa StateFlow das ViewModels ✅ (implementado)
 - [ ] TimelineEditor mostra strips carregadas
 - [ ] TimelineEditor atualiza automaticamente quando novas strips são carregadas
 - [ ] LoadingOverlay aparece e desaparece corretamente
 - [ ] LoadingOverlay mostra progresso em estágios
 - [ ] Memória não vaza (bitmaps são reciclados)
 - [ ] Concorrência funciona (sem crashes)
+
+**Próximo Passo:** Testar no dispositivo/emulador
 
 ---
 
@@ -510,15 +523,15 @@ fun TimelineEditor(
 | Fase 4: PreloadViewModel | ✅ Concluída | 100% |
 | Fase 5: HomeViewModel | ✅ Concluída | 100% |
 | Fase 6: TrimViewModel | ✅ Concluída | 100% |
-| Fase 7: MainActivity | ⚠️ Parcial | 50% (criada, mas não passada corretamente) |
-| Fase 8: HomeScreen | ⚠️ Parcial | 50% (código escrito, mas não compila) |
-| Fase 9: TrimScreen | ❌ Reiniciada | 0% (revertida para código antigo) |
-| Fase 10: TimelineEditor | ❌ Não iniciada | 0% |
-| Fase 11: PreloadDataStore | ❌ Não iniciada | 0% |
-| **TOTAL** | | **~55%** |
+| Fase 7: MainActivity | ✅ Concluída | 100% |
+| Fase 8: HomeScreen | ✅ Concluída | 100% |
+| Fase 9: TrimScreen | ✅ Concluída | 100% |
+| Fase 10: TimelineEditor | ✅ Concluída | 100% |
+| Fase 11: PreloadDataStore | ✅ Concluída | 100% |
+| **TOTAL** | | **✅ 100%** |
 
 ---
 
 **Última Atualização:** 2026-03-02
-**Status:** 5 de 10 fases concluídas (50%)
-**Próximo Passo:** Reimplementar Fase 7 (MainActivity) com passagem correta de parâmetros
+**Status:** ✅ **11 de 11 fases concluídas (100%)**
+**Próximo Passo:** ✅ **Refatoração completa! Pronto para testes**

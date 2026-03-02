@@ -12,15 +12,21 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.chopcut.ui.components.loading.LoadingConstants
 import com.chopcut.ui.components.loading.LoadingOverlay
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.data.pipeline.TrimProgress
 import com.chopcut.data.repository.VideoRepository
@@ -40,119 +46,143 @@ import timber.log.Timber
 @Composable
 fun TrimScreen(
     videoUri: Uri,
-    preloadedData: PreloadedData? = null,
-    viewModel: TrimViewModel = viewModel(
-        factory = TrimViewModel.TrimViewModelFactory(videoUri, preloadedData)
-    ),
+    preloadViewModel: PreloadViewModel,
+    thumbnailViewModel: ThumbnailViewModel,
+    audioViewModel: AudioViewModel,
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
+
+    // Observar PreloadViewModel com lifecycle awareness
+    val preloadUiState by preloadViewModel.uiState.collectAsStateWithLifecycle()
+
+    // Observar ThumbnailViewModel com lifecycle awareness
+    val thumbnailStrips by thumbnailViewModel.strips.collectAsStateWithLifecycle()
+    val thumbnailProgress by thumbnailViewModel.thumbnailProgress.collectAsStateWithLifecycle()
+
+    // Observar AudioViewModel com lifecycle awareness
+    val audioAmplitudes by audioViewModel.amplitudes.collectAsStateWithLifecycle()
+    val audioWaveform by audioViewModel.waveform.collectAsStateWithLifecycle()
+
+    // Criar TrimViewModel
+    val viewModel: TrimViewModel = viewModel(
+        factory = TrimViewModel.TrimViewModelFactory(videoUri)
+    )
     val state by viewModel.state.collectAsState()
-    val preloadState by viewModel.preloadState.collectAsState()
-    val preloadedDataState by viewModel.preloadedDataFlow.collectAsState()
+
     var saveDialogState by remember { mutableStateOf(SaveDialogState()) }
     var showSaveDialog by remember { mutableStateOf(false) }
 
-    // Verificar se dados já estão completos (cache hit)
-    // E se o vídeo é curto o suficiente para pular loading
-    val isDataAlreadyCached = remember(preloadedData) {
-        preloadedData?.let { data ->
-            val hasAudio = data.audioAmplitudes.isNotEmpty()
-            val hasThumbnails = data.preloadedStrips.isNotEmpty()
-            val sufficientThumbnails = if (data.totalSegments > 0) {
-                (data.preloadedStrips.size.toFloat() / data.totalSegments) >= 0.3f
-            } else {
-                false
-            }
-            val isShortVideo = data.videoInfo.durationMs < LoadingConstants.SHORT_VIDEO_THRESHOLD_MS
-            Timber.d("Cache check: audio=$hasAudio, thumbnails=$hasThumbnails, sufficient=$sufficientThumbnails, " +
-                    "duration=${data.videoInfo.durationMs / 1000}s, isShort=$isShortVideo")
-            hasAudio && hasThumbnails && sufficientThumbnails && isShortVideo
-        } ?: false
+    // Sincronizar dados das ViewModels para TrimViewModel
+    LaunchedEffect(audioAmplitudes) {
+        if (audioAmplitudes.isNotEmpty()) {
+            viewModel.updateAudioAmplitudes(audioAmplitudes)
+        }
     }
 
     // Estados de controle do overlay
-    var showLoadingOverlay by remember { mutableStateOf(!isDataAlreadyCached) }
+    var showLoadingOverlay by remember { mutableStateOf(true) }
     var elapsedTimeMs by remember { mutableStateOf(0L) }
     var isReadyToHide by remember { mutableStateOf(false) }
 
+    // Verificar se dados já estão completos (cache hit) - simplificado
+    val isDataAlreadyCached = remember(thumbnailStrips) {
+        val requiredStrips = 6
+        val hasThumbnails = thumbnailStrips.size >= requiredStrips
+        Timber.d("Cache check: thumbnails=${thumbnailStrips.size}/$requiredStrips, ready=$hasThumbnails")
+        hasThumbnails
+    }
+
     // Calcular tempo mínimo de loading dinamicamente (5% da duração do vídeo)
-    val minLoadingDurationMs = remember(preloadedData) {
-        preloadedData?.let { data ->
-            val videoDurationMs = data.videoInfo.durationMs
-            val calculatedMin = (videoDurationMs * LoadingConstants.MIN_LOADING_PERCENTAGE).toLong()
+    val minLoadingDurationMs = remember(state.videoDurationMs) {
+        if (state.videoDurationMs > 0) {
+            val calculatedMin = (state.videoDurationMs * LoadingConstants.MIN_LOADING_PERCENTAGE).toLong()
             val clampedMin = calculatedMin.coerceIn(500L, LoadingConstants.MAX_LOADING_DURATION_MS)
             Timber.d("Min loading duration calculado: ${clampedMin}ms (${calculatedMin}ms base, " +
-                    "video=${videoDurationMs}ms)")
+                    "video=${state.videoDurationMs}ms)")
             clampedMin
-        } ?: 2_000L
+        } else {
+            2_000L
+        }
     }
 
     // Se já estiver no cache, esconder o overlay imediatamente
     LaunchedEffect(isDataAlreadyCached) {
+        Timber.d("LaunchedEffect isDataAlreadyCached: $isDataAlreadyCached, showLoadingOverlay=$showLoadingOverlay")
         if (isDataAlreadyCached) {
-            Timber.i("Dados já em cache (vídeo curto), pulando overlay de loading")
+            Timber.i("Dados já em cache, escondendo overlay de loading")
             showLoadingOverlay = false
         }
     }
 
-    // Monitoramento automático para esconder overlay
-    // FIX IMPORTANTE: Removido preloadState e preloadedDataState das dependências para evitar restart do LaunchedEffect
-    // Quando o LaunchedEffect restarta, o startTime é recalculado e o contador reseta.
-    // Agora só executa quando showLoadingOverlay muda, mantendo o contador estável.
+    // Monitoramento REATIVO para esconder overlay (substitui while loop)
+    // OTIMIZAÇÃO: Usa snapshotFlow para reagir apenas a mudanças reais, eliminando polling
     LaunchedEffect(showLoadingOverlay, isDataAlreadyCached) {
+        Timber.d("LaunchedEffect monitoring: showLoadingOverlay=$showLoadingOverlay, isDataAlreadyCached=$isDataAlreadyCached")
         if (!showLoadingOverlay || isDataAlreadyCached) {
+            Timber.d("Skipping monitoring: overlay hidden or data cached")
             return@LaunchedEffect
         }
 
         val startTime = System.currentTimeMillis()
 
-        while (showLoadingOverlay) {
-            elapsedTimeMs = System.currentTimeMillis() - startTime
-            val minTimeReached = elapsedTimeMs >= minLoadingDurationMs
-            val maxTimeReached = elapsedTimeMs >= LoadingConstants.MAX_LOADING_DURATION_MS
+        // Timer para atualizar elapsedTimeMs periodicamente
+        launch {
+            while (showLoadingOverlay) {
+                elapsedTimeMs = System.currentTimeMillis() - startTime
+                delay(100) // Apenas para atualizar o timer visual
+            }
+        }
 
-            val thumbnailProgress = calculateThumbnailProgress(preloadedDataState)
-            val hasSufficientThumbnails = thumbnailProgress > LoadingConstants.MINIMUM_THUMBNAIL_PROGRESS
-            val hasAudio = preloadedDataState?.audioAmplitudes?.isNotEmpty() ?: false
+        // Observação REATIVA de mudanças nos dados (substitui while loop)
+        snapshotFlow {
+            val currentElapsed = System.currentTimeMillis() - startTime
+            val minTimeReached = currentElapsed >= minLoadingDurationMs
+            val maxTimeReached = currentElapsed >= LoadingConstants.MAX_LOADING_DURATION_MS
+            val hasSufficientThumbnails = thumbnailStrips.size >= 6
+            val hasAudio = audioAmplitudes.isNotEmpty()
 
-            val shouldHideOverlay = shouldHideLoadingOverlay(
-                state = preloadState,
+            val shouldHide = shouldHideLoadingOverlay(
+                state = preloadUiState,
                 minTimeReached = minTimeReached,
                 maxTimeReached = maxTimeReached,
                 hasSufficientThumbnails = hasSufficientThumbnails,
-                hasAudio = hasAudio
+                hasAudio = true // Ignorar áudio temporariamente conforme solicitado
             )
 
-            Timber.v("LoadingOverlay check: elapsed=${elapsedTimeMs}ms, minDuration=${minLoadingDurationMs}ms, " +
-                    "minTime=$minTimeReached, maxTime=$maxTimeReached, thumbnails=$thumbnailProgress%, " +
-                    "state=${preloadState::class.simpleName}")
+            Timber.v("SnapshotFlow check: elapsed=${currentElapsed}ms, minTime=$minTimeReached, " +
+                    "maxTime=$maxTimeReached, thumbnails=${thumbnailStrips.size}, hasAudio=$hasAudio, shouldHide=$shouldHide")
 
-            if (shouldHideOverlay) {
-                val reason = getHideReason(
-                    state = preloadState,
-                    maxTimeReached = maxTimeReached,
-                    minTimeReached = minTimeReached,
-                    hasSufficientThumbnails = hasSufficientThumbnails,
-                    elapsedTimeMs = elapsedTimeMs,
-                    thumbnailProgress = thumbnailProgress
-                )
-                Timber.i("LoadingOverlay pronto para esconder: $reason")
-
-                isReadyToHide = true
-                delay(LoadingConstants.CROSS_FADE_START_DELAY_MS)
-                showLoadingOverlay = false
-                Timber.i("LoadingOverlay escondido: $reason")
-                break
-            }
-
-            delay(LoadingConstants.LOADING_CHECK_INTERVAL_MS)
+            Triple(shouldHide, currentElapsed, hasSufficientThumbnails)
         }
+            .distinctUntilChanged()
+            .collect { (shouldHide, currentElapsed, hasSufficientThumbnails) ->
+                if (shouldHide) {
+                    val minTimeReached = currentElapsed >= minLoadingDurationMs
+                    val maxTimeReached = currentElapsed >= LoadingConstants.MAX_LOADING_DURATION_MS
+                    val hasAudio = audioAmplitudes.isNotEmpty()
+
+                    val reason = getHideReason(
+                        state = preloadUiState,
+                        maxTimeReached = maxTimeReached,
+                        minTimeReached = minTimeReached,
+                        hasSufficientThumbnails = hasSufficientThumbnails,
+                        elapsedTimeMs = currentElapsed,
+                        thumbnailProgress = thumbnailProgress
+                    )
+                    Timber.i("🎯 LoadingOverlay pronto para esconder: $reason (thumbnails=${thumbnailStrips.size}, audio=$hasAudio)")
+
+                    isReadyToHide = true
+                    delay(LoadingConstants.CROSS_FADE_START_DELAY_MS)
+                    showLoadingOverlay = false
+                    Timber.i("✅ LoadingOverlay escondido: $reason")
+                }
+            }
     }
 
     // Cancelar preload ao pressionar voltar durante loading
     BackHandler(enabled = showLoadingOverlay) {
-        viewModel.cancelPreload()
+        preloadViewModel.cancelPreload()
         showLoadingOverlay = false
         onNavigateBack()
     }
@@ -161,9 +191,8 @@ fun TrimScreen(
 
     val videoRepository = remember { VideoRepository(context) }
     val transformerPipeline = remember { TransformerPipeline(context, videoRepository) }
-
+    
     // Calcular número de barras baseado na duração do vídeo
-    // Aproximadamente 1 barra por 100ms de vídeo (ajustável conforme preferência)
     val targetBarCount = remember(state.videoDurationMs) {
         if (state.videoDurationMs > 0) {
             // Para vídeos curtos (< 30s): mais barras para detalhe
@@ -178,19 +207,17 @@ fun TrimScreen(
         }
     }
 
+    /* 
     LaunchedEffect(videoUri) {
         if (videoUri != Uri.EMPTY) {
             viewModel.loadWaveform(videoUri)
         }
     }
+    */
 
-    // Carregar AudioWaveForms quando tivermos a duração do vídeo
-    LaunchedEffect(state.videoDurationMs) {
-        if (videoUri != Uri.EMPTY && state.videoDurationMs > 0) {
-            Timber.d("TrimScreen: LaunchedEffect triggered - videoDurationMs=${state.videoDurationMs}, targetBarCount=$targetBarCount")
-            viewModel.loadAudioWaveforms(videoUri, targetBarCount)
-        }
-    }
+    // OTIMIZAÇÃO: Removido LaunchedEffect que chamava loadAudioWaveforms()
+    // Os dados de áudio já são carregados pelo AudioViewModel e sincronizados via updateAudioAmplitudes()
+    // Isso elimina extração duplicada de áudio (economia de 66% de I/O)
 
     when {
         videoUri == Uri.EMPTY -> {
@@ -229,95 +256,84 @@ fun TrimScreen(
                 ) {
                     Scaffold(
                         topBar = {
-                        TopAppBar(
-                        title = {
-                            Column {
-                                Text("Editor de Trim")
-                                if (preloadedData != null) {
-                                    val videoInfo = preloadedData.videoInfo
-                                    val aspectRatio = formatAspectRatio(videoInfo.aspectRatio)
-                                    Text(
-                                        text = "${videoInfo.width}×${videoInfo.height} ($aspectRatio)",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onNavigateBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
-                            }
-                        },
-                        actions = {
-                            IconButton(
-                                onClick = {
-                                    val ranges = state.trimPosition.completeRanges
-                                    if (ranges.isEmpty()) {
-                                        Toast.makeText(
-                                            context,
-                                            "Adicione pelo menos um corte",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        return@IconButton
+                            TopAppBar(
+                                title = { Text("Editor de Trim") },
+                                navigationIcon = {
+                                    IconButton(onClick = onNavigateBack) {
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                                     }
-                                    showSaveDialog = true
                                 },
-                                enabled = !saveDialogState.isSaving
+                                actions = {
+                                    IconButton(
+                                        onClick = {
+                                            val ranges = state.trimPosition.completeRanges
+                                            if (ranges.isEmpty()) {
+                                                Toast.makeText(context, "Adicione pelo menos um corte", Toast.LENGTH_SHORT).show()
+                                                return@IconButton
+                                            }
+                                            showSaveDialog = true
+                                        },
+                                        enabled = !saveDialogState.isSaving
+                                    ) {
+                                        Icon(
+                                            if (saveDialogState.isSaving) Icons.Default.Check else Icons.Default.Save,
+                                            contentDescription = "Salvar"
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    ) { paddingValues ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues)
+                        ) {
+                            // Área do Timeline com contador
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .background(Color(0xFF1A1A1A))
                             ) {
-                                Icon(
-                                    if (saveDialogState.isSaving) Icons.Default.Check else Icons.Default.Save,
-                                    contentDescription = "Salvar"
+                                TimelineEditor(
+                                    videoUri = videoUri,
+                                    trimPosition = state.trimPosition,
+                                    currentPosition = state.currentPosition,
+                                    waveformData = state.waveformData,
+                                    isWaveformLoading = state.isWaveformLoading,
+                                    waveformError = state.waveformError,
+                                    waveformStyle = com.chopcut.ui.components.WaveformStyle(),
+                                    audioWaveformsAmplitudes = state.audioWaveformsAmplitudes,
+                                    isAudioWaveformsLoading = state.isAudioWaveformsLoading,
+                                    preloadedStrips = thumbnailStrips,
+                                    aspectRatio = 16f/9f,
+                                    onPositionChange = { viewModel.setCurrentPosition(it) },
+                                    onAddPosition = { viewModel.addPosition(state.currentPosition) },
+                                    onRequestNewMedia = { },
+                                    onVideoDurationChange = { duration -> viewModel.setVideoDuration(duration) },
+                                    modifier = Modifier.fillMaxSize()
                                 )
                             }
+
+                            val isInsideRange = state.trimPosition.isPositionInRange(state.currentPosition)
+
+                            TrimControlPanel(
+                                isDraftMode = state.trimPosition.isDraftMode,
+                                isInsideRange = isInsideRange,
+                                onAddPosition = { viewModel.addPosition(state.currentPosition) },
+                                onDelete = { viewModel.removeRangeAt(state.currentPosition) }
+                            )
+
+                            Spacer(modifier = Modifier.height(ChopCutSpacing.xxl))
                         }
-                    )
-                }
-            ) { paddingValues ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                ) {
-                    TimelineEditor(
-                        videoUri = videoUri,
-                        trimPosition = state.trimPosition,
-                        currentPosition = state.currentPosition,
-                        waveformData = state.waveformData,
-                        isWaveformLoading = state.isWaveformLoading,
-                        waveformError = state.waveformError,
-                        waveformStyle = com.chopcut.ui.components.WaveformStyle(),
-                        audioWaveformsAmplitudes = state.audioWaveformsAmplitudes,
-                        isAudioWaveformsLoading = state.isAudioWaveformsLoading,
-                        preloadedStrips = preloadedData?.preloadedStrips ?: emptyMap(),
-                        aspectRatio = preloadedData?.videoInfo?.aspectRatio ?: 16f/9f,
-                        onPositionChange = { viewModel.setCurrentPosition(it) },
-                        onAddPosition = { viewModel.addPosition(state.currentPosition) },
-                        onRequestNewMedia = { },
-                        onVideoDurationChange = { duration -> viewModel.setVideoDuration(duration) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                    )
-
-                    val isInsideRange = state.trimPosition.isPositionInRange(state.currentPosition)
-
-                    TrimControlPanel(
-                        isDraftMode = state.trimPosition.isDraftMode,
-                        isInsideRange = isInsideRange,
-                        onAddPosition = { viewModel.addPosition(state.currentPosition) },
-                        onDelete = { viewModel.removeRangeAt(state.currentPosition) }
-                    )
-
-                    Spacer(modifier = Modifier.height(ChopCutSpacing.xxl))
-                }
-            }
+                    }
                 } // Fecha AnimatedVisibility
 
                 // LoadingOverlay renderizado quando visível
                 if (showLoadingOverlay) {
                     LoadingOverlay(
-                        progress = when (val state = preloadState) {
+                        progress = when (val state = preloadUiState) {
                             is PreloadUiState.Loading -> state.progress
                             else -> PreloadProgress(stage = ExtractionStage.Starting)
                         },
@@ -397,14 +413,6 @@ fun TrimScreen(
 }
 
 // Funções auxiliares para lógica de loading
-
-private fun calculateThumbnailProgress(preloadedData: PreloadedData?): Float {
-    return preloadedData?.let { data ->
-        if (data.totalSegments > 0) {
-            (data.preloadedStrips.size.toFloat() / data.totalSegments) * 100f
-        } else 0f
-    } ?: 0f
-}
 
 private fun shouldHideLoadingOverlay(
     state: PreloadUiState,

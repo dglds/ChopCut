@@ -48,9 +48,8 @@ class AudioViewModel(
     
     private val audioDataExtractor = AudioDataExtractor(application)
     private var waveformQuality: WaveformQuality = WaveformQuality.Medium
-    
-    // ========== MÉTODOS PÚBLICOS ==========
-    
+    private var activeUri: Uri? = null
+
     /**
      * Carrega a waveform de áudio para um vídeo.
      * 
@@ -58,6 +57,12 @@ class AudioViewModel(
      * @param targetBarCount Número de barras de waveform (opcional)
      */
     fun loadWaveform(uri: Uri, targetBarCount: Int? = null) {
+        if (activeUri == uri && _uiState.value is AudioUiState.Ready) {
+            Timber.d("Waveform já está pronta para $uri, pulando")
+            return
+        }
+        
+        activeUri = uri
         viewModelScope.launch(DispatcherProvider.io) {
             try {
                 _uiState.value = AudioUiState.Loading
@@ -136,6 +141,7 @@ class AudioViewModel(
         _waveform.value = null
         _amplitudes.value = emptyList()
         _uiState.value = AudioUiState.Idle
+        activeUri = null
     }
     
     // ========== MÉTODOS PRIVADOS ==========

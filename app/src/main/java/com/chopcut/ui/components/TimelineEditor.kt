@@ -31,6 +31,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -86,6 +88,7 @@ fun TimelineEditor(
     audioWaveformsAmplitudes: List<Float> = emptyList(),
     isAudioWaveformsLoading: Boolean = false,
     preloadedStrips: Map<Int, Bitmap> = emptyMap(),
+    thumbnailViewModel: com.chopcut.ui.screen.ThumbnailViewModel? = null,
     aspectRatio: Float = 16f / 9f,
     onPositionChange: (Long) -> Unit,
     onAddPosition: () -> Unit,
@@ -145,27 +148,43 @@ fun TimelineEditor(
                 // mais complexa para suportar isso corretamente.
                 ThumbnailStripManager(context, thumbWidth, thumbHeight, thumbsPerStrip, adaptiveStrips = false)
             }
+          // Observar StateFlow de ThumbnailViewModel se disponível
+          val stripsFromViewModel = if (thumbnailViewModel != null) {
+              thumbnailViewModel.strips.collectAsState().value
+          } else {
+              emptyMap()
+          }
+
+          // Estado mutável local para strips
           val strips = remember {
               androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
                   putAll(preloadedStrips)
               }
           }
-          
-          // Rastrear quantos tempos tem em cada segmento (para strips adaptativas)
-          val thumbsPerStripMap = remember { androidx.compose.runtime.mutableStateMapOf<Int, Int>() }
-          
-          // Sincronizar strips internas com as preloaded (para suportar carregamento progressivo)
-          LaunchedEffect(preloadedStrips) {
-              Timber.d("TimelineEditor: LaunchedEffect preloadedStrips triggered")
-              Timber.d("TimelineEditor: preloadedStrips size = ${preloadedStrips.size}")
-              if (preloadedStrips.isNotEmpty()) {
-                  preloadedStrips.forEach { (k, v) ->
-                      Timber.d("TimelineEditor: Sincronizando strip $k: ${v?.width}x${v?.height}")
-                      strips[k] = v
+
+          // OTIMIZAÇÃO: Sincronizar strips de forma eficiente
+          // Usar key que só muda quando realmente há novas strips
+          LaunchedEffect(stripsFromViewModel.size, preloadedStrips.size) {
+              // Se temos ViewModel, usar strips dela
+              if (thumbnailViewModel != null && stripsFromViewModel.isNotEmpty()) {
+                  stripsFromViewModel.forEach { (k, v) ->
+                      if (!strips.containsKey(k)) {
+                          strips[k] = v
+                      }
                   }
-                  Timber.d("TimelineEditor: ${preloadedStrips.size} strips sincronizadas")
+              }
+              // Caso contrário, usar preloadedStrips (compatibilidade)
+              else if (preloadedStrips.isNotEmpty()) {
+                  preloadedStrips.forEach { (k, v) ->
+                      if (!strips.containsKey(k)) {
+                          strips[k] = v
+                      }
+                  }
               }
           }
+
+          // Rastrear quantos tempos tem em cada segmento (para strips adaptativas)
+          val thumbsPerStripMap = remember { androidx.compose.runtime.mutableStateMapOf<Int, Int>() }
           val loadingStrips = remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
           val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -174,116 +193,36 @@ fun TimelineEditor(
         // Aumentado para 500 para suportar vídeos longos (~83 min) sem descarte agressivo
         val maxStrips = 500
 
-         // STRIP LOADING: Carregar segmentos visíveis + adjacentes com pre-fetching adaptativo
-         // IMPORTANTE: usa scope.launch (não launch) para que as coroutines
-         // sobrevivam ao restart do LaunchedEffect quando scrollOffsetPx muda
-         LaunchedEffect(scrollOffsetPx, videoDurationMs) {
-             if (videoDurationMs == 0L) return@LaunchedEffect
- 
-             val totalSegments = stripManager.getSegmentCount(videoDurationMs)
-             val currentSecond = (scrollOffsetPx / pxPerSecond).toInt().coerceAtLeast(0)
-             val visibleSegment = currentSecond / thumbsPerStrip
-             
-             // CANCELAMENTO INTELIGENTE: Cancelar jobs distantes antes de começar novos
-             // Resolve Problema 3 e 12: Jobs antigos continuam ao pular scroll
-             com.chopcut.data.thumbnail.ThumbnailCacheManager.cancelFarJobs(
-                 uri = videoUri,
-                 currentSegment = visibleSegment,
-                 threshold = 5
-             )
-             
-             // PRE-FETCHING ADAPTATIVO: Calcular distancia baseado na velocidade
-             // Resolve Problema 11: Pre-fetching adaptativo baseado na velocidade
-             val prefetchDistance = when {
-                 scrollVelocity < 500f -> 3  // Scroll lento: carregar 3 strips à frente
-                 scrollVelocity < 2000f -> 2 // Scroll médio: carregar 2 strips
-                 else -> 1  // Scroll rápido: carregar apenas o visível
-             }
-             
-             val segmentsToLoad = listOf(
-                 visibleSegment,
-                 *(1..prefetchDistance).flatMap { i ->
-                     listOf(visibleSegment - i, visibleSegment + i)
-                 }.toTypedArray()
-             ).filter { it in 0 until totalSegments }
-              .filter { !strips.containsKey(it) && loadingStrips[it] != true }
-  
-              segmentsToLoad.forEach { segIdx ->
-                  if (loadingStrips.containsKey(segIdx)) return@forEach
-   
-                   // Usar ThumbnailCacheManager para carregamento com tracking
-                   // Resolve Problema 3: Cancelamento inteligente
-                   com.chopcut.data.thumbnail.ThumbnailCacheManager.loadStripWithTracking(
-                       uri = videoUri,
-                       segmentIndex = segIdx,
-                       durationMs = videoDurationMs,
-                       thumbWidth = thumbWidth,
-                       thumbHeight = thumbHeight,
-                       thumbsPerStrip = thumbsPerStrip
-                   ) { strip ->
-                       // Callback já é executado no Main thread pelo ThumbnailCacheManager
-                       if (strip != null) {
-                           strips[segIdx] = strip
-                       }
-                   }
-              }
-         }
 
-          // BACKGROUND LOADING: Radial (da posição do scroll para as bordas) com pre-fetching adaptativo
-          // Resolve Problema 10: Priorização inteligente baseada na proximidade
-          LaunchedEffect(videoUri, videoDurationMs, scrollOffsetPx) {
-              if (videoDurationMs == 0L) return@LaunchedEffect
-              
-              val totalSegments = stripManager.getSegmentCount(videoDurationMs)
-              val currentSecond = (scrollOffsetPx / pxPerSecond).toInt().coerceAtLeast(0)
-              val centerSegment = currentSecond / thumbsPerStrip
-              
-              // CANCELAMENTO INTELIGENTE: Cancelar jobs distantes antes de começar novos
-              // Resolve Problema 12: Estratégia radial não cancela jobs
-              com.chopcut.data.thumbnail.ThumbnailCacheManager.cancelFarJobs(
-                  uri = videoUri,
-                  currentSegment = centerSegment,
-                  threshold = 10  // Mais permissivo para background (maior alcance)
-              )
-              
-              // PRE-FETCHING ADAPTATIVO: Calcular alcance baseado na velocidade
-              val prefetchDistance = when {
-                  scrollVelocity < 500f -> 10  // Scroll lento: carregar até 10 strips de distância
-                  scrollVelocity < 2000f -> 5 // Scroll médio: carregar até 5 strips
-                  else -> 3  // Scroll rápido: carregar apenas 3 strips de distância
-              }
-              
-              // Criar lista de segmentos ordenada pela proximidade do scroll atual (Estratégia Radial)
-              // Resolve Problema 10: Priorização de carregamento baseada na proximidade
-              val segmentsByPriority = (0 until totalSegments)
-                  .filter { kotlin.math.abs(it - centerSegment) <= prefetchDistance }
-                  .sortedBy { kotlin.math.abs(it - centerSegment) }
-                  .take(maxStrips)
-              
-               for (segIdx in segmentsByPriority) {
-                   if (strips.size >= maxStrips) break
-                   if (strips.containsKey(segIdx) || loadingStrips.containsKey(segIdx)) continue
-   
-                   try {
-                       // Usar ThumbnailCacheManager para carregamento com tracking
-                       // Note: loadStripWithTracking já executa o callback no Main thread
-                       com.chopcut.data.thumbnail.ThumbnailCacheManager.loadStripWithTracking(
-                           uri = videoUri,
-                           segmentIndex = segIdx,
-                           durationMs = videoDurationMs,
-                           thumbWidth = thumbWidth,
-                           thumbHeight = thumbHeight,
-                           thumbsPerStrip = thumbsPerStrip
-                       ) { strip ->
-                           if (strip != null && isActive) {
-                               strips[segIdx] = strip
-                           }
-                       }
-                   } catch (e: Exception) {
-                       Timber.w("Failed background radial pre-load of segment $segIdx")
-                   }
-               }
-          }
+        // SEQUENTIAL LOADING: Delegar o carregamento para o ViewModel.
+        // Isso garante que o processo sobreviva à navegação entre telas.
+        LaunchedEffect(videoUri, videoDurationMs) {
+            if (videoDurationMs == 0L) return@LaunchedEffect
+            
+            if (thumbnailViewModel != null) {
+                thumbnailViewModel.loadAllStripsSequentially(videoUri, videoDurationMs)
+            } else {
+                // FALLBACK: Se o ViewModel não estiver disponível, mantemos o loop local simples
+                val totalSegments = stripManager.getSegmentCount(videoDurationMs)
+                for (segIdx in 0 until totalSegments) {
+                    if (strips.containsKey(segIdx) || loadingStrips.containsKey(segIdx)) continue
+                    
+                    com.chopcut.data.thumbnail.ThumbnailCacheManager.loadStripWithTracking(
+                        uri = videoUri,
+                        segmentIndex = segIdx,
+                        durationMs = videoDurationMs,
+                        thumbWidth = thumbWidth,
+                        thumbHeight = thumbHeight,
+                        thumbsPerStrip = thumbsPerStrip
+                    ) { strip ->
+                        if (strip != null) {
+                            strips[segIdx] = strip
+                        }
+                    }
+                    kotlinx.coroutines.delay(100)
+                }
+            }
+        }
 
         // Animação de shimmer suave para placeholders de thumbnails
         val infiniteTransition = rememberInfiniteTransition(label = "thumbnailShimmer")
@@ -366,7 +305,9 @@ fun TimelineEditor(
             }
         }
     
-        LaunchedEffect(isPlaying, scrollOffsetPx) {
+        // OTIMIZAÇÃO: Remover scrollOffsetPx das dependências para evitar feedback loop
+        // O LaunchedEffect modifica scrollOffsetPx, então não deve depender dele
+        LaunchedEffect(isPlaying) {
             if (!isPlaying) return@LaunchedEffect
             while (isActive) {
                 val pos = exoPlayer.currentPosition

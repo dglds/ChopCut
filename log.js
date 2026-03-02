@@ -11,13 +11,17 @@ const tags = ["TrimViewModel", "ThumbnailCacheManager",
 ]
 
 const filters  =[
+`adb logcat | grep -E "PARALLEL PRELOAD|SnapshotFlow|Cache HIT"`,
     ` | grep -E ${tags.join('|')}`,
     `| grep -E "TrimScreen|LoadingOverlay|PreloadUiState"`,
 ` TrimScreen:I LoadingOverlay:I PreloadUiState:I '*:S'`,
 ]
 
+//cache monitor
+const cache = `adb logcat -s ThumbnailStrip ThumbnailCacheManager ThumbnailViewModel ThumbnailExtractorBatch`
 
-const command = `${reset} && ${adb} ${filters[index -1]}`
+
+const command = cache
 
 
 

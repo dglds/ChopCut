@@ -1,5 +1,6 @@
 package com.chopcut
 
+import android.app.Application
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -30,9 +31,11 @@ import com.chopcut.ui.components.feedback.DebugToast
 import com.chopcut.ui.components.feedback.DebugViewModel
 import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.HomeScreen
-import com.chopcut.ui.screen.PreloadDataStore
 import com.chopcut.ui.screen.PreferencesScreen
 import com.chopcut.ui.screen.TrimScreen
+import com.chopcut.ui.screen.PreloadViewModel
+import com.chopcut.ui.screen.ThumbnailViewModel
+import com.chopcut.ui.screen.AudioViewModel
 import com.chopcut.ui.screen.debug.AudioWaveFormsTestScreen
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -49,6 +52,10 @@ import com.chopcut.ui.components.loading.LoadingConstants
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Inicializar ThumbnailCacheManager singleton (FASE 1.4 do PLANO_OTIMIZACAO_CACHE.md)
+        com.chopcut.data.thumbnail.ThumbnailCacheManager.init(applicationContext)
+
         enableEdgeToEdge()
         setContent {
             ChopCutTheme {
@@ -62,6 +69,22 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
 
                     val debugViewModel: DebugViewModel = viewModel()
+
+                    // ViewModels especializadas no escopo da Activity
+                    val application = remember { context.applicationContext as Application }
+                    val thumbnailViewModel: ThumbnailViewModel = viewModel(
+                        factory = ThumbnailViewModel.ThumbnailViewModelFactory(application)
+                    )
+                    val audioViewModel: AudioViewModel = viewModel(
+                        factory = AudioViewModel.AudioViewModelFactory(application)
+                    )
+                    val preloadViewModel: PreloadViewModel = viewModel(
+                        factory = PreloadViewModel.PreloadViewModelFactory(
+                            application,
+                            thumbnailViewModel,
+                            audioViewModel
+                        )
+                    )
 
                     // Transições de fade suaves e sincronizadas com LoadingOverlay
                     val navFadeIn = fadeIn(
@@ -105,6 +128,7 @@ class MainActivity : ComponentActivity() {
                                 popExitTransition = { navFadeOut }
                             ) {
                                 HomeScreen(
+                                    preloadViewModel = preloadViewModel,
                                     onNavigateToEditor = { videoUri ->
                                         val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
                                         navController.navigate("editor?videoUri=$encodedUri")
@@ -159,13 +183,13 @@ class MainActivity : ComponentActivity() {
                             ) { backStackEntry ->
                                 val videoUriString = backStackEntry.arguments?.getString("videoUri")
                                 val videoUri = videoUriString?.let { Uri.parse(it) }
-                                val preloadedData = PreloadDataStore.getData()
 
                                 TrimScreen(
                                     videoUri = videoUri ?: Uri.EMPTY,
-                                    preloadedData = preloadedData,
+                                    preloadViewModel = preloadViewModel,
+                                    thumbnailViewModel = thumbnailViewModel,
+                                    audioViewModel = audioViewModel,
                                     onNavigateBack = {
-                                        PreloadDataStore.clearData()
                                         navController.popBackStack()
                                     }
                                 )

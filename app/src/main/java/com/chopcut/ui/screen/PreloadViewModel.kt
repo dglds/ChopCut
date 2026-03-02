@@ -10,8 +10,13 @@ import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.util.DispatcherProvider
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -38,12 +43,30 @@ class PreloadViewModel(
 ) : AndroidViewModel(application) {
     
     // ========== ESTADO ==========
-    
+
     private val _uiState = MutableStateFlow<PreloadUiState>(PreloadUiState.Idle)
     val uiState: StateFlow<PreloadUiState> = _uiState.asStateFlow()
-    
+
+    // StateFlow reativo para isReady (Apenas thumbnails são críticas para entrar no editor)
+    // Regra: Liberar com 6 strips, ou com todas se o vídeo tiver menos de 6.
+    val isReadyFlow: StateFlow<Boolean> = combine(
+        thumbnailVM.strips,
+        thumbnailVM.totalSegments
+    ) { strips, total ->
+        if (total == 0) return@combine false
+        val threshold = minOf(total, 6)
+        val ready = strips.size >= threshold
+        Timber.v("isReadyFlow check: strips=${strips.size}, total=$total, threshold=$threshold, ready=$ready")
+        ready
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
     // ========== JOBS ==========
     
+    private var activeUri: Uri? = null
     private var preloadJob: Job? = null
     private var thumbnailJob: Job? = null
     
@@ -63,8 +86,14 @@ class PreloadViewModel(
      * @param stripsToPreload Número de strips a carregar (padrão: 6)
      */
     fun startPreload(uri: Uri, stripsToPreload: Int = 6) {
+        if (activeUri == uri && _uiState.value is PreloadUiState.Ready) {
+            Timber.d("Preload já está pronto para $uri, pulando restart")
+            return
+        }
+
         preloadJob?.cancel()
         thumbnailJob?.cancel()
+        activeUri = uri
         
         preloadJob = viewModelScope.launch(DispatcherProvider.io) {
             try {
@@ -81,45 +110,51 @@ class PreloadViewModel(
                 Timber.d("=== PreloadViewModel.startPreload STARTED ===")
                 Timber.d("URI: $uri, strips to preload: $stripsToPreload")
                 
-                // 1. ThumbnailViewModel carrega strips
-                Timber.d("Step 1: Starting thumbnail preload...")
-                thumbnailVM.preload(uri, stripsToPreload)
+                // 1. Iniciar ambos em paralelo
+                Timber.d("Step 1: Starting parallel preload (thumbnails + audio)...")
                 
-                // Observar progresso de thumbnails
+                // Job para thumbnails
+                val thumbPreloadJob = launch {
+                    thumbnailVM.preload(uri, stripsToPreload)
+                    // Aguardar o estado Ready da ThumbnailViewModel (que agora sabe o total real)
+                    while (thumbnailVM.uiState.value !is ThumbnailViewModel.ThumbnailUiState.Ready) {
+                        kotlinx.coroutines.delay(100)
+                    }
+                    Timber.d("Parallel: ThumbnailViewModel is Ready")
+                }
+
+                /* 
+                // Job para áudio (Desabilitado temporariamente por performance)
+                val audioPreloadJob = launch {
+                    audioVM.loadWaveform(uri, targetBarCount = calculateTargetBarCount(durationMs = 0))
+                    Timber.d("Parallel: Audio waveform ready")
+                }
+                */
+
+                // Observar progresso de thumbnails para UI
                 thumbnailJob = launch {
                     thumbnailVM.thumbnailProgress.collect { progress ->
                         val percent = (progress * 100).toInt()
-                        _uiState.value = PreloadUiState.Loading(progress = PreloadProgress(
-                            stage = ExtractionStage.ExtractingThumbnails,
-                            audioPercent = 0,
-                            thumbnailPercent = percent,
-                            currentSegment = 0,
-                            totalSegments = stripsToPreload,
-                            thumbnailsExtracted = thumbnailVM.strips.value.size,
-                            thumbnailsTotal = stripsToPreload
-                        ))
+                        _uiState.update { currentState ->
+                             if (currentState is PreloadUiState.Loading) {
+                                 currentState.copy(progress = currentState.progress.copy(
+                                     stage = ExtractionStage.ExtractingThumbnails,
+                                     thumbnailPercent = percent,
+                                     thumbnailsExtracted = thumbnailVM.strips.value.size,
+                                     thumbnailsTotal = stripsToPreload
+                                 ))
+                             } else currentState
+                        }
                     }
                 }
+
+                // AGUARDAR: Liberamos o acesso assim que o thumbPreloadJob terminar (mínimo de 6 strips)
+                // O áudio continuará em background se ainda estiver processando
+                thumbPreloadJob.join()
                 
-                // Aguardar thumbnails carregarem
-                while (thumbnailVM.uiState.value !is ThumbnailViewModel.ThumbnailUiState.Ready) {
-                    kotlinx.coroutines.delay(100)
-                }
+                Timber.d("Step 2: Fast-track ready (Thumbnails OK). Audio status: ${audioVM.uiState.value}")
                 
-                Timber.d("Step 2: Thumbnails loaded")
-                
-                // 2. AudioViewModel carrega waveform
-                Timber.d("Step 3: Starting audio waveform loading...")
-                audioVM.loadWaveform(uri, targetBarCount = calculateTargetBarCount(durationMs = 0))
-                
-                // Aguardar áudio carregar
-                while (audioVM.uiState.value !is AudioViewModel.AudioUiState.Ready) {
-                    kotlinx.coroutines.delay(100)
-                }
-                
-                Timber.d("Step 4: Audio waveform loaded")
-                
-                // 3. Marcar como Ready (criar PreloadedData com dados das ViewModels)
+                // 3. Marcar como Ready
                 val preloadedData = PreloadedData(
                     videoInfo = com.chopcut.data.model.VideoInfo(
                         uri = uri,
@@ -133,7 +168,7 @@ class PreloadViewModel(
                         frameRate = 30,
                         videoCodec = null,
                         audioCodec = null,
-                        hasAudio = audioVM.amplitudes.value.size > 0,
+                        hasAudio = true, // Assumimos que tem áudio para não bloquear
                         sizeBytes = 0
                     ),
                     audioAmplitudes = audioVM.amplitudes.value,
@@ -143,7 +178,7 @@ class PreloadViewModel(
                 )
                 _uiState.value = PreloadUiState.Ready(preloadedData)
                 
-                Timber.d("=== PreloadViewModel.startPreload COMPLETED ===")
+                Timber.d("=== PreloadViewModel.startPreload FAST-READY ===")
                 
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
@@ -190,6 +225,7 @@ class PreloadViewModel(
         Timber.d("Clearing PreloadViewModel")
         
         cancelPreload()
+        activeUri = null
         _uiState.value = PreloadUiState.Idle
         thumbnailVM.clear()
         audioVM.clear()

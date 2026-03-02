@@ -90,9 +90,12 @@ class ThumbnailStripManager(
                    • Threads de I/O: 3 (escrita paralela)
                 
                 💡 ESTRATÉGIA ADOTADA:
-                   ${if (Runtime.getRuntime().availableProcessors() <= 2) "→ Baixo custo: 2 threads (mínimo para overhead)" 
-                   else if (Runtime.getRuntime().availableProcessors() <= 6) "→ Médio: até 4 threads (equilíbrio)" 
-                   else "→ High-end: 6 threads (máximo throughput)"}
+                   ${when {
+                       Runtime.getRuntime().availableProcessors() <= 2 -> "→ Baixo custo: 2 threads (mínimo para overhead)"
+                       Runtime.getRuntime().availableProcessors() <= 4 -> "→ Médio: 4 threads (equilíbrio)"
+                       Runtime.getRuntime().availableProcessors() <= 6 -> "→ High-end: 6 threads (alto throughput)"
+                       else -> "→ Muito potente: 8 threads (máximo throughput)"
+                   }}
                 
                 🚀 OTIMIZAÇÕES HABILITADAS:
                    ✓ Threads dinâmicas baseadas no hardware
@@ -105,22 +108,24 @@ class ThumbnailStripManager(
 
         /**
          * Calcula o número ótimo de threads de extração baseado no hardware.
-         * 
+         *
          * Resolve Problema 5: Threads dinâmicas baseadas no device
-         * 
-         * Estratégia:
+         *
+         * Estratégia OTIMIZADA:
          * - Devices de baixo custo (≤2 cores): 2 threads (mínimo para overhead)
-         * - Devices médios (≤6 cores): Até 4 threads (equilíbrio throughput/overhead)
-         * - Devices high-end (>6 cores): 6 threads (máximo throughput)
-         * 
+         * - Devices médios (≤4 cores): 4 threads (equilíbrio)
+         * - Devices high-end (≤6 cores): 6 threads (alto throughput)
+         * - Devices muito potentes (>6 cores): 8 threads (máximo throughput)
+         *
          * @return Número ótimo de threads para extração
          */
         private fun calculateOptimalThreadCount(): Int {
             val cores = Runtime.getRuntime().availableProcessors()
             return when {
                 cores <= 2 -> 2      // Baixo custo: mínimo para overhead
-                cores <= 6 -> cores.coerceAtMost(4)  // Médio: equilíbrio
-                else -> 6            // High-end: máximo throughput
+                cores <= 4 -> 4      // Médio: equilíbrio
+                cores <= 6 -> 6      // High-end: alto throughput
+                else -> 8            // Muito potente: máximo throughput (OTIMIZADO)
             }
         }
         
@@ -302,10 +307,16 @@ class ThumbnailStripManager(
             
             // ATENÇÃO: decodeFile é thread-safe para leitura paralela
             val bitmap = BitmapFactory.decodeFile(cacheFile.absolutePath, options)
-            
+
             if (bitmap != null) {
                 val elapsed = System.currentTimeMillis() - startTime
-                Timber.d("ThumbnailStrip: Cache HIT for segment $segmentIndex (${elapsed}ms)")
+
+                // MÉTRICAS DE PERFORMANCE: Alertar se cache I/O está lento
+                if (elapsed > 50) {
+                    Timber.w("⚠️ Slow disk cache read: ${elapsed}ms for segment $segmentIndex (threshold: 50ms)")
+                } else {
+                    Timber.d("✓ Cache HIT for segment $segmentIndex (${elapsed}ms)")
+                }
             } else {
                 Timber.w("ThumbnailStrip: Cache file corrupted for segment $segmentIndex")
                 // Delete sem lock, filesystem cuida da atomicidade
@@ -501,23 +512,7 @@ class ThumbnailStripManager(
                 val strip = Bitmap.createBitmap(stripWidth, thumbHeight, Bitmap.Config.RGB_565)
                 val canvas = Canvas(strip)
 
-                // 🔍 ASPECT MONITOR: Log início da criação da strip
-                android.util.Log.i("ThumbnailAspectMonitor", """
-                    ╔═════════════════════════════════════════════════════════╗
-                    ║ CRIAÇÃO DE STRIP - Segmento: $segmentIndex
-                    ╚═════════════════════════════════════════════════════════╝
-                    📊 STRIP INFO:
-                       • Thumbs por strip: $currentThumbsPerStrip${if (adaptiveStrips) " (Adaptativo)" else ""}
-                        • Frames no segmento: $framesInSegment
-                       • Dimensões da strip: ${stripWidth}x${thumbHeight}
-                       • Config: RGB_565 (2 bytes/pixel)
-                       • Tamanho estimado: ${(stripWidth * thumbHeight * 2) / 1024}KB
-                       • Range de tempo: ${startSec}s - ${startSec + framesInSegment}s
 
-                    🎯 THUMB INDIVIDUAL:
-                       • Dimensões: ${thumbWidth}x${thumbHeight}
-                       • Aspect Ratio: ${String.format("%.3f", thumbWidth.toFloat() / thumbHeight.toFloat())}
-                """.trimIndent())
 
                 // MELHORIA: Extrair frames em batch usando ThumbnailExtractorBatch
                 // Isso reutiliza UMA instância do MediaMetadataRetriever para todo o segmento
@@ -555,31 +550,12 @@ class ThumbnailStripManager(
                         val dstX = frameIdx * thumbWidth
                         val dstRect = Rect(dstX, 0, dstX + thumbWidth, thumbHeight)
 
-                        // 🔍 ASPECT MONITOR: Log detalhado do stitching
-                        android.util.Log.d("ThumbnailAspectMonitor", """
-                            🔗 STITCHING Frame #$frameIdx (${sec}s):
-                               • Source: ${source.width}x${source.height} (ratio: ${String.format("%.3f", source.width.toFloat() / source.height.toFloat())})
-                               • Destino na strip: [$dstX, 0, ${dstX + thumbWidth}, $thumbHeight]
-                               • Esperado: ${thumbWidth}x${thumbHeight}
-                               • Match: ${source.width == thumbWidth && source.height == thumbHeight}
-                        """.trimIndent())
-
                         canvas.drawBitmap(source, null, dstRect, cropPaint)
                         source.recycle()
                     } else {
-                        android.util.Log.w("ThumbnailAspectMonitor", "   ⚠️ Frame #$frameIdx (${sec}s) não extraído")
                         Timber.w("ThumbnailStrip: Failed to extract frame at sec=$sec")
                     }
                 }
-
-                android.util.Log.i("ThumbnailAspectMonitor", """
-                    ✅ STRIP FINALIZADA:
-                       • Segmento: $segmentIndex
-                       • Dimensões finais: ${strip.width}x${strip.height}
-                       • Aspect Ratio: ${String.format("%.3f", strip.width.toFloat() / strip.height.toFloat())}
-                       • Frames stitchados: ${extractedFrames.size}/$framesInSegment
-                    ╚═════════════════════════════════════════════════════════╝
-                """.trimIndent())
 
                 Timber.d("ThumbnailStrip: Segment $segmentIndex ($framesInSegment frames, ${stripWidth}x$thumbHeight, RGB_565) - BATCH MODE")
 

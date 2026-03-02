@@ -40,7 +40,6 @@ class ThumbnailExtractorBatch(
         height: Int = 180
     ): Map<Long, Bitmap> = withContext(Dispatchers.IO) {
         if (positionsMs.isEmpty()) {
-            Timber.w("extractBatch: positionsMs is empty")
             return@withContext emptyMap()
         }
 
@@ -49,7 +48,6 @@ class ThumbnailExtractorBatch(
 
         // Ordenar posições para minimizar seeks no vídeo
         val sortedPositions = positionsMs.sorted()
-        Timber.d("extractBatch: Starting extraction of ${positionsMs.size} thumbnails from $uri")
 
         val retriever = MediaMetadataRetriever()
         try {
@@ -61,7 +59,7 @@ class ThumbnailExtractorBatch(
             // Extrair cada posição
             sortedPositions.forEach { positionMs ->
                 try {
-                    val bitmap = extractFrameAt(retriever, positionMs, width, height)
+                    val bitmap = extractFrameAt(retriever, positionMs, width, height, ThumbnailQuality.LOW)
                     if (bitmap != null) {
                         results[positionMs] = bitmap
                     }
@@ -73,7 +71,7 @@ class ThumbnailExtractorBatch(
             val totalTime = System.currentTimeMillis() - startTime
             val avgTime = if (results.isNotEmpty()) totalTime / results.size else 0
 
-            Timber.d("extractBatch: Completed in ${totalTime}ms (${results.size}/${positionsMs.size} successful, avg ${avgTime}ms per frame)")
+            Timber.i("extractBatch: Completed ${results.size} thumbnails in ${totalTime}ms (avg ${avgTime}ms/frame)")
 
         } catch (e: Exception) {
             Timber.e(e, "extractBatch: Fatal error during batch extraction")
@@ -108,7 +106,7 @@ class ThumbnailExtractorBatch(
 
         try {
             retriever.setDataSource(context, uri)
-            val bitmap = extractFrameAt(retriever, positionMs, width, height)
+            val bitmap = extractFrameAt(retriever, positionMs, width, height, ThumbnailQuality.HIGH)
 
             val elapsedTime = System.currentTimeMillis() - startTime
             Timber.d("extractSingle: Completed in ${elapsedTime}ms for frame at ${positionMs}ms")
@@ -139,9 +137,22 @@ class ThumbnailExtractorBatch(
         retriever: MediaMetadataRetriever,
         positionMs: Long,
         width: Int,
-        height: Int
+        height: Int,
+        quality: ThumbnailQuality = ThumbnailQuality.LOW
     ): Bitmap? {
         return try {
+            // Se for LOW quality (timeline), extraímos no tamanho exato e retornamos imediatamente
+            // Isso evita 100% do overhead de Canvas, Paint e redimensionamento manual.
+            if (quality == ThumbnailQuality.LOW) {
+                return retriever.getScaledFrameAtTime(
+                    positionMs * 1000,
+                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                    width,
+                    height
+                )
+            }
+
+            // A partir daqui, lógica para HIGH quality (Export/Preview Detalhado)
             // Get frame at position
             // For HIGH quality, we extract slightly larger and scale down with filtering (Anti-Aliasing)
             // Obter dimensões reais do vídeo para evitar distorção no getScaledFrameAtTime
@@ -168,30 +179,6 @@ class ThumbnailExtractorBatch(
             val finalWidth = (extractWidth * 1.2f).toInt()
             val finalHeight = (extractHeight * 1.2f).toInt()
 
-            // 🔍 ASPECT MONITOR: Log detalhado de metadados do vídeo e dimensões de extração
-            android.util.Log.i("ThumbnailAspectMonitor", """
-                ═══════════════════════════════════════════════════════════
-                EXTRAÇÃO DE FRAME - Posição: ${positionMs}ms | Qualidade: HIGH
-                ═══════════════════════════════════════════════════════════
-                📹 VÍDEO ORIGINAL:
-                   • Dimensões brutas: ${videoWidth}x${videoHeight}
-                   • Rotação: ${videoRotation}°
-                   • Portrait: $isPortrait
-                   • Dimensões reais (pós-rotação): ${realWidth}x${realHeight}
-                   • Aspect Ratio Real: ${String.format("%.3f", videoAspectRatio)} (${realWidth}:${realHeight})
-
-                🎯 TARGET SOLICITADO:
-                   • Dimensões: ${width}x${height}
-                   • Aspect Ratio Target: ${String.format("%.3f", width.toFloat() / height.toFloat())}
-
-                ⚙️ EXTRAÇÃO AJUSTADA:
-                   • Dimensões base: ${extractWidth}x${extractHeight}
-                   • Aspect Ratio: ${String.format("%.3f", extractWidth.toFloat() / extractHeight.toFloat())}
-                   • Dimensões finais: ${finalWidth}x${finalHeight}
-                   • Fator de escala: 1.2x (HIGH)
-                ═══════════════════════════════════════════════════════════
-            """.trimIndent())
-
             val rawFrame = retriever.getScaledFrameAtTime(
                 positionMs * 1000, // MediaMetadataRetriever usa microssegundos
                 MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
@@ -200,12 +187,6 @@ class ThumbnailExtractorBatch(
             )
 
             val frame = if (rawFrame != null && (rawFrame.width != width || rawFrame.height != height)) {
-                // 🔍 ASPECT MONITOR: Log de rescale/crop para qualidade HIGH
-                android.util.Log.i("ThumbnailAspectMonitor", """
-                    🔄 CROP & RESCALE (Center Crop):
-                       • Frame extraído: ${rawFrame.width}x${rawFrame.height} (ratio: ${String.format("%.3f", rawFrame.width.toFloat() / rawFrame.height.toFloat())})
-                       • Target: ${width}x${height} (ratio: ${String.format("%.3f", width.toFloat() / height.toFloat())})
-                """.trimIndent())
 
                 // Criar bitmap de destino no tamanho exato solicitado (Force RGB_565 para economizar RAM)
                 val result = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
@@ -242,29 +223,8 @@ class ThumbnailExtractorBatch(
             }
 
             if (frame == null) {
-                android.util.Log.w("ThumbnailAspectMonitor", "❌ ERRO: Frame NULL retornado na posição ${positionMs}ms")
-                Timber.w("extractFrameAt: Got null frame at ${positionMs}ms")
                 null
             } else {
-                // 🔍 ASPECT MONITOR: Log do frame final
-                android.util.Log.i("ThumbnailAspectMonitor", """
-                    ✅ FRAME FINAL EXTRAÍDO:
-                       • Dimensões: ${frame.width}x${frame.height}
-                       • Aspect Ratio: ${String.format("%.3f", frame.width.toFloat() / frame.height.toFloat())}
-                       • Config: ${frame.config}
-                       • Bytes/pixel: ${when(frame.config) {
-                           Bitmap.Config.RGB_565 -> "2"
-                           Bitmap.Config.ARGB_8888 -> "4"
-                           else -> "unknown"
-                       }}
-                       • Tamanho estimado: ${(frame.width * frame.height * when(frame.config) {
-                           Bitmap.Config.RGB_565 -> 2
-                           Bitmap.Config.ARGB_8888 -> 4
-                           else -> 4
-                       }) / 1024}KB
-                    ═══════════════════════════════════════════════════════════
-                """.trimIndent())
-
                 frame
             }
         } catch (e: Exception) {
