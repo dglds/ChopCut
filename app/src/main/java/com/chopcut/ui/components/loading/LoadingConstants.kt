@@ -21,6 +21,9 @@ object LoadingConstants {
     // Progresso mínimo de thumbnails
     const val MINIMUM_THUMBNAIL_PROGRESS = 20f     // 20% das thumbnails (foco em renderizar o que existe)
 
+    // Número fixo de strips a carregar antes de permitir navegação
+    const val MINIMUM_STRIPS_REQUIRED = 6          // REQUERIDO: 6 strips fixo
+
     // Timings de transição
     const val CROSS_FADE_START_DELAY_MS = 100L      // Delay reduzido para iniciar cross-fade
 
