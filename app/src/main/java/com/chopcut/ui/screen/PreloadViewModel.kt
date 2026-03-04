@@ -86,6 +86,22 @@ class PreloadViewModel(
      * @param stripsToPreload Número de strips a carregar (padrão: 6)
      */
     fun startPreload(uri: Uri, stripsToPreload: Int = 6) {
+        Timber.tag("PreloadViewModel").d("=== startPreload CALLED ===")
+        Timber.tag("PreloadViewModel").d("uri: $uri")
+        Timber.tag("PreloadViewModel").d("stripsToPreload: $stripsToPreload")
+        Timber.tag("PreloadViewModel").d("activeUri: $activeUri")
+        Timber.tag("PreloadViewModel").d("currentState: ${_uiState.value}")
+        Timber.tag("PreloadViewModel").d("strips loaded: ${thumbnailVM.strips.value.size}")
+        Timber.tag("PreloadViewModel").d("totalSegments: ${thumbnailVM.totalSegments.value}")
+        
+        Timber.d("=== PreloadViewModel.startPreload CALLED ===")
+        Timber.d("uri: $uri")
+        Timber.d("stripsToPreload: $stripsToPreload")
+        Timber.d("activeUri: $activeUri")
+        Timber.d("currentState: ${_uiState.value}")
+        Timber.d("strips loaded: ${thumbnailVM.strips.value.size}")
+        Timber.d("totalSegments: ${thumbnailVM.totalSegments.value}")
+        
         if (activeUri == uri && _uiState.value is PreloadUiState.Ready) {
             Timber.d("Preload já está pronto para $uri, pulando restart")
             return

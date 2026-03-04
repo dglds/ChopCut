@@ -159,6 +159,19 @@ class ThumbnailCache(
     fun contains(uri: String, positionMs: Long): Boolean {
         return cache.containsKey(generateKey(uri, positionMs))
     }
+
+    /**
+     * Remove um item específico do cache
+     *
+     * Útil para remover bitmaps reciclados ou inválidos
+     */
+    fun remove(uri: String, positionMs: Long) {
+        val key = generateKey(uri, positionMs)
+        val bitmap = cache.remove(key)
+        if (bitmap != null) {
+            Timber.d("Cache REMOVE: $key")
+        }
+    }
     
     /**
      * Estatísticas do cache LRU.

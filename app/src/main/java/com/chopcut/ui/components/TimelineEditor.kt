@@ -267,7 +267,7 @@ fun TimelineEditor(
                     isPlaying = playing
                 }
                 override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                    android.util.Log.e("TimelineEditor", "ExoPlayer error: ${error.message}", error)
+                    Timber.tag("TimelineEditor").e(error, "ExoPlayer error: ${error.message}")
                     val cause = error.cause
                     // Check for SecurityException (Permission denied)
                     val isPermError = cause?.toString()?.contains("SecurityException") == true || 
@@ -453,10 +453,11 @@ fun TimelineEditor(
                  }
                  } // Fim do if (showWaveform)
 
-                // PAINT ALLOCATIONS MOVED OUTSIDE LOOP (Optimization)
-                // Pré-alocar objetos fora do draw loop (zero allocations por frame durante scroll)
-                val srcRect = remember { android.graphics.Rect() } // Remember para sobreviver a recomposições
-                val dstRect = remember { android.graphics.Rect() }
+                 // PAINT ALLOCATIONS MOVED OUTSIDE LOOP (Optimization)
+                 // Pré-alocar objetos fora do draw loop (zero allocations por frame durante scroll)
+                 // srcRect REMOVIDO: não mais necessário com renderização por strip inteira
+                 // val srcRect = remember { android.graphics.Rect() } // Remember para sobreviver a recomposições
+                 val dstRect = remember { android.graphics.Rect() }
 
                 // Paint com bilinear filtering para render suave da strip→tela
                 val renderPaint = remember {
@@ -499,15 +500,20 @@ fun TimelineEditor(
                           typeface = robotoMonoTypeface ?: android.graphics.Typeface.MONOSPACE
                           isAntiAlias = true
                           letterSpacing = 0f
-                      }
-                  }
+                       }
+                   }
 
-                 Canvas(modifier = Modifier.fillMaxSize()) {
-                     // Régua: ticks a cada 0.1s, timestamps a cada 5s
-                     val tickSpacingSeconds = 0.1f
-                     val tickSpacingPx = pxPerSecond * tickSpacingSeconds
-                     val startTickIndex = ((currentScroll - centerOffset) / tickSpacingPx).toInt() - 1
-                     val endTickIndex = ((currentScroll - centerOffset + timelineWidth) / tickSpacingPx).toInt() + 2
+                   // MÉTRICA DE PERFORMANCE: Variáveis para tracking (antes do Canvas)
+                   val drawCallCount = remember { androidx.compose.runtime.mutableIntStateOf(0) }
+                   val frameCount = remember { androidx.compose.runtime.mutableIntStateOf(0) }
+                   val lastLogTime = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+
+                   Canvas(modifier = Modifier.fillMaxSize()) {
+                       // Régua: ticks a cada 0.1s, timestamps a cada 5s
+                       val tickSpacingSeconds = 0.1f
+                       val tickSpacingPx = pxPerSecond * tickSpacingSeconds
+                       val startTickIndex = ((currentScroll - centerOffset) / tickSpacingPx).toInt() - 1
+                       val endTickIndex = ((currentScroll - centerOffset + timelineWidth) / tickSpacingPx).toInt() + 2
 
 
                      val rulerTopY = 0f
@@ -530,15 +536,81 @@ fun TimelineEditor(
                        // OTIMIZAÇÃO: Culling agressivo - sem buffer para renderizar ~30% menos strips
                        val endSecond = ((currentScroll - centerOffset + timelineWidth) / pxPerSecond).toInt()
 
-                       // OTIMIZAÇÃO: Calcular segmentos visíveis para buscar strips uma vez
-                      val visibleSegmentIndices = mutableSetOf<Int>()
-                      for (sec in startSecond..endSecond) {
-                          val segIdx = sec / thumbsPerStrip
-                          visibleSegmentIndices.add(segIdx)
-                      }
+                        // OTIMIZAÇÃO: Calcular segmentos visíveis para buscar strips uma vez
+                       val visibleSegmentIndices = mutableSetOf<Int>()
+                       for (sec in startSecond..endSecond) {
+                           val segIdx = sec / thumbsPerStrip
+                           visibleSegmentIndices.add(segIdx)
+                       }
+
+                       // MÉTRICA DE PERFORMANCE: Iniciar contagem
+                       drawCallCount.intValue = 0
+                       val frameStartTime = System.nanoTime()
 
 
-                      for (sec in startSecond..endSecond) {
+                       // ═══════════════════════════════════════════════════════════════
+                       // ✅ NOVO: Renderização por STRIP (OTIMIZADO - 30x menos draw calls)
+                       // ═══════════════════════════════════════════════════════════════
+                       for (segIdx in visibleSegmentIndices) {
+                           val strip = strips[segIdx]
+                           val startSec = segIdx * thumbsPerStrip
+                           val stripWidthPx = thumbW * thumbsPerStrip
+                           val x = centerOffset + (startSec * pxPerSecond) - currentScroll
+
+                           drawCallCount.intValue++
+
+                           if (strip != null && !strip.isRecycled) {
+                               // Desenhar STRIP INTEIRA de uma vez (sem recortes)
+                               val verticalOffset = (thumbnailHeightPx - thumbH) / 2f
+
+                               dstRect.set(
+                                   x.toInt(), (thumbnailTop + verticalOffset).toInt(),
+                                   (x + stripWidthPx).toInt(), (thumbnailTop + verticalOffset + thumbH).toInt()
+                               )
+
+                               drawIntoCanvas { canvas ->
+                                   canvas.nativeCanvas.drawBitmap(strip, null, dstRect, renderPaint)
+                               }
+                           } else {
+                               // Strip não carregada - shimmer para a STRIP INTEIRA
+                               drawIntoCanvas { canvas ->
+                                   // Base background para strip inteira
+                                   canvas.nativeCanvas.drawRect(
+                                       x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
+                                       bgPaint
+                                   )
+
+                                   // Shimmer diagonal para strip inteira
+                                   val shimmerPaint = android.graphics.Paint().apply {
+                                       val width = stripWidthPx
+                                       val height = thumbnailHeightPx
+                                       val gradientSize = (width + height) * 0.8f
+
+                                       val offsetX = shimmerProgress * (width + gradientSize) - gradientSize
+                                       val offsetY = shimmerProgress * (height + gradientSize) - gradientSize
+
+                                       shader = android.graphics.LinearGradient(
+                                           x + offsetX, thumbnailTop + offsetY,
+                                           x + offsetX + gradientSize, thumbnailTop + offsetY + gradientSize,
+                                           shimmerGradient, shimmerPositions,
+                                           android.graphics.Shader.TileMode.CLAMP
+                                       )
+                                   }
+
+                                   canvas.nativeCanvas.drawRect(
+                                       x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
+                                       shimmerPaint
+                                   )
+                               }
+                           }
+                       }
+
+                       // ═══════════════════════════════════════════════════════════════
+                       // ❌ ANTIGO: Renderização por SEGUNDO (SUBÓTIMO - mantido para referência)
+                       // ═══════════════════════════════════════════════════════════════
+                       // Comentado pois causa ~30x mais draw calls
+                       /*
+                       for (sec in startSecond..endSecond) {
                            val timeMs = sec * 1000L
                            if (timeMs >= videoDurationMs) break
 
@@ -551,10 +623,10 @@ fun TimelineEditor(
                            val strip = strips[segIdx]
                             if (strip != null && !strip.isRecycled) {
                                 // Recortar o frame correto da strip (mantendo aspect ratio 1:1)
-                                srcRect.set(
-                                    (frameInStrip * thumbW).toInt(), 0,
-                                    ((frameInStrip + 1) * thumbW).toInt(), thumbH.toInt()
-                                )
+                                // srcRect.set(
+                                //     (frameInStrip * thumbW).toInt(), 0,
+                                //     ((frameInStrip + 1) * thumbW).toInt(), thumbH.toInt()
+                                // )
                                 // Manter largura original do thumb para evitar distorção
                                 val thumbDisplayWidth = thumbW
                                 val thumbDisplayHeight = thumbH
@@ -562,15 +634,15 @@ fun TimelineEditor(
                                 // Centralizar verticalmente na área de thumbnails (48dp)
                                 val verticalOffset = (thumbnailHeightPx - thumbDisplayHeight) / 2f
 
-                                dstRect.set(
-                                    x.toInt(), (thumbnailTop + verticalOffset).toInt(),
-                                    (x + thumbDisplayWidth).toInt(), (thumbnailTop + verticalOffset + thumbDisplayHeight).toInt()
-                                )
+                                // dstRect.set(
+                                //     x.toInt(), (thumbnailTop + verticalOffset).toInt(),
+                                //     (x + thumbDisplayWidth).toInt(), (thumbnailTop + verticalOffset + thumbDisplayHeight).toInt()
+                                // )
 
                                 // 🔍 RENDER Strip #$segIdx
 
                                 drawIntoCanvas { canvas ->
-                                    canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
+                                    // canvas.nativeCanvas.drawBitmap(strip, srcRect, dstRect, renderPaint)
                                 }
                              } else {
                                 // Strip não carregada - shimmer effect diagonal suave
@@ -604,12 +676,14 @@ fun TimelineEditor(
                                     }
 
                                          canvas.nativeCanvas.drawRect(
-                                             x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
-                                             shimmerPaint
-                                         )
-                                     }
-                                 }
-                           }
+                                              x, thumbnailTop, x + pxPerSecond, thumbnailTop + thumbnailHeightPx,
+                                              shimmerPaint
+                                          )
+                                      }
+                                  }
+                            }
+                       */
+                       // ═══════════════════════════════════════════════════════════════
                       drawContext.canvas.restore()
 
                      // DRAW AUDIO WAVEFORMS (sincronizado com thumbnails)
@@ -647,7 +721,40 @@ fun TimelineEditor(
                                  )
                              }
                          }
-                         drawContext.canvas.restore()
+                        drawContext.canvas.restore()
+
+                       // MÉTRICA DE PERFORMANCE: Logar draw calls por frame (a cada 60 frames ≈ 1s)
+                       val frameTimeMs = (System.nanoTime() - frameStartTime) / 1_000_000
+                       val currentTime = System.currentTimeMillis()
+
+                       if (currentTime - lastLogTime.longValue > 1000) {
+                           frameCount.intValue++
+                           Timber.i("""
+                               ═══════════════════════════════════════════════════════
+                               TIMELINE PERFORMANCE LOG (Frame #${frameCount.intValue})
+                               ═══════════════════════════════════════════════════════
+                               ✅ OTIMIZAÇÃO ATIVA: Renderização por STRIP
+                               ────────────────────────────────────────────────
+                               📊 MÉTRICAS DO FRAME:
+                               • Draw calls: ${drawCallCount.intValue}
+                               • Strips visíveis: ${visibleSegmentIndices.size}
+                               • Frame time: ${frameTimeMs}ms
+                               • FPS estimado: ${if (frameTimeMs > 0) 1000f / frameTimeMs else 60f} fps
+                               ────────────────────────────────────────────────
+                               📐 CONFIGURAÇÃO:
+                               • thumbsPerStrip: $thumbsPerStrip
+                               • thumbWidth: ${thumbW.toInt()}px
+                               • thumbHeight: ${thumbH.toInt()}px
+                               • pxPerSecond: ${pxPerSecond.toInt()}px
+                               • Timeline width: ${timelineWidth.toInt()}px
+                               ────────────────────────────────────────────────
+                               📈 PERFORMANCE (vs implementação antiga):
+                               • Draw calls redução: ~${(endSecond - startSecond + 1) / visibleSegmentIndices.size.coerceAtLeast(1)}x menos
+                               • Iterações: ${visibleSegmentIndices.size} strips (antigo: ${endSecond - startSecond + 1} frames)
+                               ═══════════════════════════════════════════════════════
+                           """.trimIndent())
+                           lastLogTime.longValue = currentTime
+                       }
                      }
 
                         // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.

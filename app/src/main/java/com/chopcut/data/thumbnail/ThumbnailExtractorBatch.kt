@@ -39,7 +39,13 @@ class ThumbnailExtractorBatch(
         width: Int = 320,
         height: Int = 180
     ): Map<Long, Bitmap> = withContext(Dispatchers.IO) {
+        Timber.d("=== ThumbnailExtractorBatch.extractBatch STARTED ===")
+        Timber.d("uri: $uri")
+        Timber.d("positionsMs: $positionsMs (${positionsMs.size} positions)")
+        Timber.d("target size: ${width}x${height}")
+        
         if (positionsMs.isEmpty()) {
+            Timber.w("No positions to extract, returning empty map")
             return@withContext emptyMap()
         }
 
@@ -55,16 +61,21 @@ class ThumbnailExtractorBatch(
             // ✅ AGORA: Cria UMA vez e reusa para todas as extrações
 
             retriever.setDataSource(context, uri)
+            Timber.d("MediaMetadataRetriever.setDataSource successful")
 
             // Extrair cada posição
             sortedPositions.forEach { positionMs ->
                 try {
+                    Timber.d("Extracting frame at ${positionMs}ms")
                     val bitmap = extractFrameAt(retriever, positionMs, width, height, ThumbnailQuality.LOW)
                     if (bitmap != null) {
                         results[positionMs] = bitmap
+                        Timber.d("Frame at ${positionMs}ms extracted successfully, size=${bitmap.width}x${bitmap.height}")
+                    } else {
+                        Timber.w("Frame at ${positionMs}ms returned null")
                     }
                 } catch (e: Exception) {
-                    Timber.w(e, "Failed to extract frame at ${positionMs}ms")
+                    Timber.e(e, "Failed to extract frame at ${positionMs}ms")
                 }
             }
 
@@ -72,12 +83,14 @@ class ThumbnailExtractorBatch(
             val avgTime = if (results.isNotEmpty()) totalTime / results.size else 0
 
             Timber.i("extractBatch: Completed ${results.size} thumbnails in ${totalTime}ms (avg ${avgTime}ms/frame)")
+            Timber.d("=== ThumbnailExtractorBatch.extractBatch COMPLETED ===")
 
         } catch (e: Exception) {
             Timber.e(e, "extractBatch: Fatal error during batch extraction")
         } finally {
             try {
                 retriever.release()
+                Timber.d("MediaMetadataRetriever released")
             } catch (e: Exception) {
                 Timber.e(e, "extractBatch: Error releasing MediaMetadataRetriever")
             }
@@ -140,16 +153,24 @@ class ThumbnailExtractorBatch(
         height: Int,
         quality: ThumbnailQuality = ThumbnailQuality.LOW
     ): Bitmap? {
+        Timber.d("extractFrameAt called: positionMs=${positionMs}ms, size=${width}x${height}, quality=$quality")
         return try {
             // Se for LOW quality (timeline), extraímos no tamanho exato e retornamos imediatamente
             // Isso evita 100% do overhead de Canvas, Paint e redimensionamento manual.
             if (quality == ThumbnailQuality.LOW) {
-                return retriever.getScaledFrameAtTime(
+                Timber.d("Using getScaledFrameAtTime for LOW quality")
+                val bitmap = retriever.getScaledFrameAtTime(
                     positionMs * 1000,
                     MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                     width,
                     height
                 )
+                if (bitmap != null) {
+                    Timber.d("getScaledFrameAtTime returned bitmap, size=${bitmap.width}x${bitmap.height}")
+                } else {
+                    Timber.w("getScaledFrameAtTime returned null")
+                }
+                return bitmap
             }
 
             // A partir daqui, lógica para HIGH quality (Export/Preview Detalhado)
@@ -228,7 +249,7 @@ class ThumbnailExtractorBatch(
                 frame
             }
         } catch (e: Exception) {
-            android.util.Log.e("ThumbnailAspectMonitor", "❌ EXCEÇÃO durante extração na posição ${positionMs}ms: ${e.message}", e)
+            Timber.tag("ThumbnailAspectMonitor").e(e, "❌ EXCEÇÃO durante extração na posição ${positionMs}ms: ${e.message}")
             Timber.w(e, "extractFrameAt: Error extracting frame at ${positionMs}ms")
             null
         }

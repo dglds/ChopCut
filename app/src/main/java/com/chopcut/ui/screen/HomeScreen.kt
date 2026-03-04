@@ -78,6 +78,12 @@ import com.chopcut.ui.components.buttons.ChopCutPrimaryButton
 import com.chopcut.ui.components.buttons.ChopCutSecondaryButton
 import com.chopcut.ui.components.feedback.DebugEntry
 import com.chopcut.ui.components.feedback.DebugViewModel
+import com.chopcut.data.thumbnail.ThumbnailCacheManager
+import com.chopcut.ChopCutApplication
+import com.chopcut.data.local.PreferencesManager
+import java.io.File
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.chopcut.ui.components.feedback.ErrorState
 import com.chopcut.ui.components.gallery.BottomSheetGallery
 import com.chopcut.ui.theme.Border
@@ -118,10 +124,29 @@ fun HomeScreen(
 
     // Iniciar preload ao selecionar vídeo
     LaunchedEffect(selectedUri, uiState) {
+        Timber.tag("HomeScreen").d("=== LaunchedEffect TRIGGERED ===")
+        Timber.tag("HomeScreen").d("selectedUri: $selectedUri")
+        Timber.tag("HomeScreen").d("uiState: $uiState")
+        Timber.tag("HomeScreen").d("isPreloadReady: $isPreloadReady")
+        
+        Timber.d("=== HomeScreen LaunchedEffect TRIGGERED ===")
+        Timber.d("selectedUri: $selectedUri")
+        Timber.d("uiState: $uiState")
+        Timber.d("isPreloadReady: $isPreloadReady")
+        
         val uri = selectedUri
         if (uri != null && uiState is HomeUiState.VideoLoaded) {
+            Timber.tag("HomeScreen").d("Conditions met, starting preload")
             Timber.d("HomeScreen: Iniciando preload para $uri")
+            Timber.d("HomeScreen: isPreloadReady=$isPreloadReady")
             preloadViewModel.startPreload(uri, stripsToPreload = 6)
+        } else {
+            Timber.tag("HomeScreen").d("Conditions NOT met for preload")
+            Timber.tag("HomeScreen").d("uri != null: ${uri != null}")
+            Timber.tag("HomeScreen").d("uiState is VideoLoaded: ${uiState is HomeUiState.VideoLoaded}")
+            Timber.d("HomeScreen: Conditions not met for preload")
+            Timber.d("uri != null: ${uri != null}")
+            Timber.d("uiState is VideoLoaded: ${uiState is HomeUiState.VideoLoaded}")
         }
     }
 
@@ -208,9 +233,13 @@ fun HomeScreen(
                 }
         
                 item {
-                    FeatureGrid()
+                    FeatureGrid(
+                        onClearCache = {
+                            ChopCutApplication.clearThumbnailCache()
+                        }
+                    )
                 }
-        
+
                 if (uiState is HomeUiState.Error) {
                     item {
                         ErrorState(
@@ -526,13 +555,35 @@ private data class FeatureInfo(
     val icon: ImageVector,
     val title: String,
     val description: String,
-    val accentColor: Color
+    val accentColor: Color,
+    val isCacheFeature: Boolean = false
 )
 
 @Composable
-private fun FeatureGrid() {
+private fun FeatureGrid(onClearCache: () -> Unit) {
+        val context = LocalContext.current
+        val prefsManager = remember { PreferencesManager(context) }
+
+        // Calcular tamanho do cache de disco
+        val diskCacheSize = remember { mutableStateOf(0L) }
+        val diskCacheFiles = remember { mutableStateOf(0) }
+
+        // Atualizar informações do cache ao criar o composable
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            val cacheDir = File(context.cacheDir, "thumbnail_strips")
+            if (cacheDir.exists()) {
+                val files = cacheDir.listFiles() ?: emptyArray()
+                diskCacheFiles.value = files.size
+                diskCacheSize.value = files.sumOf { it.length() }
+            } else {
+                diskCacheFiles.value = 0
+                diskCacheSize.value = 0L
+            }
+        }
+
         val features = remember {
             listOf(
+                FeatureInfo(Icons.Default.Settings, "Cache", formatBytes(diskCacheSize.value), Color(0xFF6B7280), isCacheFeature = true),
                 FeatureInfo(Icons.Default.ContentCut, "Trim", "Cortar trechos", Primary),
                 FeatureInfo(Icons.AutoMirrored.Filled.CallMerge, "Join", "Concatenar vídeos", Waveform),
                 FeatureInfo(Icons.Default.Compress, "Compress", "Reduzir tamanho", Warning),
@@ -563,16 +614,25 @@ private fun FeatureGrid() {
             )
         }
 
-        features.chunked(2).forEach { rowFeatures ->
+        features.chunked(2).forEachIndexed { rowIndex, rowFeatures ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xs)
             ) {
-                rowFeatures.forEach { feature ->
-                    FeatureCard(
-                        feature = feature,
-                        modifier = Modifier.weight(1f)
-                    )
+                rowFeatures.forEachIndexed { colIndex, feature ->
+                    if (feature.isCacheFeature && rowIndex == 0) {  // Primeira linha, primeiro card
+                        CacheFeatureCard(
+                            diskCacheSize = diskCacheSize.value,
+                            onClearCache = onClearCache,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        FeatureCard(
+                            feature = feature,
+                            onClearCache = null,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
                 if (rowFeatures.size < 2) {
                     Spacer(Modifier.weight(1f))
@@ -585,7 +645,8 @@ private fun FeatureGrid() {
 @Composable
 private fun FeatureCard(
     feature: FeatureInfo,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClearCache: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier
@@ -626,6 +687,15 @@ private fun FeatureCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        
+        // Botão de limpar cache no card Trim
+        if (feature.isCacheFeature && onClearCache != null) {
+            Spacer(Modifier.height(ChopCutSpacing.xs))
+            ChopCutSecondaryButton(
+                onClick = onClearCache,
+                text = "Limpar"
+            )
+        }
     }
 }
 
@@ -643,6 +713,47 @@ private fun BadgeText(text: String) {
     )
 }
 
+/**
+ * Card de Cache de Thumbnails nos recursos
+ * Mostra os bytes de cache e botão para limpar
+ */
+@Composable
+private fun CacheFeatureCard(
+    diskCacheSize: Long,
+    onClearCache: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Surface)
+            .padding(ChopCutSpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = "Cache",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = OnSurface
+            )
+            Text(
+                text = formatBytes(diskCacheSize),
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
+        }
+
+        ChopCutSecondaryButton(
+            onClick = onClearCache,
+            text = "Limpar"
+        )
+    }
+    }
+
 private fun formatAspectRatio(ratio: Float): String {
     return when {
         (ratio - 16f / 9f).let { kotlin.math.abs(it) } < 0.01f -> "16:9"
@@ -650,5 +761,17 @@ private fun formatAspectRatio(ratio: Float): String {
         (ratio - 4f / 3f).let { kotlin.math.abs(it) } < 0.01f -> "4:3"
         (ratio - 1f).let { kotlin.math.abs(it) } < 0.01f -> "1:1"
         else -> "%.2f".format(ratio)
+    }
+}
+
+/**
+ * Formata bytes em formato legível (KB, MB, GB)
+ */
+private fun formatBytes(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
+        else -> "${bytes / (1024 * 1024 * 1024)} GB"
     }
 }

@@ -2,8 +2,8 @@ const args = process.argv.splice(2)
 const index = Number(args[0])
 const outputFile = args[1]
 
-const reset = "adb logcat -c"
-const adb = "adb logcat -v raw"
+const resetLogs = "adb logcat -c && "
+const adb = "adb logcat -v"
 
 const tags = ["TrimViewModel", "ThumbnailCacheManager",
     "LoadingOverlay",
@@ -18,18 +18,25 @@ const filters  =[
 ]
 
 //cache monitor
-const cache = `adb logcat -s ThumbnailStrip ThumbnailCacheManager ThumbnailViewModel ThumbnailExtractorBatch`
 
 
-const command = cache
+// 1. Extração de thumbs
+const extracao = `
+adb logcat -c && adb logcat -v time -s ThumbnailStrip:D ThumbnailAspectMonitor:D ThumbnailCacheManager:D ThumbnailViewModel:D | grep -E "(extractSegment|Extracting segment|Batch extraction|extractBatch)"
+`// 2. Montagem das strips
+const stripss = `
+adb logcat -c && adb logcat -v time -s ThumbnailStrip:D ThumbnailAspectMonitor:D | grep -E "(Stitch|drawBitmap|strip|canvas)"
+`
+// 3. Operações do cache (inserção, consulta, recuperação)
+const cach = `
+adb logcat -c && adb logcat -v time -s ThumbnailStrip:D ThumbnailCacheManager:D | grep -E "(Cache HIT|Cache MISS|Cached segment|loadFromCache|saveToCache)"
+`
 
+const tudoJunto = `
+adb logcat -c && adb logcat -v time -s 'ThumbnailStrip:*' 'ThumbnailAspectMonitor:*' 'ThumbnailCacheManager:*' 'ThumbnailViewModel:*' | grep -E "(extractSegment|Extracting segment|Batch extraction|COMPLETED|drawBitmap|Strip|Cache HIT|Cache MISS|Cached segment|loadFromCache|saveToCache|Saving segment)"`
 
+const array  = [
+    `adb logcat -c && adb logcat -v brief -s "ThumbnailStrip:*" "ThumbnailAspectMonitor:*" "ThumbnailCacheManager:*" "ThumbnailViewModel:*" | grep -E "(extractSegment|Extracting segment|Batch extraction|COMPLETED|drawBitmap|Strip|totalSegments|segments out of|strips loaded|loaded|Loading)"`,
+]
 
-if (index == 0)
-    filters.map((c, i) => console.log((i+1) +':' + c))
-else{
-    console.log(command)
-    return command
-}
-
-
+console.log( {extracao, stripss, cach})

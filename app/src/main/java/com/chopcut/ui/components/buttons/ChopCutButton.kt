@@ -109,27 +109,23 @@ fun ChopCutSecondaryButton(
             contentColor = com.chopcut.ui.theme.OnSurface
         ),
         contentPadding = PaddingValues(
-            horizontal = 24.dp,
-            vertical = 12.dp
+            horizontal = 16.dp,
+            vertical = 10.dp
         ),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-        border = ButtonDefaults.outlinedButtonBorder.copy(
-            brush = androidx.compose.ui.graphics.SolidColor(
-                com.chopcut.ui.theme.Border
-            )
-        )
+        border = ButtonDefaults.outlinedButtonBorder
     ) {
         if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
         }
         Text(
             text = text,
-            style = ChopCutTypography.labelLarge
+            style = ChopCutTypography.labelMedium
         )
     }
 }

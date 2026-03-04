@@ -18,6 +18,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_GALLERY_SORT_ORDER = "gallery_sort_order"
         private const val KEY_DEBUG_ENABLED = "debug_enabled" // Debugger toast
         private const val KEY_THUMBS_PER_STRIP = "thumbs_per_strip" // Thumbs por strip (padrão: 10)
+        private const val KEY_CLEAR_CACHE_ON_STARTUP = "clear_cache_on_startup" // Limpar cache ao iniciar
     }
 
     /**
@@ -63,4 +64,23 @@ class PreferencesManager(context: Context) {
     var thumbsPerStrip: Int
         get() = prefs.getInt(KEY_THUMBS_PER_STRIP, 10).coerceIn(5, 30)
         set(value) = prefs.edit().putInt(KEY_THUMBS_PER_STRIP, value.coerceIn(5, 30)).apply()
+
+    /**
+     * Limpar cache de thumbnails ao iniciar o app (DESABILITADO por padrão)
+     *
+     * Útil para:
+     * - Testes (garantir cache limpo entre sessões)
+     * - Debug (recomeçar sempre do zero)
+     *
+     * Nota: Se desabilitado, o cache persiste entre sessões (RECOMENDADO para produção)
+     * Se habilitado, o cache é limpo sempre que o app inicia ou retoma
+     *
+     * Estratégia de cache LRU:
+     * - Memória: 100 strips (~35-40MB) com eviction automático
+     * - Disco: 200MB com LRU baseado em lastModified
+     * - Portanto, o cache se gerencia automaticamente sem limpeza manual
+     */
+    var clearCacheOnStartup: Boolean
+        get() = prefs.getBoolean(KEY_CLEAR_CACHE_ON_STARTUP, false)  // ❌ DESABILITADO por padrão (RECOMENDADO)
+        set(value) = prefs.edit().putBoolean(KEY_CLEAR_CACHE_ON_STARTUP, value).apply()
 }

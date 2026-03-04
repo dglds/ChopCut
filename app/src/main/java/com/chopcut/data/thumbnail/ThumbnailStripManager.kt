@@ -79,7 +79,7 @@ class ThumbnailStripManager(
 
         init {
             val optimalThreads = calculateOptimalThreadCount()
-            android.util.Log.i("ThumbnailStrip", """
+            Timber.tag("ThumbnailStrip").i("""
                 ╔═════════════════════════════════════════════════════════╗
                 ║     THUMBNAIL STRIP MANAGER - CONFIGURAÇÃO             ║
                 ╚═════════════════════════════════════════════════════════╝
@@ -475,14 +475,18 @@ class ThumbnailStripManager(
         durationMs: Long,
         totalSegments: Int
     ): Bitmap? = withContext(Dispatchers.IO) {
+        Timber.d("=== ThumbnailStripManager.extractSegment STARTED ===")
+        Timber.d("segmentIndex: $segmentIndex, totalSegments: $totalSegments, durationMs: $durationMs")
+        
         // Fail-fast se o job já foi cancelado
         coroutineContext.ensureActive()
 
                 // MELHORIA: Tentar carregar do cache primeiro (se habilitado)
+                Timber.d("Cache enabled: ${prefsManager.thumbnailCacheEnabled}")
                 if (prefsManager.thumbnailCacheEnabled) {
                     val cachedStrip = loadFromCache(uri, segmentIndex)
                     if (cachedStrip != null) {
-                        Timber.i("ThumbnailStrip: CACHE HIT - Segment $segmentIndex loaded from disk")
+                        Timber.i("ThumbnailStrip: CACHE HIT - Segment $segmentIndex loaded from disk, size=${cachedStrip.width}x${cachedStrip.height}")
                         return@withContext cachedStrip
                     }
 
@@ -504,7 +508,8 @@ class ThumbnailStripManager(
 
             val framesInSegment = minOf(currentThumbsPerStrip, totalSeconds - startSec)
 
-             try {
+              try {
+                Timber.d("Extracting segment $segmentIndex: $framesInSegment frames, strip size=${thumbWidth * framesInSegment}x$thumbHeight")
                 coroutineContext.ensureActive()
 
                 // Strip RGB_565: metade da memória de ARGB_8888
@@ -528,13 +533,15 @@ class ThumbnailStripManager(
                     height = thumbHeight
                 )
 
+                Timber.d("Batch extraction returned ${extractedFrames.size} frames for segment $segmentIndex")
+
                 if (extractedFrames.isEmpty()) {
-                    android.util.Log.w("ThumbnailAspectMonitor", "❌ ERRO: Nenhum frame extraído para segmento $segmentIndex")
-                    Timber.w("ThumbnailStrip: No frames extracted for segment $segmentIndex")
+                    Timber.tag("ThumbnailAspectMonitor").w("❌ ERRO: Nenhum frame extraído para segmento $segmentIndex")
+                    Timber.e("ThumbnailStrip: No frames extracted for segment $segmentIndex")
                     return@withPermit null
                 }
 
-                android.util.Log.i("ThumbnailAspectMonitor", "   ✅ Extraídos ${extractedFrames.size}/$framesInSegment frames com sucesso")
+                Timber.tag("ThumbnailAspectMonitor").i("   ✅ Extraídos ${extractedFrames.size}/$framesInSegment frames com sucesso")
 
                 // Stitch frames na strip
                 for (frameIdx in 0 until framesInSegment) {
@@ -558,16 +565,18 @@ class ThumbnailStripManager(
                 }
 
                 Timber.d("ThumbnailStrip: Segment $segmentIndex ($framesInSegment frames, ${stripWidth}x$thumbHeight, RGB_565) - BATCH MODE")
+                Timber.d("=== ThumbnailStripManager.extractSegment COMPLETED for segment $segmentIndex ===")
 
                 // MELHORIA: Salvar no cache após extração bem-sucedida (se habilitado)
                 if (prefsManager.thumbnailCacheEnabled) {
+                    Timber.d("Saving segment $segmentIndex to cache...")
                     saveToCache(uri, segmentIndex, strip)
                 }
 
                 strip
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                android.util.Log.e("ThumbnailAspectMonitor", "❌ EXCEÇÃO FATAL ao extrair segmento $segmentIndex: ${e.message}", e)
+                Timber.tag("ThumbnailAspectMonitor").e(e, "❌ EXCEÇÃO FATAL ao extrair segmento $segmentIndex: ${e.message}")
                 Timber.e(e, "ThumbnailStrip: Fatal error extracting segment $segmentIndex")
                 null
             }

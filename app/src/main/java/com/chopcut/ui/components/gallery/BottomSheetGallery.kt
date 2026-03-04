@@ -1,5 +1,7 @@
 package com.chopcut.ui.components.gallery
 
+import timber.log.Timber
+
 import android.content.ContentUris
 import android.net.Uri
 import android.provider.MediaStore
@@ -200,7 +202,13 @@ fun VideoGridItem(video: GalleryVideo, imageLoader: ImageLoader, onClick: (Uri) 
         modifier = Modifier
             .aspectRatio(1f)
             .background(Color.Black)
-            .clickable { onClick(video.uri) }
+            .clickable {
+                Timber.tag("BottomSheetGallery").d("=== VIDEO SELECTED ===")
+                Timber.tag("BottomSheetGallery").d("uri: ${video.uri}")
+                Timber.tag("BottomSheetGallery").d("id: ${video.id}")
+                onClick(video.uri)
+                Timber.tag("BottomSheetGallery").d("onClick chamado")
+            }
     ) {
         Image(
             painter = rememberAsyncImagePainter(

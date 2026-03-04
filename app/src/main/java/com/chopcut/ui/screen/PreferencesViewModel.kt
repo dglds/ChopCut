@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.chopcut.data.local.PreferencesManager
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.data.thumbnail.ThumbnailStripManager
+import com.chopcut.data.thumbnail.ThumbnailCacheManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -131,18 +132,26 @@ class PreferencesViewModel(
     }
 
     /**
-     * Limpa todo o cache de thumbnails do disco
+     * Limpa todo o cache de thumbnails (memória e disco)
      */
-     fun clearThumbnailCache() {
+    fun clearThumbnailCache() {
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = PreferencesUiState.Loading
             try {
                 val context: android.content.Context = getApplication()
+
+                // Limpar cache de memória (LRU)
+                ThumbnailCacheManager.clearMemoryCache()
+                Timber.d("Memory cache cleared")
+
+                // Limpar cache de disco
                 ThumbnailStripManager.clearCache(context)
+                Timber.d("Disk cache cleared")
+
                 _uiState.value = PreferencesUiState.Success(
-                    message = "Cache de thumbnails limpo com sucesso."
+                    message = "Cache de thumbnails limpo com sucesso (memória e disco)."
                 )
-                Timber.i("Thumbnail cache cleared by user")
+                Timber.i("Thumbnail cache cleared by user (memory + disk)")
             } catch (e: Exception) {
                 Timber.e(e, "Error clearing thumbnail cache")
                 _uiState.value = PreferencesUiState.Error(

@@ -28,6 +28,7 @@ import kotlin.math.abs
  * Resolve Problema 6: Cache persiste ao navegar
  */
 object ThumbnailCacheManager {
+    @Volatile
     private var appContext: Context? = null
     
     // Cache em memória LRU (100 strips ~43MB)
@@ -35,6 +36,9 @@ object ThumbnailCacheManager {
     
     // Gerenciador de strips (já existe, vamos reutilizar)
     private var stripManager: ThumbnailStripManager? = null
+    
+    // Lock para inicialização thread-safe
+    private val initLock = Mutex()
     
     // Tracking de jobs
     private val jobsLock = Mutex()
@@ -44,34 +48,56 @@ object ThumbnailCacheManager {
     /**
      * Inicializa o ThumbnailCacheManager com o contexto da aplicação.
      * Deve ser chamado no Application.onCreate()
+     * Thread-safe usando @Volatile + Mutex
      */
-    fun init(context: Context) {
-        appContext = context.applicationContext
-        Timber.i("""
-            ╔═════════════════════════════════════════════════════════╗
-            ║          THUMBNAIL CACHE MANAGER - INICIALIZADO        ║
-            ╚═════════════════════════════════════════════════════════╝
+    suspend fun init(context: Context) {
+        initLock.withLock {
+            if (appContext != null) {
+                Timber.d("ThumbnailCacheManager: Já inicializado, ignorando")
+                return@withLock
+            }
             
-            🗄️  CACHE EM MEMÓRIA (LRU):
-               • Capacidade: 100 strips (~43MB)
-               • Auto-eviction: Least Recently Used
+            appContext = context.applicationContext
             
-            💾  CACHE EM DISCO:
-               • Formato: WEBP (70% qualidade)
-               • Capacidade: 200MB
-               • LRU baseado em lastModified
-            
-            🔗 ARQUITETURA:
-               • Memória: ThumbnailCache (LRU)
-               • Disco: ThumbnailStripManager
-               • Jobs: Tracking inteligente por vídeo/segmento
-            ╚═════════════════════════════════════════════════════════╝
-        """.trimIndent())
+            Timber.i("""
+                ╔═════════════════════════════════════════════════════════╗
+                ║          THUMBNAIL CACHE MANAGER - INICIALIZADO        ║
+                ╚═════════════════════════════════════════════════════════╝
+                
+                🗄️  CACHE EM MEMÓRIA (LRU):
+                   • Capacidade: 100 strips (~43MB)
+                   • Auto-eviction: Least Recently Used
+                 
+                💾  CACHE EM DISCO:
+                   • Formato: WEBP (70% qualidade)
+                   • Capacidade: 200MB
+                   • LRU baseado em lastModified
+                 
+                🔗 ARQUITETURA:
+                   • Memória: ThumbnailCache (LRU)
+                   • Disco: ThumbnailStripManager
+                   • Jobs: Tracking inteligente por vídeo/segmento
+                 ╚═════════════════════════════════════════════════════════╝
+            """.trimIndent())
+        }
+    }
+    
+    /**
+     * Versão síncrona para compatibilidade (chamada no Application.onCreate)
+     * Usa runBlocking para garantir inicialização síncrona
+     */
+    fun initSync(context: Context) {
+        kotlinx.coroutines.runBlocking {
+            init(context)
+        }
     }
     
     /**
      * Configura o ThumbnailStripManager com as dimensões corretas.
      * Deve ser chamado antes de extrair strips para um novo vídeo.
+     *
+     * ✅ MELHORIA: Usa as dimensões exatas fornecidas para evitar
+     * problemas de extração e cache miss desnecessário.
      */
     fun configureStripManager(
         thumbWidth: Int,
@@ -79,7 +105,7 @@ object ThumbnailCacheManager {
         thumbsPerStrip: Int
     ) {
         val context = appContext ?: throw IllegalStateException("ThumbnailCacheManager not initialized")
-        
+
         stripManager = ThumbnailStripManager(
             context = context,
             thumbWidth = thumbWidth,
@@ -87,10 +113,19 @@ object ThumbnailCacheManager {
             thumbsPerStrip = thumbsPerStrip,
             adaptiveStrips = false
         )
-        
+
         Timber.d("ThumbnailCacheManager: StripManager configured with thumbWidth=$thumbWidth, thumbHeight=$thumbHeight, thumbsPerStrip=$thumbsPerStrip")
     }
-    
+
+    /**
+     * Garante que o cache está inicializado
+     */
+    private fun ensureInitialized() {
+        if (appContext == null) {
+            throw IllegalStateException("ThumbnailCacheManager not initialized. Call init() first.")
+        }
+    }
+
     /**
      * Obtém ou extrai uma strip de forma inteligente usando cache-aside.
      * 
@@ -115,30 +150,57 @@ object ThumbnailCacheManager {
         thumbHeight: Int,
         thumbsPerStrip: Int
     ): Bitmap? {
+        Timber.d("ThumbnailCacheManager.getStrip called: segment=$segmentIndex, duration=$durationMs, size=${thumbWidth}x$thumbHeight")
         ensureInitialized()
-        
-        // Configurar stripManager se necessário
-        if (stripManager == null || 
-            stripManager!!.thumbWidth != thumbWidth || 
-            stripManager!!.thumbHeight != thumbHeight || 
-            stripManager!!.thumbsPerStrip != thumbsPerStrip) {
+
+        // ✅ OTIMIZAÇÃO: Configurar stripManager APENAS se realmente necessário
+        // Se as dimensões forem as mesmas, REUSAR o stripManager existente
+        // Isso evita recriar instâncias e melhora hit rate do cache de disco
+        val needsNewStripManager = stripManager == null ||
+            stripManager!!.thumbWidth != thumbWidth ||
+            stripManager!!.thumbHeight != thumbHeight ||
+            stripManager!!.thumbsPerStrip != thumbsPerStrip
+
+        if (needsNewStripManager) {
             configureStripManager(thumbWidth, thumbHeight, thumbsPerStrip)
+            Timber.d("ThumbnailCacheManager: Configured new stripManager for dimensions ${thumbWidth}x${thumbHeight}")
+        } else {
+            Timber.d("ThumbnailCacheManager: Reusing existing stripManager")
         }
-        
+
         val uriString = uri.toString()
         val positionKey = segmentIndex.toLong()
-        
+
+        // ✅ MELHORIA: Verificar se bitmap do cache ainda é válido antes de retornar
+        val cached = memoryCache.get(uriString, positionKey)
+        if (cached != null && !cached.isRecycled) {
+            Timber.d("ThumbnailCacheManager: Cache HIT (bitmap válido) for segment $segmentIndex")
+            return cached
+        } else if (cached != null && cached.isRecycled) {
+            Timber.w("ThumbnailCacheManager: Cache HIT mas bitmap está reciclado, removendo do cache for segment $segmentIndex")
+            memoryCache.remove(uriString, positionKey)
+            // Continua para cache miss abaixo
+        } else {
+            Timber.d("ThumbnailCacheManager: Cache MISS for segment $segmentIndex, will extract")
+        }
+
         // Tentar cache-aside: memória → disco → extração
         return memoryCache.getOrPut(uriString, positionKey) {
             // Cache miss: tentar disco ou extrair
-            stripManager!!.extractSegment(uri, segmentIndex, durationMs) 
-                ?: throw NoSuchElementException("Failed to extract segment $segmentIndex")
+            Timber.d("ThumbnailCacheManager: Extracting segment $segmentIndex (cache miss)")
+            val strip = stripManager!!.extractSegment(uri, segmentIndex, durationMs)
+            if (strip != null) {
+                Timber.d("ThumbnailCacheManager: Segment $segmentIndex extracted successfully, size=${strip.width}x${strip.height}")
+            } else {
+                Timber.e("ThumbnailCacheManager: Failed to extract segment $segmentIndex, returning null")
+            }
+            strip ?: throw NoSuchElementException("Failed to extract segment $segmentIndex")
         }
     }
-    
+
     /**
      * Carrega uma strip específica com tracking para cancelamento inteligente.
-     * 
+     *
      * Resolve Problema 3: Cancelamento inteligente ao pular scroll
      */
     suspend fun loadStripWithTracking(
@@ -385,16 +447,7 @@ object ThumbnailCacheManager {
         clearMemoryCache()
         Timber.i("ThumbnailCacheManager: All caches cleared")
     }
-    
-    /**
-     * Verifica se foi inicializado corretamente.
-     */
-    private fun ensureInitialized() {
-        if (appContext == null) {
-            throw IllegalStateException("ThumbnailCacheManager not initialized. Call init(context) first.")
-        }
-    }
-    
+
     /**
      * Estatísticas do cache manager.
      */

@@ -48,7 +48,14 @@ class HomeViewModel(
     val errorState: StateFlow<ErrorHandler.ErrorState?> = _errorState.asStateFlow()
 
     fun selectVideo(uri: Uri) {
+        Timber.tag("HomeViewModel").d("=== selectVideo CALLED ===")
+        Timber.tag("HomeViewModel").d("uri: $uri")
+        
+        Timber.d("=== HomeViewModel.selectVideo CALLED ===")
+        Timber.d("uri: $uri")
         _selectedVideoUri.value = uri
+        Timber.tag("HomeViewModel").d("_selectedVideoUri atualizado para: ${_selectedVideoUri.value}")
+        Timber.d("_selectedVideoUri atualizado para: ${_selectedVideoUri.value}")
         loadVideoMetadata(uri)
     }
     
@@ -58,23 +65,31 @@ class HomeViewModel(
     }
     
     private fun loadVideoMetadata(uri: Uri) {
+        Timber.d("=== HomeViewModel.loadVideoMetadata CALLED ===")
+        Timber.d("uri: $uri")
+        
         viewModelScope.launch(DispatcherProvider.io) {
+            Timber.d("=== loadVideoMetadata coroutine STARTED ===")
             _uiState.value = HomeUiState.Loading
             _errorState.value = null
 
+            Timber.d("Chamando videoRepository.getMetadata...")
             val result = safeExecuteSuspend(context = getApplication()) {
                 videoRepository.getMetadata(uri)
             }
+            Timber.d("videoRepository.getMetadata retornou: $result")
 
             when (result) {
                 is com.chopcut.util.error.ErrorResult.Success -> {
                     val metadata = result.data
+                    Timber.d("Metadata obtido: $metadata")
                     if (metadata != null) {
                         // Validar duração
                         val validation = VideoConstraints.getValidationMessage(
                             metadata.durationMs
                         )
                         if (validation != null) {
+                            Timber.w("Vídeo rejeitado: $validation")
                             _errorState.value = ErrorHandler.ErrorState(
                                 title = "Vídeo muito longo",
                                 message = validation,
@@ -82,9 +97,11 @@ class HomeViewModel(
                             )
                             _uiState.value = HomeUiState.Error(validation)
                         } else {
+                            Timber.d("Vídeo válido, mudando estado para VideoLoaded")
                             _uiState.value = HomeUiState.VideoLoaded(metadata)
                             Timber.d("Video loaded: ${metadata.fileName}")
-                            // NOTA: HomeScreen vai chamar PreloadViewModel.startPreload()
+                            Timber.d("Duration: ${metadata.durationMs}ms")
+                            Timber.d("NOTA: HomeScreen vai chamar PreloadViewModel.startPreload()")
                         }
                     } else {
                         _errorState.value = ErrorHandler.ErrorState(
@@ -95,10 +112,12 @@ class HomeViewModel(
                     }
                 }
                 is com.chopcut.util.error.ErrorResult.Error -> {
+                    Timber.e("Erro ao carregar metadados: ${result.errorState}")
                     _errorState.value = result.errorState
                     _uiState.value = HomeUiState.Error(result.errorState.message)
                 }
             }
+            Timber.d("=== loadVideoMetadata coroutine FINISHED ===")
         }
     }
 

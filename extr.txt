@@ -1,0 +1,325 @@
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=10000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=30000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=0ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=40000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=50000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=20000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=30000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=10000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=21000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=11000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=22000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=12000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=23000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=13000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=24000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=14000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=25000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=15000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=26000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=31000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=51000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=41000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=1000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=31000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=11000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=16000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=27000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=32000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=52000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=42000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=2000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=32000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=12000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=17000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=28000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=33000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=53000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=43000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=3000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=33000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=13000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=18000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=29000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=34000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=54000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=44000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=4000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=34000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=14000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=19000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=35000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=20000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=55000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=45000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=5000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=35000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=15000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=36000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=40000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=21000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=56000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=46000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=6000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=36000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=16000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=37000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=41000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=22000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=57000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=47000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=7000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=37000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=17000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=38000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=42000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=23000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=58000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=48000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=8000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=38000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=18000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=39000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=43000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=24000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=59000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=49000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=9000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=39000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=19000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=44000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=0ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=25000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=50000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=45000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=1000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=26000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=51000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=46000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=2000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=27000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=52000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=47000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=3000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=28000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=53000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=48000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=4000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=29000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positionMs=54000ms, size=168x168, quality=LOW
+D/ThumbnailExtractorBatch(24253): Using getScaledFrameAtTime for LOW quality
+D/ThumbnailExtractorBatch(24253): getScaledFrameAtTime returned bitmap, size=168x168
+D/ThumbnailExtractorBatch(24253): extractFrameAt called: positi

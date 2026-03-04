@@ -53,8 +53,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Inicializar ThumbnailCacheManager singleton (FASE 1.4 do PLANO_OTIMIZACAO_CACHE.md)
-        com.chopcut.data.thumbnail.ThumbnailCacheManager.init(applicationContext)
+        // NOTA: ThumbnailCacheManager é inicializado no ChopCutApplication.initSync()
 
         enableEdgeToEdge()
         setContent {
