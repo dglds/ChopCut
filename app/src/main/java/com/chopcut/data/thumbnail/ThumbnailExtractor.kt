@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import com.chopcut.config.constants.ThumbnailConstants
+import com.chopcut.config.constants.FileFormatConstants
 import com.chopcut.data.model.ThumbnailExtractionProgress
 import com.chopcut.data.model.ThumbnailFormat
 import com.chopcut.data.model.ThumbnailSettings
@@ -52,8 +54,8 @@ class ThumbnailExtractor(
 
             // Get frame at position
             // For HIGH quality, we extract slightly larger and scale down with filtering (Anti-Aliasing)
-            val extractWidth = if (quality == ThumbnailQuality.HIGH) (width * 1.2f).toInt() else width
-            val extractHeight = if (quality == ThumbnailQuality.HIGH) (height * 1.2f).toInt() else height
+            val extractWidth = if (quality == ThumbnailQuality.HIGH) (width * ThumbnailConstants.Quality.HIGH_QUALITY_EXTRACT_FACTOR).toInt() else width
+            val extractHeight = if (quality == ThumbnailQuality.HIGH) (height * ThumbnailConstants.Quality.HIGH_QUALITY_EXTRACT_FACTOR).toInt() else height
 
             val rawFrame = retriever.getScaledFrameAtTime(
                 positionMs * 1000, // Convert to microseconds
@@ -118,8 +120,8 @@ class ThumbnailExtractor(
     suspend fun extractToFile(
         uri: Uri,
         destFile: java.io.File,
-        width: Int = 320,
-        height: Int = 180,
+        width: Int = ThumbnailConstants.Dimensions.DEFAULT_WIDTH,
+        height: Int = ThumbnailConstants.Dimensions.DEFAULT_HEIGHT,
         rotation: Int = 0
     ): Boolean = withContext(Dispatchers.IO) {
         var bitmap = extractAt(uri, 0, width, height) // Extract at start (0ms)
@@ -140,7 +142,7 @@ class ThumbnailExtractor(
                 }
 
                 java.io.FileOutputStream(destFile).use { out ->
-                    bitmap?.compress(Bitmap.CompressFormat.JPEG, 80, out)
+                    bitmap?.compress(Bitmap.CompressFormat.JPEG, ThumbnailConstants.Quality.JPEG_COMPRESSION_QUALITY, out)
                 }
                 Timber.d("Thumbnail saved to ${destFile.absolutePath} (rot: $rotation)")
                 true
@@ -200,8 +202,8 @@ class ThumbnailExtractor(
 
                     try {
                         val quality = settings.extractionQuality
-                        val extractWidth = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.width * 1.2f).toInt() else settings.dimensionPreset.width
-                        val extractHeight = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.height * 1.2f).toInt() else settings.dimensionPreset.height
+                        val extractWidth = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.width * ThumbnailConstants.Quality.HIGH_QUALITY_EXTRACT_FACTOR).toInt() else settings.dimensionPreset.width
+                        val extractHeight = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.height * ThumbnailConstants.Quality.HIGH_QUALITY_EXTRACT_FACTOR).toInt() else settings.dimensionPreset.height
 
                         val rawFrame = retriever.getScaledFrameAtTime(
                             positionMs * 1000,
@@ -312,9 +314,9 @@ class ThumbnailExtractor(
 
                 // Determine file extension and compress format
                 val (extension, compressFormat) = when (settings.format) {
-                    ThumbnailFormat.JPEG -> ".jpg" to Bitmap.CompressFormat.JPEG
-                    ThumbnailFormat.PNG -> ".png" to Bitmap.CompressFormat.PNG
-                    ThumbnailFormat.WEBP -> ".webp" to Bitmap.CompressFormat.WEBP
+                    ThumbnailFormat.JPEG -> FileFormatConstants.Extensions.JPG to Bitmap.CompressFormat.JPEG
+                    ThumbnailFormat.PNG -> FileFormatConstants.Extensions.PNG to Bitmap.CompressFormat.PNG
+                    ThumbnailFormat.WEBP -> FileFormatConstants.Extensions.WEBP to Bitmap.CompressFormat.WEBP
                 }
 
                 var bitmap: Bitmap? = null
@@ -326,8 +328,8 @@ class ThumbnailExtractor(
 
                     try {
                         val quality = settings.extractionQuality
-                        val extractWidth = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.width * 1.2f).toInt() else settings.dimensionPreset.width
-                        val extractHeight = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.height * 1.2f).toInt() else settings.dimensionPreset.height
+                        val extractWidth = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.width * ThumbnailConstants.Quality.HIGH_QUALITY_EXTRACT_FACTOR).toInt() else settings.dimensionPreset.width
+                        val extractHeight = if (quality == ThumbnailQuality.HIGH) (settings.dimensionPreset.height * ThumbnailConstants.Quality.HIGH_QUALITY_EXTRACT_FACTOR).toInt() else settings.dimensionPreset.height
 
                         val rawFrame = retriever.getScaledFrameAtTime(
                             positionMs * 1000,
@@ -442,8 +444,8 @@ class ThumbnailExtractor(
                 val positionMs = i * intervalMs
 
                 // For strip, we use HIGH quality by default for best visual
-                val extractWidth = (width * 1.2f).toInt()
-                val extractHeight = (height * 1.2f).toInt()
+                val extractWidth = (width * ThumbnailConstants.Quality.HIGH_QUALITY_EXTRACT_FACTOR).toInt()
+                val extractHeight = (height * ThumbnailConstants.Quality.HIGH_QUALITY_EXTRACT_FACTOR).toInt()
 
                 val rawFrame = retriever.getScaledFrameAtTime(
                     positionMs * 1000,
@@ -679,7 +681,7 @@ class ThumbnailExtractor(
                 val thumbHeight = settings.dimensionPreset.height
 
                 // Calculate interval between thumbnails
-                val intervalMs = 1000L / settings.thumbsPerSecond
+                val intervalMs = ThumbnailConstants.Timing.INTERVAL_CALCULATION_DIVISOR / settings.thumbsPerSecond
                 val totalThumbnails = (durationMs / intervalMs).toInt()
 
                 Timber.d("Extracting filmstrip: $totalThumbnails thumbs from ${durationMs}ms video")
@@ -861,21 +863,21 @@ class ThumbnailExtractor(
         /**
          * Default thumbnail size for timeline
          */
-        const val DEFAULT_THUMB_WIDTH = 50
-        const val DEFAULT_THUMB_HEIGHT = 50
+        const val DEFAULT_THUMB_WIDTH = ThumbnailConstants.Dimensions.NORMAL_WIDTH
+        const val DEFAULT_THUMB_HEIGHT = ThumbnailConstants.Dimensions.NORMAL_HEIGHT
 
         /**
          * Recommended number of thumbnails for timeline
          */
-        const val RECOMMENDED_THUMB_COUNT = 10
+        const val RECOMMENDED_THUMB_COUNT = ThumbnailConstants.Quality.DEFAULT_THUMBS_PER_STRIP
     }
 
     /**
      * Size presets for timeline thumbnails
      */
     enum class ThumbnailSize(val width: Int, val height: Int) {
-        COMPACT(40, 40),
-        NORMAL(50, 50),
-        DETAILED(80, 80)
+        COMPACT(ThumbnailConstants.Dimensions.COMPACT_WIDTH, ThumbnailConstants.Dimensions.COMPACT_HEIGHT),
+        NORMAL(ThumbnailConstants.Dimensions.NORMAL_WIDTH, ThumbnailConstants.Dimensions.NORMAL_HEIGHT),
+        DETAILED(ThumbnailConstants.Dimensions.DETAILED_WIDTH, ThumbnailConstants.Dimensions.DETAILED_HEIGHT)
     }
 }

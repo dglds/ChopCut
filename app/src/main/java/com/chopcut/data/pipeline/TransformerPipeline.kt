@@ -88,7 +88,7 @@ class TransformerPipeline(
                 override fun onCompleted(composition: Composition, result: ExportResult) {
                     isFinished = true
                     mainHandler.removeCallbacks(progressRunnable)
-                    Timber.tag("TransformerPipeline").d(file exists: ${outputFile.exists(, "Export finished successfully)}, size: ${outputFile.length()}")
+                    Timber.tag("TransformerPipeline").d("Export finished successfully, file exists: ${outputFile.exists()}, size: ${outputFile.length()}")
                     Timber.d("Export finished successfully")
                     trySend(TrimProgress.Completed(outputFile))
                     channel.close()

@@ -11,6 +11,9 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.util.Size
+import com.chopcut.config.constants.ThumbnailConstants
+import com.chopcut.config.constants.CacheConstants
+import com.chopcut.config.constants.PerformanceConstants
 import com.chopcut.data.local.PreferencesManager
 import com.chopcut.data.model.ThumbnailQuality
 import kotlinx.coroutines.Dispatchers
@@ -54,31 +57,31 @@ class ThumbnailStripManager(
 ) {
     /** Gerenciador de preferências para verificar se cache está habilitado */
     private val prefsManager = PreferencesManager(context)
-    
+
     /** Configuração de strips adaptativas */
-    private val minThumbsPerStrip = 5  // Mínimo para início rápido
+    private val minThumbsPerStrip = ThumbnailConstants.Quality.MIN_THUMBS_PER_STRIP
     
     companion object {
         /** Limite de concorrência para extração (baseado no hardware) */
-        private val extractSemaphore = Semaphore(calculateOptimalThreadCount())
+        private val extractSemaphore = Semaphore(PerformanceConstants.ThreadCounts.calculateOptimalThreads(Runtime.getRuntime().availableProcessors()))
 
         /** Limite de concorrência para I/O de escrita (permite escrita paralela) */
-        private val ioSemaphore = Semaphore(3)
+        private val ioSemaphore = Semaphore(ThumbnailConstants.Concurrency.IO_SEMAPHORE_PERMITS)
 
         /** Diretório de cache para strips */
         private const val CACHE_DIR = "thumbnail_strips"
 
-        /** Tamanho máximo do cache em bytes (200MB) */
-        private const val MAX_CACHE_SIZE = 200L * 1024 * 1024
+        /** Tamanho máximo do cache em bytes */
+        private const val MAX_CACHE_SIZE = ThumbnailConstants.Cache.MAX_CACHE_SIZE
 
         /** Versão do cache para invalidação manual ao mudar formatos/lógica */
-        private const val CACHE_VERSION = 3 // v1=JPEG, v2=WEBP, v3=AdaptiveStrips
+        private const val CACHE_VERSION = ThumbnailConstants.Cache.CACHE_VERSION
 
-        /** Qualidade para compressão das strips (70% = excelente equilíbrio qualidade/tamanho para tiras) */
-        private const val COMPRESSION_QUALITY = 70
+        /** Qualidade para compressão das strips */
+        private const val COMPRESSION_QUALITY = ThumbnailConstants.Quality.STRIP_COMPRESSION_QUALITY
 
         init {
-            val optimalThreads = calculateOptimalThreadCount()
+            val optimalThreads = PerformanceConstants.ThreadCounts.calculateOptimalThreads(Runtime.getRuntime().availableProcessors())
             Timber.tag("ThumbnailStrip").i("""
                 ╔═════════════════════════════════════════════════════════╗
                 ║     THUMBNAIL STRIP MANAGER - CONFIGURAÇÃO             ║
@@ -87,61 +90,38 @@ class ThumbnailStripManager(
                 📊 HARDWARE DETECTADO:
                    • CPU Cores: ${Runtime.getRuntime().availableProcessors()}
                    • Threads de extração: $optimalThreads (máximo)
-                   • Threads de I/O: 3 (escrita paralela)
-                
-                💡 ESTRATÉGIA ADOTADA:
-                   ${when {
-                       Runtime.getRuntime().availableProcessors() <= 2 -> "→ Baixo custo: 2 threads (mínimo para overhead)"
-                       Runtime.getRuntime().availableProcessors() <= 4 -> "→ Médio: 4 threads (equilíbrio)"
-                       Runtime.getRuntime().availableProcessors() <= 6 -> "→ High-end: 6 threads (alto throughput)"
-                       else -> "→ Muito potente: 8 threads (máximo throughput)"
-                   }}
-                
-                🚀 OTIMIZAÇÕES HABILITADAS:
-                   ✓ Threads dinâmicas baseadas no hardware
-                   ✓ Escrita paralela (até 3 strips simultâneas)
-                   ✓ Cache LRU em disco (200MB)
-                   ✓ Compressão WEBP (70% qualidade)
-                ╚═════════════════════════════════════════════════════════╝
+                   • Threads de I/O: ${ThumbnailConstants.Concurrency.IO_SEMAPHORE_PERMITS} (escrita paralela)
+                 
+                 💡 ESTRATÉGIA ADOTADA:
+                    ${when {
+                        Runtime.getRuntime().availableProcessors() <= 2 -> "→ Baixo custo: ${PerformanceConstants.ThreadCounts.LOW_END} threads (mínimo para overhead)"
+                        Runtime.getRuntime().availableProcessors() <= 4 -> "→ Médio: ${PerformanceConstants.ThreadCounts.MID_RANGE} threads (equilíbrio)"
+                        Runtime.getRuntime().availableProcessors() <= 6 -> "→ High-end: ${PerformanceConstants.ThreadCounts.HIGH_END} threads (alto throughput)"
+                        else -> "→ Muito potente: ${PerformanceConstants.ThreadCounts.MAX} threads (máximo throughput)"
+                    }}
+                 
+                 🚀 OTIMIZAÇÕES HABILITADAS:
+                    ✓ Threads dinâmicas baseadas no hardware
+                    ✓ Escrita paralela (até ${ThumbnailConstants.Concurrency.IO_SEMAPHORE_PERMITS} strips simultâneas)
+                    ✓ Cache LRU em disco (${ThumbnailConstants.Cache.MAX_CACHE_SIZE / 1024 / 1024}MB)
+                    ✓ Compressão WEBP (${ThumbnailConstants.Quality.STRIP_COMPRESSION_QUALITY}% qualidade)
+                 ╚═════════════════════════════════════════════════════════╝
             """.trimIndent())
-        }
-
-        /**
-         * Calcula o número ótimo de threads de extração baseado no hardware.
-         *
-         * Resolve Problema 5: Threads dinâmicas baseadas no device
-         *
-         * Estratégia OTIMIZADA:
-         * - Devices de baixo custo (≤2 cores): 2 threads (mínimo para overhead)
-         * - Devices médios (≤4 cores): 4 threads (equilíbrio)
-         * - Devices high-end (≤6 cores): 6 threads (alto throughput)
-         * - Devices muito potentes (>6 cores): 8 threads (máximo throughput)
-         *
-         * @return Número ótimo de threads para extração
-         */
-        private fun calculateOptimalThreadCount(): Int {
-            val cores = Runtime.getRuntime().availableProcessors()
-            return when {
-                cores <= 2 -> 2      // Baixo custo: mínimo para overhead
-                cores <= 4 -> 4      // Médio: equilíbrio
-                cores <= 6 -> 6      // High-end: alto throughput
-                else -> 8            // Muito potente: máximo throughput (OTIMIZADO)
-            }
         }
         
         /**
          * Calcula thumbsPerStrip para um segmento específico usando estratégia adaptativa.
-         * 
+         *
          * Estratégia: Começa pequena (5) para carregar rápido o início, cresce suavemente
          * até o limite máximo usando curva de potência (exponencial suave).
-         * 
+         *
          * Exemplo para vídeo de 15min com max=20:
          * - Segmento 0 (0%): 5 thumbs
          * - Segmento 10 (25%): ~7 thumbs
          * - Segmento 20 (50%): ~11 thumbs
          * - Segmento 30 (75%): ~14 thumbs
          * - Segmento 40+ (100%): 20 thumbs
-         * 
+         *
          * @param segmentIndex Índice do segmento (0-based)
          * @param totalSegments Número total de segmentos
          * @param maxThumbsPerStrip Limite máximo de thumbs por strip
@@ -152,22 +132,22 @@ class ThumbnailStripManager(
             segmentIndex: Int,
             totalSegments: Int,
             maxThumbsPerStrip: Int,
-            minThumbsPerStrip: Int = 5
+            minThumbsPerStrip: Int = ThumbnailConstants.Quality.MIN_THUMBS_PER_STRIP
         ): Int {
             if (totalSegments <= 1) return maxThumbsPerStrip
-            
+
             // Progresso normalizado (0.0 a 1.0)
             val progress = segmentIndex.toFloat() / (totalSegments - 1).toFloat()
-            
+
             // Curva de potência suave (ex: progress^0.5)
             // Isso faz o crescimento ser mais rápido no início, mais lento depois
-            val power = 0.5f
+            val power = ThumbnailConstants.Quality.ADAPTIVE_POWER_CURVE_EXPONENT
             val adjustedProgress = progress.coerceIn(0f, 1f).pow(power)
-            
+
             // Calcular thumbsPerStrip ajustado
             val range = maxThumbsPerStrip - minThumbsPerStrip
             val thumbsForSegment = (minThumbsPerStrip + (range * adjustedProgress)).toInt()
-            
+
             return thumbsForSegment.coerceIn(minThumbsPerStrip, maxThumbsPerStrip)
         }
         
@@ -312,8 +292,8 @@ class ThumbnailStripManager(
                 val elapsed = System.currentTimeMillis() - startTime
 
                 // MÉTRICAS DE PERFORMANCE: Alertar se cache I/O está lento
-                if (elapsed > 50) {
-                    Timber.w("⚠️ Slow disk cache read: ${elapsed}ms for segment $segmentIndex (threshold: 50ms)")
+                if (elapsed > ThumbnailConstants.Timing.CACHE_READ_THRESHOLD_MS) {
+                    Timber.w("⚠️ Slow disk cache read: ${elapsed}ms for segment $segmentIndex (threshold: ${ThumbnailConstants.Timing.CACHE_READ_THRESHOLD_MS}ms)")
                 } else {
                     Timber.d("✓ Cache HIT for segment $segmentIndex (${elapsed}ms)")
                 }
@@ -402,7 +382,7 @@ class ThumbnailStripManager(
                 
                 // Ordenar por lastModified (mais antigos primeiro)
                 val sortedFiles: List<File> = cacheFiles.sortedBy { file -> file.lastModified() }
-                val filesToDelete: List<File> = sortedFiles.take(cacheFiles.size / 4)
+                val filesToDelete: List<File> = sortedFiles.take(cacheFiles.size / CacheConstants.Thumbnail.TRIM_RATIO_DIVISOR)
                 
                 var deletedSize = 0L
                 filesToDelete.forEach { file: File ->

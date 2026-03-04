@@ -4,6 +4,7 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import com.chopcut.config.constants.AudioConstants
 import com.chopcut.util.TimeTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,14 +21,9 @@ class AudioDataExtractor(
 ) {
 
     companion object {
-        // Threshold agressivo para silêncio (valores abaixo são considerados silêncio)
-        private const val SILENCE_THRESHOLD = 0.03f
-
-        // Fator de boost para voz (amplifica sinais de voz detectados)
-        private const val VOICE_BOOST = 1.5f
-
-        // Número de amostras para coletar para análise de ruído (limite seguro)
-        private const val NOISE_SAMPLE_SIZE = 50000 // ~1 segundo de áudio
+        private const val SILENCE_THRESHOLD = AudioConstants.Quality.SILENCE_THRESHOLD
+        private const val VOICE_BOOST = AudioConstants.Quality.VOICE_BOOST_FACTOR
+        private const val NOISE_SAMPLE_SIZE = AudioConstants.Extraction.NOISE_SAMPLE_SIZE
     }
 
     suspend fun extractRawPcmData(
@@ -60,7 +56,7 @@ class AudioDataExtractor(
 
             val format = extractor.getTrackFormat(audioTrackIndex)
             val mime = format.getString(MediaFormat.KEY_MIME)!!
-            val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE, 44100)
+            val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE, AudioConstants.Extraction.DEFAULT_SAMPLE_RATE)
             val channelCount = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
                 format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             } else 1
@@ -74,7 +70,7 @@ class AudioDataExtractor(
                 val totalFrames = (sampleRate * channelCount * expectedDurationMs / 1000).toLong()
                 (totalFrames.toFloat() / targetBarCount).toInt().coerceAtLeast(1)
             } else {
-                1000
+                AudioConstants.Extraction.DEFAULT_SAMPLES_PER_BAR
             }
             val estimatedPoints = targetBarCount
 
@@ -83,12 +79,12 @@ class AudioDataExtractor(
             // FASE 1: Coletar amostras para análise de ruído (primeiros segundos)
             val noiseSamples = mutableListOf<Float>()
             val bufferInfo = MediaCodec.BufferInfo()
-            val timeoutUs = 100000L
+            val timeoutUs = AudioConstants.Extraction.DECODER_TIMEOUT_US
 
             var outputDone = false
             var inputDone = false
             var tryAgainCount = 0
-            val maxTryAgain = 200
+            val maxTryAgain = AudioConstants.Extraction.MAX_TRY_AGAIN
             var needsEosSent = false
 
             var reusableShortArray: ShortArray? = null
@@ -234,7 +230,7 @@ class AudioDataExtractor(
                 val sortedNoise = noiseSamples.sorted()
                 val noiseSampleSize = (sortedNoise.size * 0.2).toInt().coerceAtLeast(1)
                 val noiseFloor = sortedNoise.take(noiseSampleSize).average().toFloat()
-                val dynamicThreshold = (noiseFloor * 4f).coerceAtLeast(SILENCE_THRESHOLD)
+                val dynamicThreshold = (noiseFloor * AudioConstants.Quality.DYNAMIC_THRESHOLD_MULTIPLIER).coerceAtLeast(SILENCE_THRESHOLD)
 
                 Timber.d("Noise floor: $noiseFloor, Dynamic threshold: $dynamicThreshold")
 
@@ -302,7 +298,7 @@ data class AudioRawData(
     companion object {
         fun empty() = AudioRawData(
             pcmSamples = floatArrayOf(),
-            sampleRate = 44100,
+            sampleRate = AudioConstants.Extraction.DEFAULT_SAMPLE_RATE,
             durationMs = 0
         )
     }
