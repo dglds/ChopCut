@@ -5,13 +5,13 @@
 # Descrição:
 #   Painel interativo para selecionar e executar comandos ADB de monitoramento
 #   de performance do ChopCut. Este script exibe os comandos brutos para
-#   maior clareza e controle.
+#   maior clareza e controle. Permite voltar ao menu durante a monitoração.
 #
 # Como usar:
 #   1. Conecte seu dispositivo com 'adb connect'
 #   2. Execute o script: ./adb-menu.sh
 #   3. Escolha um dos comandos do menu para iniciar o monitoramento.
-#   4. Pressione Ctrl+C para parar o comando e retornar ao menu.
+#   4. Pressione 'q' a qualquer momento para parar o comando e retornar ao menu.
 #
 # ==============================================================================
 
@@ -39,6 +39,32 @@ show_menu() {
     echo "---------------------------------------------------"
 }
 
+# Função para executar um comando com a opção de voltar
+run_command() {
+    local cmd_to_run=$1
+    echo "Executando: $cmd_to_run"
+    echo ">>> Pressione 'q' a qualquer momento para voltar ao menu <<<"
+    
+    # Executa o comando em background
+    eval $cmd_to_run & 
+    local cmd_pid=$!
+
+    # Loop para checar a entrada do usuário ou se o processo terminou
+    while kill -0 $cmd_pid 2>/dev/null; do
+        read -t 0.5 -n 1 input
+        if [[ $input = "q" ]]; then
+            # Mata o processo do comando adb
+            kill $cmd_pid
+            # Mata processos filhos (grep)
+            pkill -P $cmd_pid
+            echo -e "\n\nMonitoramento interrompido pelo usuário."
+            sleep 1
+            break
+        fi
+d    done
+}
+
+
 # Loop principal do script
 while true; do
     show_menu
@@ -46,24 +72,16 @@ while true; do
 
     case $choice in
         1)
-            echo "Executando: $CMD1"
-            eval $CMD1
-            read -p "Monitoramento parado. Pressione Enter para voltar ao menu..."
+            run_command "$CMD1"
             ;;
         2)
-            echo "Executando: $CMD2"
-            eval $CMD2
-            read -p "Monitoramento parado. Pressione Enter para voltar ao menu..."
+            run_command "$CMD2"
             ;;
         3)
-            echo "Executando: $CMD3"
-            eval $CMD3
-            read -p "Monitoramento parado. Pressione Enter para voltar ao menu..."
+            run_command "$CMD3"
             ;;
         4)
-            echo "Executando: $CMD4"
-            eval $CMD4
-            read -p "Monitoramento parado. Pressione Enter para voltar ao menu..."
+            run_command "$CMD4"
             ;;
         q)
             echo "Saindo..."
