@@ -33,7 +33,6 @@ class TransformerPipeline(
         val outputFile = videoRepository.createTempFile(".mp4")
 
         Timber.tag("TransformerPipeline").d("Starting trim with ${ranges.size} range(s)")
-        Timber.d("Starting trim with ${ranges.size} range(s)")
 
         var isFinished = false
         var transformerRef: Transformer? = null
@@ -89,7 +88,6 @@ class TransformerPipeline(
                     isFinished = true
                     mainHandler.removeCallbacks(progressRunnable)
                     Timber.tag("TransformerPipeline").d("Export finished successfully, file exists: ${outputFile.exists()}, size: ${outputFile.length()}")
-                    Timber.d("Export finished successfully")
                     trySend(TrimProgress.Completed(outputFile))
                     channel.close()
                 }
@@ -102,7 +100,6 @@ class TransformerPipeline(
                     isFinished = true
                     mainHandler.removeCallbacks(progressRunnable)
                     Timber.tag("TransformerPipeline").e(exception, "Export failed")
-                    Timber.e(exception, "Export failed")
                     trySend(TrimProgress.Failed(exception))
                     channel.close()
                 }
@@ -125,7 +122,6 @@ class TransformerPipeline(
                     mainHandler.postDelayed(progressRunnable, 250)
                 } catch (e: Exception) {
                     Timber.tag("TransformerPipeline").e(e, "Error starting transformer")
-                    Timber.e(e, "Error starting transformer")
                     trySend(TrimProgress.Failed(e))
                     channel.close()
                 }
@@ -141,7 +137,6 @@ class TransformerPipeline(
 
         } catch (e: Exception) {
             Timber.tag("TransformerPipeline").e(e, "Error during trim operation")
-            Timber.e(e, "Error during trim operation")
             trySend(TrimProgress.Failed(e))
             channel.close()
 

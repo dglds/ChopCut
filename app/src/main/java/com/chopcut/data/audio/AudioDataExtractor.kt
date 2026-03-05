@@ -174,13 +174,6 @@ class AudioDataExtractor(
                                         currentMaxAmp = 0f
                                         samplesAccumulated = 0
 
-                                        // Log progress a cada 50 barras
-                                        if (pcmData.size % 50 == 0 && pcmData.size > lastProgressLog) {
-                                            val progressMs = (totalSamplesProcessed.toFloat() / (sampleRate * channelCount) * 1000).toLong()
-                                            Timber.d("Progress: ${pcmData.size} bars, ${progressMs}ms processed")
-                                            lastProgressLog = pcmData.size
-                                        }
-
                                         // Parar de coletar ruído depois de ter amostras suficientes
                                         if (!noiseCollected && noiseSamples.size >= NOISE_SAMPLE_SIZE) {
                                             noiseCollected = true

@@ -150,9 +150,6 @@ fun TrimScreen(
                 hasAudio = true // Ignorar áudio temporariamente conforme solicitado
             )
 
-            Timber.v("SnapshotFlow check: elapsed=${currentElapsed}ms, minTime=$minTimeReached, " +
-                    "maxTime=$maxTimeReached, thumbnails=${thumbnailStrips.size}, hasAudio=$hasAudio, shouldHide=$shouldHide")
-
             Triple(shouldHide, currentElapsed, hasSufficientThumbnails)
         }
             .distinctUntilChanged()
@@ -423,11 +420,9 @@ private fun shouldHideLoadingOverlay(
 ): Boolean {
     return when (state) {
         is PreloadUiState.Ready -> {
-            Timber.v("Ready state: thumbnails=$hasSufficientThumbnails")
             hasSufficientThumbnails
         }
         is PreloadUiState.Loading -> {
-            Timber.v("Loading state: maxTime=$maxTimeReached, minTime=$minTimeReached, thumbnails=$hasSufficientThumbnails, audio=$hasAudio")
             // Sempre esconder no timeout máximo
             maxTimeReached || (minTimeReached && hasSufficientThumbnails && hasAudio)
         }
