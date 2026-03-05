@@ -1,4 +1,5 @@
 import java.io.ByteArrayOutputStream
+import org.gradle.kotlin.dsl.support.serviceOf
 
 plugins {
     alias(libs.plugins.android.application)
@@ -115,7 +116,7 @@ tasks.register("logcatTimber", Exec::class) {
     val pid by lazy {
         val output = ByteArrayOutputStream()
         try {
-            project.exec {
+            serviceOf<org.gradle.process.ExecOperations>().exec {
                 commandLine("adb", "shell", "pidof", "-s", "com.chopcut")
                 standardOutput = output
                 isIgnoreExitValue = true // Don't fail if pidof returns non-zero
@@ -149,111 +150,31 @@ tasks.register("logcatTimber", Exec::class) {
 // ============================================================================
 
 /**
- * Executa a suite completa de testes de performance
- * Gera relatórios em JSON, Markdown e CSV
+ * TASK GENÉRICA PARA RODAR TESTES
+ * Uso: ./gradlew runTest -Ptarget=NomeDaClasse#NomeDoMetodo
  */
-tasks.register("performanceTest") {
-    group = "Performance"
-    description = "Run complete performance test suite with reports (JSON, MD, CSV)"
+tasks.register("runTest", Exec::class) {
+    group = "Verification"
+    description = "Runs any test with LIVE logs. Usage: ./gradlew runTest -Ptarget=ClassName#method"
 
-    dependsOn("connectedDebugAndroidTest")
+    val target = project.findProperty("target")?.toString() 
+        ?: "com.chopcut.performance.ThumbnailExtractionPerformanceTest#testExtractionCountAccuracy"
 
-    doFirst {
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("🚀 Running Complete Performance Test Suite")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("Tests included:")
-        println("  ✓ Video metadata extraction")
-        println("  ✓ Thumbnail extraction (single & batch)")
-        println("  ✓ Different resolutions (160x90 to 1280x720)")
-        println("  ✓ File operations")
-        println()
-        println("Reports will be saved to:")
-        println("  /storage/emulated/0/Android/data/com.chopcut/files/performance_reports/")
-        println()
-        println("Estimated time: 5-10 minutes")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-        // Configura argumentos de teste
-        project.gradle.startParameter.projectProperties.put(
-            "android.testInstrumentationRunnerArguments.class",
-            "com.chopcut.performance.PerformanceTestSuite"
-        )
-    }
-
-    doLast {
-        println()
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("✅ Performance tests completed!")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println()
-        println("To view reports:")
-        println("  ./gradlew pullPerformanceReports")
-        println("  ./scripts/view_performance_reports.sh")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    }
+    workingDir = rootDir
+    commandLine("./scripts/run_live_tests.sh", target)
 }
 
 /**
- * Executa apenas testes de extração de thumbnails
+ * Atalho para rodar apenas os testes de extração de thumbnails.
  */
-tasks.register("performanceTestThumbnails", Exec::class) {
+tasks.register("performanceTestExtraction") {
     group = "Performance"
-    description = "Run thumbnail extraction performance tests only"
-
-    commandLine(
-        "./gradlew",
-        "connectedAndroidTest",
-        "-Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.performance.ThumbnailExtractionPerformanceTest"
-    )
-
+    description = "Run only THUMBNAIL EXTRACTION performance tests with LIVE logs"
+    dependsOn("runTest")
+    
+    // Força o target padrão para a classe de extração se rodar via este atalho
     doFirst {
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("🎬 Running Thumbnail Extraction Performance Tests")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    }
-}
-
-/**
- * Executa apenas testes de operações de vídeo
- */
-tasks.register("performanceTestVideo", Exec::class) {
-    group = "Performance"
-    description = "Run video operations performance tests only"
-
-    commandLine(
-        "./gradlew",
-        "connectedAndroidTest",
-        "-Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.performance.VideoOperationsPerformanceTest"
-    )
-
-    doFirst {
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("🎥 Running Video Operations Performance Tests")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    }
-}
-
-/**
- * Executa stress test (200 thumbnails)
- */
-tasks.register("performanceTestStress", Exec::class) {
-    group = "Performance"
-    description = "Run stress test (200 thumbnails extraction)"
-
-    commandLine(
-        "./gradlew",
-        "connectedAndroidTest",
-        "-Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.performance.PerformanceTestSuite",
-        "-Pandroid.testInstrumentationRunnerArguments.method=runStressTest"
-    )
-
-    doFirst {
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("💪 Running Stress Test (200 thumbnails)")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("⚠️  Warning: This test may take 10-15 minutes")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        project.extra["target"] = "com.chopcut.performance.ThumbnailExtractionPerformanceTest#testExtractionCountAccuracy"
     }
 }
 
@@ -339,6 +260,48 @@ tasks.register("clearPerformanceReports", Exec::class) {
     doLast {
         println("✅ Reports cleared from device")
         println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    }
+}
+
+// ============================================================================
+// Pre-Test Device Check Task
+// ============================================================================
+tasks.register("checkDeviceConnection") {
+    group = "Verification"
+    description = "Checks if an Android device or emulator is connected before running tests."
+
+    doLast {
+        val outputStream = ByteArrayOutputStream()
+        serviceOf<org.gradle.process.ExecOperations>().exec {
+            commandLine("adb", "devices")
+            standardOutput = outputStream
+            isIgnoreExitValue = true
+        }
+
+        val devicesStr = outputStream.toString().trim()
+        val lines = devicesStr.split("\n")
+        var hasDevice = false
+        
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.isNotEmpty() && trimmed.endsWith("device") && !trimmed.startsWith("List")) {
+                hasDevice = true
+                break
+            }
+        }
+
+        if (!hasDevice) {
+            throw GradleException("❌ ERRO: Nenhum dispositivo Android ou emulador conectado. Conecte um dispositivo via USB ou inicie um emulador para rodar os testes.")
+        } else {
+            println("✅ Dispositivo Android detectado. Continuando com os testes...")
+        }
+    }
+}
+
+// Intercepta e faz com que qualquer task de teste instrumentado no device dependa do checkDeviceConnection
+tasks.whenTaskAdded {
+    if (name.startsWith("connected") && name.endsWith("AndroidTest")) {
+        dependsOn("checkDeviceConnection")
     }
 }
 
