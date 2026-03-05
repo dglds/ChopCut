@@ -128,25 +128,13 @@ fun HomeScreen(
         Timber.tag("HomeScreen").d("selectedUri: $selectedUri")
         Timber.tag("HomeScreen").d("uiState: $uiState")
         Timber.tag("HomeScreen").d("isPreloadReady: $isPreloadReady")
-        
-        Timber.d("=== HomeScreen LaunchedEffect TRIGGERED ===")
-        Timber.d("selectedUri: $selectedUri")
-        Timber.d("uiState: $uiState")
-        Timber.d("isPreloadReady: $isPreloadReady")
-        
+
         val uri = selectedUri
         if (uri != null && uiState is HomeUiState.VideoLoaded) {
             Timber.tag("HomeScreen").d("Conditions met, starting preload")
-            Timber.d("HomeScreen: Iniciando preload para $uri")
-            Timber.d("HomeScreen: isPreloadReady=$isPreloadReady")
-            preloadViewModel.startPreload(uri, stripsToPreload = 6)
+            preloadViewModel.startPreload(uri)
         } else {
-            Timber.tag("HomeScreen").d("Conditions NOT met for preload")
-            Timber.tag("HomeScreen").d("uri != null: ${uri != null}")
-            Timber.tag("HomeScreen").d("uiState is VideoLoaded: ${uiState is HomeUiState.VideoLoaded}")
-            Timber.d("HomeScreen: Conditions not met for preload")
-            Timber.d("uri != null: ${uri != null}")
-            Timber.d("uiState is VideoLoaded: ${uiState is HomeUiState.VideoLoaded}")
+            Timber.tag("HomeScreen").d("Conditions NOT met for preload — uri!=null:${uri != null}, VideoLoaded:${uiState is HomeUiState.VideoLoaded}")
         }
     }
 
@@ -209,13 +197,9 @@ fun HomeScreen(
                                 videoInfo = (uiState as HomeUiState.VideoLoaded).videoInfo,
                                 videoUri = uri,
                                 isPreloading = isLoading,
-                                isReady = isPreloadReady,
                                 onChangeVideo = requestGallery,
                                 onOpenEditor = {
-                                    // Só navegar se estiver pronto
-                                    if (isPreloadReady) {
-                                        onNavigateToEditor(uri)
-                                    }
+                                    onNavigateToEditor(uri)
                                 },
                                 onRemoveVideo = {
                                     preloadViewModel.clear()
@@ -384,7 +368,6 @@ private fun VideoPickerLoaded(
     videoInfo: VideoInfo,
     videoUri: Uri,
     isPreloading: Boolean = false,
-    isReady: Boolean = false,
     onChangeVideo: () -> Unit,
     onOpenEditor: () -> Unit,
     onRemoveVideo: () -> Unit
@@ -477,11 +460,8 @@ private fun VideoPickerLoaded(
                     modifier = Modifier
                         .weight(1f)
                         .height(40.dp)
-                        .background(
-                            if (isReady) Primary else Primary.copy(alpha = 0.5f),
-                            RoundedCornerShape(12.dp)
-                        )
-                        .clickable(enabled = isReady, onClick = onOpenEditor),
+                        .background(Primary, RoundedCornerShape(12.dp))
+                        .clickable(onClick = onOpenEditor),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(

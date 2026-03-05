@@ -50,12 +50,7 @@ class HomeViewModel(
     fun selectVideo(uri: Uri) {
         Timber.tag("HomeViewModel").d("=== selectVideo CALLED ===")
         Timber.tag("HomeViewModel").d("uri: $uri")
-        
-        Timber.d("=== HomeViewModel.selectVideo CALLED ===")
-        Timber.d("uri: $uri")
         _selectedVideoUri.value = uri
-        Timber.tag("HomeViewModel").d("_selectedVideoUri atualizado para: ${_selectedVideoUri.value}")
-        Timber.d("_selectedVideoUri atualizado para: ${_selectedVideoUri.value}")
         loadVideoMetadata(uri)
     }
     

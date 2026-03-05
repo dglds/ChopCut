@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -54,9 +55,8 @@ class PreloadViewModel(
         thumbnailVM.totalSegments
     ) { strips, total ->
         if (total == 0) return@combine false
-        val threshold = minOf(total, 6)
-        val ready = strips.size >= threshold
-        Timber.v("isReadyFlow check: strips=${strips.size}, total=$total, threshold=$threshold, ready=$ready")
+        val ready = strips.size >= total
+        Timber.v("isReadyFlow check: strips=${strips.size}, total=$total, ready=$ready")
         ready
     }.stateIn(
         scope = viewModelScope,
@@ -85,22 +85,8 @@ class PreloadViewModel(
      * @param uri URI do vídeo
      * @param stripsToPreload Número de strips a carregar (padrão: 6)
      */
-    fun startPreload(uri: Uri, stripsToPreload: Int = 6) {
-        Timber.tag("PreloadViewModel").d("=== startPreload CALLED ===")
-        Timber.tag("PreloadViewModel").d("uri: $uri")
-        Timber.tag("PreloadViewModel").d("stripsToPreload: $stripsToPreload")
-        Timber.tag("PreloadViewModel").d("activeUri: $activeUri")
-        Timber.tag("PreloadViewModel").d("currentState: ${_uiState.value}")
-        Timber.tag("PreloadViewModel").d("strips loaded: ${thumbnailVM.strips.value.size}")
-        Timber.tag("PreloadViewModel").d("totalSegments: ${thumbnailVM.totalSegments.value}")
-        
-        Timber.d("=== PreloadViewModel.startPreload CALLED ===")
-        Timber.d("uri: $uri")
-        Timber.d("stripsToPreload: $stripsToPreload")
-        Timber.d("activeUri: $activeUri")
-        Timber.d("currentState: ${_uiState.value}")
-        Timber.d("strips loaded: ${thumbnailVM.strips.value.size}")
-        Timber.d("totalSegments: ${thumbnailVM.totalSegments.value}")
+    fun startPreload(uri: Uri) {
+        Timber.d("PreloadViewModel.startPreload: uri=$uri, activeUri=$activeUri, state=${_uiState.value}")
         
         if (activeUri == uri && _uiState.value is PreloadUiState.Ready) {
             Timber.d("Preload já está pronto para $uri, pulando restart")
@@ -123,20 +109,11 @@ class PreloadViewModel(
                     thumbnailsTotal = 0
                 ))
                 
-                Timber.d("=== PreloadViewModel.startPreload STARTED ===")
-                Timber.d("URI: $uri, strips to preload: $stripsToPreload")
-                
-                // 1. Iniciar ambos em paralelo
-                Timber.d("Step 1: Starting parallel preload (thumbnails + audio)...")
-                
                 // Job para thumbnails
                 val thumbPreloadJob = launch {
-                    thumbnailVM.preload(uri, stripsToPreload)
-                    // Aguardar o estado Ready da ThumbnailViewModel (que agora sabe o total real)
-                    while (thumbnailVM.uiState.value !is ThumbnailViewModel.ThumbnailUiState.Ready) {
-                        kotlinx.coroutines.delay(100)
-                    }
-                    Timber.d("Parallel: ThumbnailViewModel is Ready")
+                    thumbnailVM.preload(uri)
+                    thumbnailVM.uiState.first { it is ThumbnailViewModel.ThumbnailUiState.Ready }
+                    Timber.d("PreloadViewModel: ThumbnailViewModel is Ready")
                 }
 
                 /* 
@@ -157,7 +134,7 @@ class PreloadViewModel(
                                      stage = ExtractionStage.ExtractingThumbnails,
                                      thumbnailPercent = percent,
                                      thumbnailsExtracted = thumbnailVM.strips.value.size,
-                                     thumbnailsTotal = stripsToPreload
+                                     thumbnailsTotal = thumbnailVM.totalSegments.value
                                  ))
                              } else currentState
                         }
@@ -167,8 +144,6 @@ class PreloadViewModel(
                 // AGUARDAR: Liberamos o acesso assim que o thumbPreloadJob terminar (mínimo de 6 strips)
                 // O áudio continuará em background se ainda estiver processando
                 thumbPreloadJob.join()
-                
-                Timber.d("Step 2: Fast-track ready (Thumbnails OK). Audio status: ${audioVM.uiState.value}")
                 
                 // 3. Marcar como Ready
                 val preloadedData = PreloadedData(
@@ -193,8 +168,7 @@ class PreloadViewModel(
                     preloadPercentage = 1f
                 )
                 _uiState.value = PreloadUiState.Ready(preloadedData)
-                
-                Timber.d("=== PreloadViewModel.startPreload FAST-READY ===")
+                Timber.d("PreloadViewModel: startPreload READY (${thumbnailVM.strips.value.size} strips)")
                 
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
@@ -203,23 +177,6 @@ class PreloadViewModel(
                 }
             }
         }
-    }
-    
-    /**
-     * Verifica se há dados suficientes carregados para permitir navegação.
-     * 
-     * @param requiredStrips Número mínimo de strips necessário (padrão: 6)
-     * @return true se estiver pronto, false caso contrário
-     */
-    fun isPreloadReady(requiredStrips: Int = 6): Boolean {
-        val thumbnailsReady = thumbnailVM.hasEnoughStrips(requiredStrips)
-        val audioReady = audioVM.isReady()
-        val result = thumbnailsReady && audioReady
-        
-        Timber.d("isPreloadReady check: requiredStrips=$requiredStrips, " +
-                "thumbnailsReady=$thumbnailsReady, audioReady=$audioReady, result=$result")
-        
-        return result
     }
     
     /**
