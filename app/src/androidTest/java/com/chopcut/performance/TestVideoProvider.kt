@@ -20,7 +20,7 @@ class TestVideoProvider(private val context: Context) {
         // Usa diretório público do Movies (acessível sem permissões especiais a partir do Android 10)
         const val TEST_VIDEOS_DIR = "/sdcard/Movies/ChopCut/tests"
         // Fallback directory in case Movies is blocked by Scoped Storage in test environment
-        const val FALLBACK_VIDEOS_DIR = "/sdcard/Download/ChopCutTests"
+        const val FALLBACK_VIDEOS_DIR = "/sdcard/Movies"
     }
 
     /**

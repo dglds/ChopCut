@@ -31,7 +31,7 @@ class ThumbnailExtractionPerformanceTest {
             try {
                 retriever.setDataSource(context, videoUri)
             } catch (e: Exception) {
-                Timber.e(e, "Erro ao obter metadata do video no teste de assert")
+                Timber.tag("TEST_PERF").e(e, "Erro ao obter metadata do vídeo no teste de assert")
             }
             val durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 15000L
             retriever.release()
@@ -43,9 +43,9 @@ class ThumbnailExtractionPerformanceTest {
             val expectedThumbnailCount = (durationMs / intervalMs).toInt()
             val positions = (0 until expectedThumbnailCount).map { it * intervalMs }
             
-            println("🧪 Iniciando Assert Test Dinâmico...")
-            println("📹 Duração Real do Vídeo: ${String.format("%.1f", durationSeconds)} segundos")
-            println("🎯 Calculado/Esperado: $expectedThumbnailCount thumbnails (intervalo de ${intervalMs}ms)")
+            Timber.tag("TEST_PERF").i("🧪 Iniciando Assert Test Dinâmico...")
+            Timber.tag("TEST_PERF").i("📹 Duração Real do Vídeo: ${String.format("%.1f", durationSeconds)}s")
+            Timber.tag("TEST_PERF").i("🎯 Calculado/Esperado: $expectedThumbnailCount thumbnails (intervalo ${intervalMs}ms)")
 
             // 4. Executar a extração em lote
             val thumbnails = thumbnailExtractorBatch.extractBatch(
@@ -56,7 +56,7 @@ class ThumbnailExtractionPerformanceTest {
             )
 
             // 5. ASSERT: Validar se a quantidade extraída bate com o cálculo da duração
-            println("✅ Total Extraído: ${thumbnails.size} thumbnails")
+            Timber.tag("TEST_PERF").i("✅ Total Extraído: ${thumbnails.size} thumbnails")
             
             assertEquals(
                 "Falha na extração: Era esperado $expectedThumbnailCount thumbs para um vídeo de ${durationSeconds}s, mas retornou ${thumbnails.size}.",
@@ -64,7 +64,7 @@ class ThumbnailExtractionPerformanceTest {
                 thumbnails.size
             )
             
-            println("✨ Teste de assertiva PASSOU: O lote gerou a contagem exata para a timeline do vídeo.")
+            Timber.tag("TEST_PERF").i("✨ Assertiva PASSOU: lote gerou contagem exata para a timeline do vídeo.")
         }
     }
 
@@ -103,10 +103,9 @@ class ThumbnailExtractionPerformanceTest {
             statistics = statistics
         )
 
-        println(statistics)
-        println(report)
-        println("\n📊 JSON REPORT:\n")
-        println(performanceReporter.generateJsonString(metrics, statistics))
+        Timber.tag("TEST_PERF").i(statistics.toString())
+        Timber.tag("TEST_PERF").i(report.toString())
+        Timber.tag("TEST_PERF").i("📊 JSON:\n${performanceReporter.generateJsonString(metrics, statistics)}")
     }
 
     @Test
@@ -144,10 +143,9 @@ class ThumbnailExtractionPerformanceTest {
             statistics = statistics
         )
 
-        println(statistics)
-        println(report)
-        println("\n📊 JSON REPORT:\n")
-        println(performanceReporter.generateJsonString(metrics, statistics))
+        Timber.tag("TEST_PERF").i(statistics.toString())
+        Timber.tag("TEST_PERF").i(report.toString())
+        Timber.tag("TEST_PERF").i("📊 JSON:\n${performanceReporter.generateJsonString(metrics, statistics)}")
     }
 
     @Test
@@ -192,10 +190,9 @@ class ThumbnailExtractionPerformanceTest {
             statistics = statistics
         )
 
-        println(statistics)
-        println(report)
-        println("\n📊 JSON REPORT:\n")
-        println(performanceReporter.generateJsonString(metrics, statistics))
+        Timber.tag("TEST_PERF").i(statistics.toString())
+        Timber.tag("TEST_PERF").i(report.toString())
+        Timber.tag("TEST_PERF").i("📊 JSON:\n${performanceReporter.generateJsonString(metrics, statistics)}")
     }
 
     @Test
@@ -235,10 +232,9 @@ class ThumbnailExtractionPerformanceTest {
             statistics = statistics
         )
 
-        println(statistics)
-        println(report)
-        println("\n📊 JSON REPORT:\n")
-        println(performanceReporter.generateJsonString(metrics, statistics))
+        Timber.tag("TEST_PERF").i(statistics.toString())
+        Timber.tag("TEST_PERF").i(report.toString())
+        Timber.tag("TEST_PERF").i("📊 JSON:\n${performanceReporter.generateJsonString(metrics, statistics)}")
     }
 
     @Test
@@ -272,10 +268,9 @@ class ThumbnailExtractionPerformanceTest {
             statistics = statistics
         )
 
-        println(statistics)
-        println(report)
-        println("\n📊 JSON REPORT:\n")
-        println(performanceReporter.generateJsonString(metrics, statistics))
+        Timber.tag("TEST_PERF").i(statistics.toString())
+        Timber.tag("TEST_PERF").i(report.toString())
+        Timber.tag("TEST_PERF").i("📊 JSON:\n${performanceReporter.generateJsonString(metrics, statistics)}")
     }
 
     @Test
@@ -289,7 +284,7 @@ class ThumbnailExtractionPerformanceTest {
             try {
                 retriever.setDataSource(context, videoUri)
             } catch (e: Exception) {
-                Timber.e(e, "Erro ao obter metadata do video no teste")
+                Timber.tag("TEST_PERF").e(e, "Erro ao obter metadata do vídeo no teste")
             }
             val durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 60000L
             retriever.release()
@@ -300,7 +295,7 @@ class ThumbnailExtractionPerformanceTest {
             val positionsCount = (durationMs / intervalMs).toInt()
             val positions = (0 until positionsCount).map { it * intervalMs }
 
-            Timber.d("Iniciando extração de \$positionsCount thumbnails para toda a timeline do vídeo...")
+            Timber.tag("TEST_PERF").i("Iniciando extração de $positionsCount thumbnails para toda a timeline do vídeo...")
 
             performanceMeasurer.measure(
                 operationName = "Extract All Timeline Thumbnails",

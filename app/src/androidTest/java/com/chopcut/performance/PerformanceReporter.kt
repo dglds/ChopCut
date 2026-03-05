@@ -138,7 +138,7 @@ class PerformanceReporter(private val context: Context) {
         }
 
         file.writeText(json.toString(2))
-        Timber.d("JSON report saved: ${file.absolutePath}")
+        Timber.tag("TEST_PERF").d("JSON report saved: ${file.absolutePath}")
         return file
     }
 
@@ -210,7 +210,7 @@ class PerformanceReporter(private val context: Context) {
         }
 
         file.writeText(markdown)
-        Timber.d("Markdown report saved: ${file.absolutePath}")
+        Timber.tag("TEST_PERF").d("Markdown report saved: ${file.absolutePath}")
         return file
     }
 
@@ -234,7 +234,7 @@ class PerformanceReporter(private val context: Context) {
         }
 
         file.writeText(csv)
-        Timber.d("CSV report saved: ${file.absolutePath}")
+        Timber.tag("TEST_PERF").d("CSV report saved: ${file.absolutePath}")
         return file
     }
 }
