@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -39,7 +40,10 @@ object ThumbnailCacheManager {
     
     // Lock para inicialização thread-safe
     private val initLock = Mutex()
-    
+
+    // Scope persistente para jobs internos (evita CoroutineScope órfão)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     // Tracking de jobs
     private val jobsLock = Mutex()
     private val videoJobs = mutableMapOf<String, Job>()
@@ -171,30 +175,19 @@ object ThumbnailCacheManager {
         val uriString = uri.toString()
         val positionKey = segmentIndex.toLong()
 
-        // ✅ MELHORIA: Verificar se bitmap do cache ainda é válido antes de retornar
-        val cached = memoryCache.get(uriString, positionKey)
-        if (cached != null && !cached.isRecycled) {
-            Timber.d("ThumbnailCacheManager: Cache HIT (bitmap válido) for segment $segmentIndex")
-            return cached
-        } else if (cached != null && cached.isRecycled) {
-            Timber.w("ThumbnailCacheManager: Cache HIT mas bitmap está reciclado, removendo do cache for segment $segmentIndex")
-            memoryCache.remove(uriString, positionKey)
-            // Continua para cache miss abaixo
-        } else {
-            Timber.d("ThumbnailCacheManager: Cache MISS for segment $segmentIndex, will extract")
-        }
-
-        // Tentar cache-aside: memória → disco → extração
-        return memoryCache.getOrPut(uriString, positionKey) {
-            // Cache miss: tentar disco ou extrair
-            Timber.d("ThumbnailCacheManager: Extracting segment $segmentIndex (cache miss)")
-            val strip = stripManager!!.extractSegment(uri, segmentIndex, durationMs)
-            if (strip != null) {
-                Timber.d("ThumbnailCacheManager: Segment $segmentIndex extracted successfully, size=${strip.width}x${strip.height}")
-            } else {
-                Timber.e("ThumbnailCacheManager: Failed to extract segment $segmentIndex, returning null")
+        // Single lookup via getOrPut (isRecycled check is inside ThumbnailCache.get)
+        return try {
+            memoryCache.getOrPut(uriString, positionKey) {
+                val strip = stripManager!!.extractSegment(uri, segmentIndex, durationMs)
+                    ?: run {
+                        Timber.e("ThumbnailCacheManager: Failed to extract segment $segmentIndex")
+                        throw NoSuchElementException("Failed to extract segment $segmentIndex")
+                    }
+                Timber.d("ThumbnailCacheManager: segment $segmentIndex extracted (${strip.width}x${strip.height})")
+                strip
             }
-            strip ?: throw NoSuchElementException("Failed to extract segment $segmentIndex")
+        } catch (e: NoSuchElementException) {
+            null
         }
     }
 
@@ -222,7 +215,6 @@ object ThumbnailCacheManager {
             segmentJobs.remove(jobKey)
         }
         
-        val scope = CoroutineScope(Dispatchers.IO)
         val job = scope.launch {
             try {
                 val strip = getStrip(uri, segmentIndex, durationMs, thumbWidth, thumbHeight, thumbsPerStrip)
@@ -256,21 +248,16 @@ object ThumbnailCacheManager {
     fun cancelJobsForUri(uri: Uri) {
         Timber.d("Cancelling all jobs for URI: $uri")
         
-        CoroutineScope(Dispatchers.IO).launch {
+        scope.launch {
             jobsLock.withLock {
                 val uriKey = uri.toString()
-                
-                // Cancelar job do vídeo
                 videoJobs[uriKey]?.cancel()
                 videoJobs.remove(uriKey)
-                
-                // Cancelar todos os jobs de segmentos para este URI
                 val segmentsToCancel = segmentJobs.keys.filter { it.startsWith("${uri}_") }
                 segmentsToCancel.forEach { key ->
                     segmentJobs[key]?.cancel()
                     segmentJobs.remove(key)
                 }
-                
                 Timber.d("Cancelled ${segmentsToCancel.size + 1} jobs for $uri")
             }
         }
@@ -289,25 +276,21 @@ object ThumbnailCacheManager {
     fun cancelFarJobs(uri: Uri, currentSegment: Int, threshold: Int = 5) {
         Timber.d("Checking for far jobs from segment $currentSegment (threshold: $threshold)")
         
-        CoroutineScope(Dispatchers.IO).launch {
+        scope.launch {
             jobsLock.withLock {
                 val uriPrefix = "${uri}_"
-                
                 val jobsToCancel = segmentJobs.keys
                     .filter { it.startsWith(uriPrefix) }
                     .mapNotNull { key ->
                         key.removePrefix(uriPrefix).toIntOrNull()?.let { idx -> key to idx }
                     }
                     .filter { (_, segIdx) -> abs(segIdx - currentSegment) > threshold }
-                
                 if (jobsToCancel.isNotEmpty()) {
                     Timber.d("Cancelling ${jobsToCancel.size} far jobs (distance > $threshold)")
                 }
-                
                 jobsToCancel.forEach { (key, _) ->
                     segmentJobs[key]?.cancel()
                     segmentJobs.remove(key)
-                    Timber.v("Cancelled far job: $key (distance > $threshold)")
                 }
             }
         }

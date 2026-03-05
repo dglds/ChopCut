@@ -39,17 +39,14 @@ class ThumbnailCache(
      */
     fun get(uri: String, positionMs: Long): Bitmap? {
         val key = generateKey(uri, positionMs)
-        val bitmap = cache[key]
-
-        if (bitmap != null) {
-            cacheHits++
-            Timber.d("Cache HIT: $key")
-        } else {
-            cacheMisses++
-            Timber.d("Cache MISS: $key")
+        return synchronized(cache) {
+            val bitmap = cache[key]
+            when {
+                bitmap == null -> { cacheMisses++; null }
+                bitmap.isRecycled -> { cache.remove(key); cacheMisses++; null }
+                else -> { cacheHits++; bitmap }
+            }
         }
-
-        return bitmap
     }
 
     /**
@@ -61,15 +58,12 @@ class ThumbnailCache(
      */
     fun put(uri: String, positionMs: Long, bitmap: Bitmap) {
         val key = generateKey(uri, positionMs)
-
-        if (cache.size >= maxSize && !cache.containsKey(key)) {
-            val oldestKey = cache.keys.first()
-            cache.remove(oldestKey)
-            Timber.d("Cache FULL: removendo $oldestKey")
+        synchronized(cache) {
+            if (cache.size >= maxSize && !cache.containsKey(key)) {
+                cache.remove(cache.keys.first())
+            }
+            cache[key] = bitmap
         }
-
-        cache[key] = bitmap
-        Timber.d("Cache PUT: $key (size: ${cache.size}/$maxSize)")
     }
 
     /**
@@ -81,14 +75,14 @@ class ThumbnailCache(
      * @param items Mapa de chave -> bitmap para adicionar ao cache
      */
     fun putAll(items: Map<String, Bitmap>) {
-        items.forEach { (key, bitmap) ->
-            if (cache.size >= maxSize && !cache.containsKey(key)) {
-                val oldestKey = cache.keys.first()
-                cache.remove(oldestKey)
+        synchronized(cache) {
+            items.forEach { (key, bitmap) ->
+                if (cache.size >= maxSize && !cache.containsKey(key)) {
+                    cache.remove(cache.keys.first())
+                }
+                cache[key] = bitmap
             }
-            cache[key] = bitmap
         }
-        Timber.d("Cache PUTALL: ${items.size} items adicionados (size: ${cache.size}/$maxSize)")
     }
 
     /**
@@ -121,56 +115,46 @@ class ThumbnailCache(
      * @return CacheStats com estatísticas atuais
      */
     fun getStats(): CacheStats {
-        val total = cacheHits + cacheMisses
-        val hitRate = if (total > 0) (cacheHits.toFloat() / total * 100) else 0f
-        
-        return CacheStats(
-            size = cache.size,
-            maxSize = maxSize,
-            hits = cacheHits,
-            misses = cacheMisses,
-            hitRate = hitRate
-        )
+        return synchronized(cache) {
+            val total = cacheHits + cacheMisses
+            val hitRate = if (total > 0) (cacheHits.toFloat() / total * 100) else 0f
+            CacheStats(size = cache.size, maxSize = maxSize, hits = cacheHits, misses = cacheMisses, hitRate = hitRate)
+        }
     }
 
     /**
      * Limpa todos os itens do cache e estatísticas.
      */
     fun clear() {
-        cache.clear()
-        cacheHits = 0
-        cacheMisses = 0
-        Timber.d("Cache CLEARED")
+        synchronized(cache) {
+            cache.clear()
+            cacheHits = 0
+            cacheMisses = 0
+        }
     }
 
     /**
      * Retorna o número atual de itens no cache
      */
-    fun size(): Int = cache.size
+    fun size(): Int = synchronized(cache) { cache.size }
 
     /**
      * Verifica se o cache está vazio
      */
-    fun isEmpty(): Boolean = cache.isEmpty()
+    fun isEmpty(): Boolean = synchronized(cache) { cache.isEmpty() }
 
     /**
      * Verifica se o cache contém uma chave específica
      */
     fun contains(uri: String, positionMs: Long): Boolean {
-        return cache.containsKey(generateKey(uri, positionMs))
+        return synchronized(cache) { cache.containsKey(generateKey(uri, positionMs)) }
     }
 
     /**
      * Remove um item específico do cache
-     *
-     * Útil para remover bitmaps reciclados ou inválidos
      */
     fun remove(uri: String, positionMs: Long) {
-        val key = generateKey(uri, positionMs)
-        val bitmap = cache.remove(key)
-        if (bitmap != null) {
-            Timber.d("Cache REMOVE: $key")
-        }
+        synchronized(cache) { cache.remove(generateKey(uri, positionMs)) }
     }
     
     /**
