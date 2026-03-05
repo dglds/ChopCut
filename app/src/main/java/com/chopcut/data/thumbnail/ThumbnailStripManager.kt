@@ -53,7 +53,8 @@ class ThumbnailStripManager(
     val thumbWidth: Int,
     val thumbHeight: Int,
     val thumbsPerStrip: Int = 10,
-    val adaptiveStrips: Boolean = true
+    val adaptiveStrips: Boolean = true,
+    private val batchExtractor: ThumbnailExtractorBatch = ThumbnailExtractorBatch(context)
 ) {
     /** Gerenciador de preferências para verificar se cache está habilitado */
     private val prefsManager = PreferencesManager(context)
@@ -404,9 +405,6 @@ class ThumbnailStripManager(
     /** Paint com interpolação bilinear para CenterCrop de qualidade */
     private val cropPaint = Paint(Paint.FILTER_BITMAP_FLAG)
     
-    /** Batch extractor para reutilizar MediaMetadataRetriever */
-    private val batchExtractor = ThumbnailExtractorBatch(context)
-
     /**
      * Extrai uma strip para o segmento especificado usando batch extraction.
      *

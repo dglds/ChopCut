@@ -20,7 +20,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.chopcut.runner.ChopCutTestRunner"
     }
 
     buildTypes {
@@ -157,8 +157,8 @@ tasks.register("runTest", Exec::class) {
     group = "Verification"
     description = "Runs any test with LIVE logs. Usage: ./gradlew runTest -Ptarget=ClassName#method"
 
-    val target = project.findProperty("target")?.toString() 
-        ?: "com.chopcut.performance.ThumbnailExtractionPerformanceTest#testExtractionCountAccuracy"
+    val target = project.findProperty("target")?.toString()
+        ?: "com.chopcut.ThumbnailExtractionTest#extractsOneThumbPerSecond"
 
     workingDir = rootDir
     commandLine("./scripts/run_live_tests.sh", target)

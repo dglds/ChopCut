@@ -28,16 +28,17 @@ adb logcat -c
 adb logcat -s "System.out:I" "TestRunner:I" | grep --line-buffered -E "(║|╠|╚|╔|═|─|DETAILED RESULTS|VIDEO:|Performance|Average|Total|Throughput|started:|finished:)" | sed -u 's/I\/System.out(//g; s/)//g; s/I\/TestRunner(//g' &
 LOGCAT_PID=$!
 
-# 4. Executa Gradle
-# Mostramos o progresso normal do Gradle para que você saiba que está compilando e instalando o APK no celular
-echo -e "${YELLOW}⏳ Compilando testes e instalando no dispositivo (isso pode levar 1-2 minutos)...${NC}"
-./gradlew app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=$TEST_CLASS
-GRADLE_EXIT_CODE=$?
+# Garante encerramento do logcat em qualquer saída (normal, Ctrl+C, erro)
+cleanup() {
+    kill $LOGCAT_PID 2>/dev/null
+    wait $LOGCAT_PID 2>/dev/null
+}
+trap cleanup EXIT INT TERM
 
-# 5. Finaliza
-sleep 1
-kill $LOGCAT_PID 2>/dev/null
-wait $LOGCAT_PID 2>/dev/null
+# 4. Executa Gradle
+echo -e "${YELLOW}⏳ Compilando testes e instalando no dispositivo (isso pode levar 1-2 minutos)...${NC}"
+./gradlew app:connectedDebugAndroidTest --quiet -Pandroid.testInstrumentationRunnerArguments.class=$TEST_CLASS
+GRADLE_EXIT_CODE=$?
 
 echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 if [ $GRADLE_EXIT_CODE -eq 0 ]; then

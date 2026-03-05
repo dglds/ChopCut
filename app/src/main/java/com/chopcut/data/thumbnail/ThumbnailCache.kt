@@ -67,25 +67,6 @@ class ThumbnailCache(
     }
 
     /**
-     * Adiciona múltiplos thumbnails ao cache de uma vez (batch insertion).
-     * Útil para pré-carregamento de strips.
-     * 
-     * Resolve Problema 1: Batch insertion para pré-carregamento
-     * 
-     * @param items Mapa de chave -> bitmap para adicionar ao cache
-     */
-    fun putAll(items: Map<String, Bitmap>) {
-        synchronized(cache) {
-            items.forEach { (key, bitmap) ->
-                if (cache.size >= maxSize && !cache.containsKey(key)) {
-                    cache.remove(cache.keys.first())
-                }
-                cache[key] = bitmap
-            }
-        }
-    }
-
-    /**
      * Obtém um thumbnail do cache ou executa o provider para gerar um novo.
      * Implementa o padrão Cache-Aside.
      * 
@@ -139,11 +120,6 @@ class ThumbnailCache(
     fun size(): Int = synchronized(cache) { cache.size }
 
     /**
-     * Verifica se o cache está vazio
-     */
-    fun isEmpty(): Boolean = synchronized(cache) { cache.isEmpty() }
-
-    /**
      * Verifica se o cache contém uma chave específica
      */
     fun contains(uri: String, positionMs: Long): Boolean {
@@ -156,7 +132,86 @@ class ThumbnailCache(
     fun remove(uri: String, positionMs: Long) {
         synchronized(cache) { cache.remove(generateKey(uri, positionMs)) }
     }
-    
+
+    /**
+     * Verifica se existe alguma entrada em cache para o URI informado.
+     * Útil para saber se um vídeo já foi processado antes de iniciar extração.
+     */
+    fun containsVideo(uri: String): Boolean {
+        return synchronized(cache) {
+            cache.keys.any { it.startsWith("${uri}_") }
+        }
+    }
+
+    /**
+     * Remove todas as entradas de cache associadas a um URI de vídeo.
+     * @return Número de entradas removidas.
+     */
+    fun removeVideo(uri: String): Int {
+        return synchronized(cache) {
+            val keys = cache.keys.filter { it.startsWith("${uri}_") }
+            keys.forEach { cache.remove(it) }
+            keys.size
+        }
+    }
+
+    /**
+     * Retorna o conjunto de URIs distintos que possuem entradas no cache.
+     * Permite auditar quais vídeos estão ocupando cache e evitar uso de cache errado.
+     * Chave interna: "${uri}_${positionMs}" — extraímos o URI removendo o sufixo numérico.
+     */
+    fun getTrackedUris(): Set<String> {
+        return synchronized(cache) {
+            cache.keys.map { it.substringBeforeLast("_") }.toSet()
+        }
+    }
+
+    /**
+     * Verifica se a capacidade do cache está igual ou acima do threshold informado.
+     * @param thresholdPercent Percentual de uso para considerar "próximo do limite" (padrão: 80%)
+     */
+    fun isNearCapacity(thresholdPercent: Int = 80): Boolean {
+        return synchronized(cache) {
+            cache.size * 100 >= maxSize * thresholdPercent
+        }
+    }
+
+    /**
+     * Calcula o tamanho total em bytes de todos os bitmaps em cache.
+     * Usa [Bitmap.byteCount] que reflete a alocação real (RGB_565=2b/px, ARGB_8888=4b/px).
+     */
+    fun totalSizeBytes(): Long {
+        return synchronized(cache) {
+            cache.values.sumOf { if (it.isRecycled) 0L else it.byteCount.toLong() }
+        }
+    }
+
+    /**
+     * Retorna o tamanho total formatado em B, KB, MB ou GB.
+     */
+    fun totalSizeFormatted(): String {
+        val bytes = totalSizeBytes()
+        return when {
+            bytes < 1_024L -> "${bytes}B"
+            bytes < 1_024L * 1_024 -> "${"%.1f".format(bytes / 1_024.0)}KB"
+            bytes < 1_024L * 1_024 * 1_024 -> "${"%.1f".format(bytes / (1_024.0 * 1_024))}MB"
+            else -> "${"%.1f".format(bytes / (1_024.0 * 1_024 * 1_024))}GB"
+        }
+    }
+
+    /**
+     * Limpa o cache de forma segura: captura estatísticas e chama [onBeforeClear] antes de apagar.
+     * Garante que nenhuma informação se perde sem registro.
+     * @param onBeforeClear Callback com stats do estado atual, chamado antes da limpeza.
+     * @return Estatísticas capturadas antes da limpeza.
+     */
+    fun clearSafely(onBeforeClear: (CacheStats) -> Unit = {}): CacheStats {
+        val statsBefore = getStats()
+        onBeforeClear(statsBefore)
+        clear()
+        return statsBefore
+    }
+
     /**
      * Estatísticas do cache LRU.
      */

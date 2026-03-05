@@ -20,7 +20,7 @@ import kotlin.system.measureTimeMillis
  * - MediaMetadataRetriever (atual): ~300-500ms por frame
  * - ThumbnailExtractorBatch: ~100-150ms por frame (reutilizando decoder)
  */
-class ThumbnailExtractorBatch(
+open class ThumbnailExtractorBatch(
     private val context: Context
 ) {
 
@@ -33,7 +33,7 @@ class ThumbnailExtractorBatch(
      * @param height Altura alvo dos thumbnails
      * @return Mapa de posição -> Bitmap
      */
-    suspend fun extractBatch(
+    open suspend fun extractBatch(
         uri: Uri,
         positionsMs: List<Long>,
         width: Int = 320,
