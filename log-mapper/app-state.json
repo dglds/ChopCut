@@ -1,0 +1,58 @@
+{
+  "graphics": {
+    "glRenderer": {
+      "isInitialized": false
+    },
+    "surfaceBridge": {
+      "isInitialized": false
+    }
+  },
+  "bottomSheetGallery": {
+    "isExpanded": true,
+    "videos": [],
+    "selectedVideo": {
+      "uri": "",
+      "id": ""
+    }
+  },
+  "timelineEditor": {
+    "scrollVelocity": 0,
+    "isScrolling": false,
+    "exoPlayerError": "Invalid state transition\", error)"
+  },
+  "preload": {
+    "stripsToPreload": 0,
+    "currentState": "",
+    "stripsLoaded": 0,
+    "totalSegments": 0,
+    "isReady": false,
+    "threshold": 2,
+    "uri": "content://media/video/123\")",
+    "activeUri": "content://media/video/123\")"
+  },
+  "cache": {
+    "entries": [],
+    "totalSize": 0,
+    "maxEntries": 100,
+    "maxSize": 104857600,
+    "hitRate": 0,
+    "missRate": 0
+  },
+  "thumbnail": {
+    "strips": [],
+    "totalSegments": 0,
+    "isLoading": false,
+    "errors": {}
+  },
+  "exoPlayer": {
+    "isPlaying": false,
+    "currentPosition": 0,
+    "duration": 0,
+    "isBuffering": false
+  },
+  "timeline": {
+    "segments": [],
+    "zoomLevel": 1,
+    "scrollPosition": 0
+  }
+}

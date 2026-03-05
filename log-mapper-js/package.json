@@ -1,0 +1,19 @@
+{
+  "name": "log-mapper-js",
+  "version": "1.0.0",
+  "description": "JavaScript OO para analisar e mapear logs do projeto ChopCut",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "demo": "node demo-entities.js"
+  },
+  "keywords": [
+    "log",
+    "mapper",
+    "chopcut",
+    "javascript",
+    "oo"
+  ],
+  "author": "",
+  "license": "ISC"
+}
