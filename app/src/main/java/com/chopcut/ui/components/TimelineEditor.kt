@@ -576,59 +576,67 @@ fun TimelineEditor(
                        // ═══════════════════════════════════════════════════════════════
                        // ✅ NOVO: Renderização por STRIP (OTIMIZADO - 30x menos draw calls)
                        // ═══════════════════════════════════════════════════════════════
-                       for (segIdx in visibleSegmentIndices) {
-                           val strip = strips[segIdx]
-                           val startSec = segIdx * thumbsPerStrip
-                           val stripWidthPx = thumbW * thumbsPerStrip
-                           val x = centerOffset + (startSec * pxPerSecond) - currentScroll
+                        for (segIdx in visibleSegmentIndices) {
+                            val strip = strips[segIdx]
+                            val startSec = segIdx * thumbsPerStrip
+                            val stripWidthPx = pxPerSecond * thumbsPerStrip // Largura visual TOTAL do segmento
+                            val x = centerOffset + (startSec * pxPerSecond) - currentScroll
 
-                           drawCallCount.intValue++
+                            drawCallCount.intValue++
 
-                           if (strip != null && !strip.isRecycled) {
-                               // Desenhar STRIP INTEIRA de uma vez (sem recortes)
-                               val verticalOffset = (thumbnailHeightPx - thumbH) / 2f
+                            // 1. SEMPRE desenhar o Background/Shimmer para o segmento inteiro
+                            // Isso garante que não haja buracos e que o overview de 1 frame não seja esticado
+                            drawIntoCanvas { canvas ->
+                                // Base background
+                                canvas.nativeCanvas.drawRect(
+                                    x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
+                                    bgPaint
+                                )
 
-                               dstRect.set(
-                                   x.toInt(), (thumbnailTop + verticalOffset).toInt(),
-                                   (x + stripWidthPx).toInt(), (thumbnailTop + verticalOffset + thumbH).toInt()
-                               )
+                                // Shimmer diagonal
+                                val shimmerPaint = android.graphics.Paint().apply {
+                                    val width = stripWidthPx
+                                    val height = thumbnailHeightPx
+                                    val gradientSize = (width + height) * 0.8f
 
-                               drawIntoCanvas { canvas ->
-                                   canvas.nativeCanvas.drawBitmap(strip, null, dstRect, renderPaint)
-                               }
-                           } else {
-                               // Strip não carregada - shimmer para a STRIP INTEIRA
-                               drawIntoCanvas { canvas ->
-                                   // Base background para strip inteira
-                                   canvas.nativeCanvas.drawRect(
-                                       x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
-                                       bgPaint
-                                   )
+                                    val offsetX = shimmerProgress * (width + gradientSize) - gradientSize
+                                    val offsetY = shimmerProgress * (height + gradientSize) - gradientSize
 
-                                   // Shimmer diagonal para strip inteira
-                                   val shimmerPaint = android.graphics.Paint().apply {
-                                       val width = stripWidthPx
-                                       val height = thumbnailHeightPx
-                                       val gradientSize = (width + height) * 0.8f
+                                    shader = android.graphics.LinearGradient(
+                                        x + offsetX, thumbnailTop + offsetY,
+                                        x + offsetX + gradientSize, thumbnailTop + offsetY + gradientSize,
+                                        shimmerGradient, shimmerPositions,
+                                        android.graphics.Shader.TileMode.CLAMP
+                                    )
+                                }
+                                canvas.nativeCanvas.drawRect(
+                                    x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
+                                    shimmerPaint
+                                )
+                            }
 
-                                       val offsetX = shimmerProgress * (width + gradientSize) - gradientSize
-                                       val offsetY = shimmerProgress * (height + gradientSize) - gradientSize
+                            // 2. Desenhar a STRIP se disponível (sem esticar)
+                            if (strip != null && !strip.isRecycled) {
+                                val verticalOffset = (thumbnailHeightPx - thumbH) / 2f
+                                
+                                // OTIMIZAÇÃO CRÍTICA: Calcular largura baseada na duração real do bitmap
+                                // Se o bitmap tem 1 frame (overview), ele deve ocupar apenas pxPerSecond.
+                                // Se tem 20 frames (detailed), ele ocupa pxPerSecond * 20.
+                                val actualDurationSeconds = strip.width.toFloat() / thumbW
+                                val actualStripVisualWidth = actualDurationSeconds * pxPerSecond
 
-                                       shader = android.graphics.LinearGradient(
-                                           x + offsetX, thumbnailTop + offsetY,
-                                           x + offsetX + gradientSize, thumbnailTop + offsetY + gradientSize,
-                                           shimmerGradient, shimmerPositions,
-                                           android.graphics.Shader.TileMode.CLAMP
-                                       )
-                                   }
+                                dstRect.set(
+                                    x.toInt(), (thumbnailTop + verticalOffset).toInt(),
+                                    (x + actualStripVisualWidth).toInt(), (thumbnailTop + verticalOffset + thumbH).toInt()
+                                )
 
-                                   canvas.nativeCanvas.drawRect(
-                                       x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
-                                       shimmerPaint
-                                   )
-                               }
-                           }
-                       }
+                                drawIntoCanvas { canvas ->
+                                    // Usamos o dstRect calculado para desenhar os frames sem esticá-los
+                                    // Se actualStripVisualWidth < stripWidthPx, o shimmer desenhado acima continuará visível no resto
+                                    canvas.nativeCanvas.drawBitmap(strip, null, dstRect, renderPaint)
+                                }
+                            }
+                        }
 
                        // ═══════════════════════════════════════════════════════════════
                        // ❌ ANTIGO: Renderização por SEGUNDO (SUBÓTIMO - mantido para referência)
