@@ -115,19 +115,17 @@ fun ConsoleLine(
                     logHistory.value.forEach { log ->
                         Text(
                             text = buildAnnotatedString {
-                                if (log.tag.isNotEmpty()) {
-                                    withStyle(
-                                        SpanStyle(
-                                            color = theme.value.textColor,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace,
-                                            fontSize = theme.value.fontSize.sp
-                                        )
-                                    ) {
-                                        append("[${log.tag}]")
-                                    }
-                                    append(" ")
+                                withStyle(
+                                    SpanStyle(
+                                        color = theme.value.textColor,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = theme.value.fontSize.sp
+                                    )
+                                ) {
+                                    append(log.tag)
                                 }
+                                append(" ")
                                 withStyle(
                                     SpanStyle(
                                         color = Color.White,
@@ -147,19 +145,17 @@ fun ConsoleLine(
                 logs.value?.let { log ->
                     Text(
                         text = buildAnnotatedString {
-                            if (log.tag.isNotEmpty()) {
-                                withStyle(
-                                    SpanStyle(
-                                        color = theme.value.textColor,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = theme.value.fontSize.sp
-                                    )
-                                ) {
-                                    append("[${log.tag}]")
-                                }
-                                append(" ")
+                            withStyle(
+                                SpanStyle(
+                                    color = theme.value.textColor,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = theme.value.fontSize.sp
+                                )
+                            ) {
+                                append(log.tag)
                             }
+                            append(" ")
                             withStyle(
                                 SpanStyle(
                                     color = Color.White,

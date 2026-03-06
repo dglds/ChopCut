@@ -62,8 +62,8 @@ class ConsoleLineViewModel : ViewModel() {
             val tree = object : timber.log.Timber.Tree() {
                 override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
                     try {
-                        val formattedMessage = if (tag != null) "[$tag] $message" else message
-                        addLog(formattedMessage, tag)
+                        // Passar a mensagem completa, a tag será extraída pelo processor
+                        addLog(message, null)
                     } catch (e: Exception) {
                         // Ignorar erros de logging para evitar loop infinito
                     }
@@ -84,17 +84,31 @@ class ConsoleLineViewModel : ViewModel() {
                         isProcessing = true
                         
                         try {
-                            val (log, tag) = logQueue.removeFirst()
+                            val (log, timberTag) = logQueue.removeFirst()
                             
-                            val messageKey = tag ?: log.substringBefore(" ")
-                            val count = (logCountMap[messageKey] ?: 0) + 1
-                            logCountMap[messageKey] = count
+                            // Extrair a primeira palavra (com caracteres especiais) como tag
+                            val firstSpaceIndex = log.indexOf(" ")
+                            val tagKey = if (firstSpaceIndex > 0) {
+                                log.substring(0, firstSpaceIndex)
+                            } else {
+                                log
+                            }
+                            
+                            // O resto da mensagem (sem a primeira palavra)
+                            val messageContent = if (firstSpaceIndex > 0) {
+                                log.substring(firstSpaceIndex + 1)
+                            } else {
+                                ""
+                            }
+                            
+                            val count = (logCountMap[tagKey] ?: 0) + 1
+                            logCountMap[tagKey] = count
                             
                             val logEntry = LogEntry(
-                                tag = tag ?: messageKey,
-                                message = log,
+                                tag = tagKey,
+                                message = messageContent,
                                 count = count,
-                                fullText = if (tag != null) "[$tag] $log [$count]" else "$log [$count]"
+                                fullText = "$tagKey $messageContent [$count]"
                             )
                             
                             if (_isMultiLine.value) {
