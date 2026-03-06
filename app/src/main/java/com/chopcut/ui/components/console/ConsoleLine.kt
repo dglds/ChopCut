@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -24,6 +27,8 @@ import androidx.compose.ui.text.withStyle
 import kotlin.math.max
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
@@ -63,6 +68,15 @@ fun ConsoleLine(
         label = "ledAlpha"
     )
     
+    val scrollState = rememberScrollState()
+    
+    // Auto-scroll para o final quando novos logs chegam
+    LaunchedEffect(logHistory.value.size) {
+        if (scrollState.canScrollForward) {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
+    
     if (isVisible.value) {
         Row(
             modifier = modifier
@@ -94,26 +108,32 @@ fun ConsoleLine(
                         Modifier
                     }
                 )
-                .padding(horizontal = 6.dp, vertical = 4.dp)
+                .padding(horizontal = 4.dp, vertical = 2.dp)
+                .height(
+                    if (isMultiLine.value) 200.dp else 20.dp
+                )
         ) {
             if (hasPendingLogs.value) {
                 Box(
                     modifier = Modifier
-                        .padding(start = 4.dp)
-                        .size(6.dp)
+                        .padding(start = 2.dp)
+                        .size(4.dp)
                         .alpha(alpha)
                         .background(
                             color = theme.value.textColor,
                             shape = CircleShape
                         )
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(2.dp))
             }
             
             if (isMultiLine.value) {
-                Column(
-                    modifier = Modifier.weight(1f)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(scrollState)
                 ) {
+                    Column {
                     if (callStackMode.value) {
                         // Modo Call Stack: empilhar logs por tag
                         val logsByTag = logHistory.value.groupBy { it.tag }
@@ -205,6 +225,7 @@ fun ConsoleLine(
                                 maxLines = 1
                             )
                         }
+                    }
                     }
                 }
             } else {

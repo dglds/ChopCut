@@ -37,7 +37,7 @@ class ConsoleLineViewModel : ViewModel() {
     private val _isMultiLine = MutableStateFlow(true)
     val isMultiLine: StateFlow<Boolean> = _isMultiLine.asStateFlow()
     
-    private val _maxDisplayLines = MutableStateFlow(5)
+    private val _maxDisplayLines = MutableStateFlow(10)
     val maxDisplayLines: StateFlow<Int> = _maxDisplayLines.asStateFlow()
     
     private val _callStackMode = MutableStateFlow(false)

@@ -17,7 +17,7 @@ object ConsoleThemes {
     val DEFAULT = ConsoleTheme(
         backgroundColor = Color.Black,
         textColor = Color(0xFF00FF00),
-        fontSize = 10f,
+        fontSize = 8f,
         fontFamily = FontFamily.Monospace,
         scanlineEnabled = false
     )
@@ -25,7 +25,7 @@ object ConsoleThemes {
     val EIGHTIES = ConsoleTheme(
         backgroundColor = Color(0xFF0A0A0A),
         textColor = Color(0xFF33FF33),
-        fontSize = 12f,
+        fontSize = 8f,
         fontFamily = FontFamily.Monospace,
         scanlineEnabled = true
     )
@@ -33,7 +33,7 @@ object ConsoleThemes {
     val AMBER_EIGHTIES = ConsoleTheme(
         backgroundColor = Color(0xFF080800),
         textColor = Color(0xFFFFB000),
-        fontSize = 12f,
+        fontSize = 8f,
         fontFamily = FontFamily.Monospace,
         scanlineEnabled = true
     )
