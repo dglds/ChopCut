@@ -8,12 +8,9 @@ object PerformanceConstants {
         const val MAX = 8
         
         fun calculateOptimalThreads(availableProcessors: Int): Int {
-            return when {
-                availableProcessors <= 2 -> LOW_END
-                availableProcessors <= 4 -> MID_RANGE
-                availableProcessors <= 6 -> HIGH_END
-                else -> MAX
-            }
+            // Regra: CPU - 1 para manter a UI fluída, mínimo 1
+            val optimal = (availableProcessors - 1).coerceAtLeast(1)
+            return optimal.coerceAtMost(MAX)
         }
     }
     
