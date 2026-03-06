@@ -225,12 +225,13 @@ fun TimelineEditor(
         }
 
         // Animação de shimmer suave para placeholders de thumbnails
+        // UPGRADE v2.0: Aumentamos o range para dar mais espaço entre as ondas
         val infiniteTransition = rememberInfiniteTransition(label = "thumbnailShimmer")
         val shimmerProgress by infiniteTransition.animateFloat(
-            initialValue = -1f,
-            targetValue = 2f,
+            initialValue = -2f,
+            targetValue = 4f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1500, easing = LinearEasing),
+                animation = tween(2000, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "shimmerProgress"
@@ -500,18 +501,20 @@ fun TimelineEditor(
                     }
                 }
 
-                // Shimmer gradient colors (gradiente diagonal suave)
+                // Shimmer gradient colors (UPGRADE v3.0: Disney Magic - Midnight & Gold)
                 val shimmerGradient = remember {
                     intArrayOf(
-                        android.graphics.Color.parseColor("#1E1E1E"), // Base escuro
-                        android.graphics.Color.parseColor("#3D3D3D"), // Médio
-                        android.graphics.Color.parseColor("#666666"), // Claro (Mais ativo)
-                        android.graphics.Color.parseColor("#3D3D3D"), // Médio
-                        android.graphics.Color.parseColor("#1E1E1E")  // Base escuro
+                        android.graphics.Color.parseColor("#0A0E1A"), // Midnight Blue
+                        android.graphics.Color.parseColor("#121A2E"), // Dark Magic Blue
+                        android.graphics.Color.parseColor("#FFD700"), // Pure Gold (Stardust Base)
+                        android.graphics.Color.parseColor("#FFFFFF"), // Magic Bloom (White Core)
+                        android.graphics.Color.parseColor("#FFD700"), // Pure Gold (Stardust Base)
+                        android.graphics.Color.parseColor("#121A2E"), // Dark Magic Blue
+                        android.graphics.Color.parseColor("#0A0E1A")  // Midnight Blue
                     )
                 }
 
-                val shimmerPositions = remember { floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f) }
+                val shimmerPositions = remember { floatArrayOf(0f, 0.4f, 0.48f, 0.5f, 0.52f, 0.6f, 1f) }
 
                   // Paint para timestamps da régua (pré-alocado, fora do draw loop)
                   val robotoMonoTypeface = remember {
@@ -600,14 +603,14 @@ fun TimelineEditor(
                                     val gradientSize = (width + height) * 0.8f
 
                                     // Aplicar deslocamento de fase baseado no índice do segmento
-                                    // A animação original vai de -1f a 2f (range 3f)
-                                    val phaseShift = segIdx * 0.05f
+                                    // UPGRADE v2.0: Wave-front flow (deslocamento mais suave e amplo)
+                                    val phaseShift = segIdx * 0.15f // Aumentado para dispersar mais a onda
                                     var adjustedProgress = shimmerProgress - phaseShift
                                     
-                                    // Manter no range -1..2 circulando (wrapping)
-                                    // -1 + ((adjustedProgress + 1) % 3)
-                                    while (adjustedProgress < -1f) adjustedProgress += 3f
-                                    while (adjustedProgress > 2f) adjustedProgress -= 3f
+                                    // Manter no range -2..4 circulando (wrapping)
+                                    val range = 6f
+                                    while (adjustedProgress < -2f) adjustedProgress += range
+                                    while (adjustedProgress > 4f) adjustedProgress -= range
 
                                     val offsetX = adjustedProgress * (width + gradientSize) - gradientSize
                                     val offsetY = adjustedProgress * (height + gradientSize) - gradientSize
