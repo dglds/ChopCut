@@ -40,6 +40,9 @@ class ConsoleLineViewModel : ViewModel() {
     private val _maxDisplayLines = MutableStateFlow(5)
     val maxDisplayLines: StateFlow<Int> = _maxDisplayLines.asStateFlow()
     
+    private val _callStackMode = MutableStateFlow(false)
+    val callStackMode: StateFlow<Boolean> = _callStackMode.asStateFlow()
+    
     enum class ConsolePosition {
         HEADER, FOOTER
     }
@@ -51,6 +54,7 @@ class ConsoleLineViewModel : ViewModel() {
     private val maxQueueSize = 100
     private var isProcessing = false
     private val logCountMap = mutableMapOf<String, Int>()
+    private val callStackMap = mutableMapOf<String, MutableList<LogEntry>>()
     
     init {
         setupTimberTree()
@@ -108,12 +112,24 @@ class ConsoleLineViewModel : ViewModel() {
                                     val count = (logCountMap[tagKey] ?: 0) + 1
                                     logCountMap[tagKey] = count
                                     
-                                    LogEntry(
+                                    val logEntry = LogEntry(
                                         tag = tagKey,
                                         message = messageContent,
                                         count = count,
                                         fullText = "[$count]$tagKey $messageContent"
                                     )
+                                    
+                                    // Manter call stack por tag
+                                    if (_callStackMode.value) {
+                                        val stack = callStackMap.getOrPut(tagKey) { mutableListOf() }
+                                        stack.add(logEntry)
+                                        // Manter apenas os últimos 50 logs por tag
+                                        if (stack.size > 50) {
+                                            stack.removeAt(0)
+                                        }
+                                    }
+                                    
+                                    logEntry
                                 } catch (e: Exception) {
                                     null
                                 }
@@ -236,6 +252,20 @@ class ConsoleLineViewModel : ViewModel() {
     
     fun decreaseDisplayLines() {
         setMaxDisplayLines(_maxDisplayLines.value - 1)
+    }
+    
+    fun toggleCallStackMode() {
+        _callStackMode.value = !_callStackMode.value
+        if (!_callStackMode.value) {
+            callStackMap.clear()
+        }
+    }
+    
+    fun setCallStackMode(enabled: Boolean) {
+        _callStackMode.value = enabled
+        if (!enabled) {
+            callStackMap.clear()
+        }
     }
     
     fun setPosition(position: ConsolePosition) {
