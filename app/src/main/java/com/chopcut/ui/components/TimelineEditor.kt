@@ -163,13 +163,22 @@ fun TimelineEditor(
           }
 
           // OTIMIZAÇÃO: Sincronizar strips de forma eficiente
-          // Usar key que só muda quando realmente há novas strips
           LaunchedEffect(stripsFromViewModel.size, preloadedStrips.size) {
-              // Se temos ViewModel, usar strips dela
-              if (thumbnailViewModel != null && stripsFromViewModel.isNotEmpty()) {
+              if (thumbnailViewModel != null) {
+                  // 1. Sincronizar - Adicionar novas
                   stripsFromViewModel.forEach { (k, v) ->
-                      if (!strips.containsKey(k)) {
+                      if (strips[k] != v) {
                           strips[k] = v
+                      }
+                  }
+                  
+                  // 2. Limpar - Remover as que saíram do cache do ViewModel (Memory Limit)
+                  if (stripsFromViewModel.isNotEmpty()) {
+                      val currentKeys = strips.keys.toList()
+                      currentKeys.forEach { k ->
+                          if (!stripsFromViewModel.containsKey(k)) {
+                              strips.remove(k)
+                          }
                       }
                   }
               }
