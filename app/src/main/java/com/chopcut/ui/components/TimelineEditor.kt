@@ -224,14 +224,14 @@ fun TimelineEditor(
             }
         }
 
-        // Animação de shimmer suave para placeholders de thumbnails
-        // UPGRADE v2.0: Aumentamos o range para dar mais espaço entre as ondas
+        // Animação de shimmer suave - v4.0 (Ambient Flow)
+        // Mais lenta e sutil para não distrair o usuário
         val infiniteTransition = rememberInfiniteTransition(label = "thumbnailShimmer")
         val shimmerProgress by infiniteTransition.animateFloat(
-            initialValue = -2f,
-            targetValue = 4f,
+            initialValue = -1f,
+            targetValue = 2f,
             animationSpec = infiniteRepeatable(
-                animation = tween(2000, easing = LinearEasing),
+                animation = tween(3000, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "shimmerProgress"
@@ -501,20 +501,21 @@ fun TimelineEditor(
                     }
                 }
 
-                // Shimmer gradient colors (UPGRADE v3.0: Disney Magic - Midnight & Gold)
+                // Shimmer gradient colors (v4.0: Ambient Flow - Neutral & Professional)
+                // Usando cinzas profundos com transições muito largas para suavidade máxima
                 val shimmerGradient = remember {
                     intArrayOf(
-                        android.graphics.Color.parseColor("#0A0E1A"), // Midnight Blue
-                        android.graphics.Color.parseColor("#121A2E"), // Dark Magic Blue
-                        android.graphics.Color.parseColor("#FFD700"), // Pure Gold (Stardust Base)
-                        android.graphics.Color.parseColor("#FFFFFF"), // Magic Bloom (White Core)
-                        android.graphics.Color.parseColor("#FFD700"), // Pure Gold (Stardust Base)
-                        android.graphics.Color.parseColor("#121A2E"), // Dark Magic Blue
-                        android.graphics.Color.parseColor("#0A0E1A")  // Midnight Blue
+                        android.graphics.Color.parseColor("#121212"), // Charcoal Base
+                        android.graphics.Color.parseColor("#1E1E1E"), // Deep Gray
+                        android.graphics.Color.parseColor("#2A2A2A"), // Ambient Light
+                        android.graphics.Color.parseColor("#3D3D3D"), // Subtle Glow
+                        android.graphics.Color.parseColor("#2A2A2A"), // Ambient Light
+                        android.graphics.Color.parseColor("#1E1E1E"), // Deep Gray
+                        android.graphics.Color.parseColor("#121212")  // Charcoal Base
                     )
                 }
 
-                val shimmerPositions = remember { floatArrayOf(0f, 0.4f, 0.48f, 0.5f, 0.52f, 0.6f, 1f) }
+                val shimmerPositions = remember { floatArrayOf(0f, 0.1f, 0.35f, 0.5f, 0.65f, 0.9f, 1f) }
 
                   // Paint para timestamps da régua (pré-alocado, fora do draw loop)
                   val robotoMonoTypeface = remember {
@@ -603,14 +604,14 @@ fun TimelineEditor(
                                     val gradientSize = (width + height) * 0.8f
 
                                     // Aplicar deslocamento de fase baseado no índice do segmento
-                                    // UPGRADE v2.0: Wave-front flow (deslocamento mais suave e amplo)
-                                    val phaseShift = segIdx * 0.15f // Aumentado para dispersar mais a onda
+                                    // v4.0: Flow Sutil (Quase imperceptível, mas orgânico)
+                                    val phaseShift = segIdx * 0.02f 
                                     var adjustedProgress = shimmerProgress - phaseShift
                                     
-                                    // Manter no range -2..4 circulando (wrapping)
-                                    val range = 6f
-                                    while (adjustedProgress < -2f) adjustedProgress += range
-                                    while (adjustedProgress > 4f) adjustedProgress -= range
+                                    // Manter no range -1..2 circulando (wrapping)
+                                    val range = 3f
+                                    while (adjustedProgress < -1f) adjustedProgress += range
+                                    while (adjustedProgress > 2f) adjustedProgress -= range
 
                                     val offsetX = adjustedProgress * (width + gradientSize) - gradientSize
                                     val offsetY = adjustedProgress * (height + gradientSize) - gradientSize
