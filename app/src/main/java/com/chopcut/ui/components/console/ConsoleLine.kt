@@ -118,6 +118,15 @@ fun ConsoleLine(
                                 withStyle(
                                     SpanStyle(
                                         color = theme.value.textColor,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = theme.value.fontSize.sp
+                                    )
+                                ) {
+                                    append("[${log.count}]")
+                                }
+                                withStyle(
+                                    SpanStyle(
+                                        color = theme.value.textColor,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace,
                                         fontSize = theme.value.fontSize.sp
@@ -133,7 +142,7 @@ fun ConsoleLine(
                                         fontSize = theme.value.fontSize.sp
                                     )
                                 ) {
-                                    append("${log.message} [${log.count}]")
+                                    append(log.message)
                                 }
                             },
                             modifier = Modifier.weight(1f),
@@ -145,6 +154,15 @@ fun ConsoleLine(
                 logs.value?.let { log ->
                     Text(
                         text = buildAnnotatedString {
+                            withStyle(
+                                SpanStyle(
+                                    color = theme.value.textColor,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = theme.value.fontSize.sp
+                                )
+                            ) {
+                                append("[${log.count}]")
+                            }
                             withStyle(
                                 SpanStyle(
                                     color = theme.value.textColor,
@@ -163,7 +181,7 @@ fun ConsoleLine(
                                     fontSize = theme.value.fontSize.sp
                                 )
                             ) {
-                                append("${log.message} [${log.count}]")
+                                append(log.message)
                             }
                         },
                         modifier = Modifier.weight(1f),

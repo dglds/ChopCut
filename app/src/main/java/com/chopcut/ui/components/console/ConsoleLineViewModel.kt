@@ -108,7 +108,7 @@ class ConsoleLineViewModel : ViewModel() {
                                 tag = tagKey,
                                 message = messageContent,
                                 count = count,
-                                fullText = "$tagKey $messageContent [$count]"
+                                fullText = "[$count]$tagKey $messageContent"
                             )
                             
                             if (_isMultiLine.value) {
