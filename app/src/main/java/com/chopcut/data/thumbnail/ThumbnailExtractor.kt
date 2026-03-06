@@ -7,6 +7,8 @@ import android.net.Uri
 import android.os.Build
 import com.chopcut.config.constants.ThumbnailConstants
 import com.chopcut.config.constants.FileFormatConstants
+import com.chopcut.data.model.ExtractionStage
+import com.chopcut.data.model.PerformanceEvent
 import com.chopcut.data.model.ThumbnailExtractionProgress
 import com.chopcut.data.model.ThumbnailFormat
 import com.chopcut.data.model.ThumbnailSettings
@@ -141,9 +143,16 @@ class ThumbnailExtractor(
                     }
                 }
 
+                val startSave = System.currentTimeMillis()
                 java.io.FileOutputStream(destFile).use { out ->
                     bitmap?.compress(Bitmap.CompressFormat.JPEG, ThumbnailConstants.Quality.JPEG_COMPRESSION_QUALITY, out)
                 }
+                val saveDuration = System.currentTimeMillis() - startSave
+                PerformanceMonitor.log(PerformanceEvent(
+                    stage = ExtractionStage.SAVE,
+                    taskId = destFile.name,
+                    durationMs = saveDuration
+                ))
                 Timber.d("Thumbnail saved to ${destFile.absolutePath} (rot: $rotation)")
                 true
             } catch (e: Exception) {
@@ -348,9 +357,17 @@ class ThumbnailExtractor(
 
                         // Save bitmap to file
                         bitmap?.let {
+                            val startSave = System.currentTimeMillis()
                             java.io.FileOutputStream(outputFile).use { out ->
                                 it.compress(compressFormat, settings.quality, out)
                             }
+                            val saveDuration = System.currentTimeMillis() - startSave
+                            PerformanceMonitor.log(PerformanceEvent(
+                                stage = ExtractionStage.SAVE,
+                                taskId = outputFile.name,
+                                durationMs = saveDuration,
+                                queueSize = totalThumbnails - (i + 1)
+                            ))
 
                             Timber.d("Saved thumbnail ${i + 1}/$totalThumbnails to ${outputFile.name}")
 

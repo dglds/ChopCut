@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
 import kotlin.math.abs
 
 /**
@@ -48,7 +49,90 @@ object ThumbnailCacheManager {
     private val jobsLock = Mutex()
     private val videoJobs = mutableMapOf<String, Job>()
     private val segmentJobs = mutableMapOf<String, Job>()
-    
+
+    /**
+     * Métricas de cache health para monitoramento e debugging
+     */
+    private val metrics = CacheMetrics()
+
+    /**
+     * Classe interna para tracking de métricas do cache
+     */
+    private class CacheMetrics {
+        @Volatile
+        var hits = 0L
+
+        @Volatile
+        var misses = 0L
+
+        @Volatile
+        var extractionCount = 0L
+
+        @Volatile
+        var extractionTotalTimeMs = 0L
+
+        @Volatile
+        var lastExtractionTime = 0L
+
+        @Volatile
+        var cacheCorruptionsDetected = 0L
+
+        @Volatile
+        var evictions = 0L
+
+        fun getHitRate(): Double {
+            val total = hits + misses
+            return if (total > 0) (hits.toDouble() / total) * 100.0 else 0.0
+        }
+
+        fun getAverageExtractionTime(): Long {
+            return if (extractionCount > 0) extractionTotalTimeMs / extractionCount else 0L
+        }
+
+        fun recordHit() { synchronized(this) { hits++ } }
+        fun recordMiss() { synchronized(this) { misses++ } }
+        fun recordExtraction(timeMs: Long) {
+            synchronized(this) {
+                extractionCount++
+                extractionTotalTimeMs += timeMs
+                lastExtractionTime = timeMs
+            }
+        }
+        fun recordCorruption() { synchronized(this) { cacheCorruptionsDetected++ } }
+        fun recordEviction() { synchronized(this) { evictions++ } }
+
+        fun reset() {
+            synchronized(this) {
+                hits = 0L
+                misses = 0L
+                extractionCount = 0L
+                extractionTotalTimeMs = 0L
+                lastExtractionTime = 0L
+                cacheCorruptionsDetected = 0L
+                evictions = 0L
+            }
+        }
+
+        fun getSummary(): String {
+            return """
+                ╔═════════════════════════════════════════════════════════╗
+                ║          CACHE HEALTH METRICS                            ║
+                ╠═════════════════════════════════════════════════════════╣
+                ║  Cache Hits          : $hits                              ║
+                ║  Cache Misses        : $misses                            ║
+                ║  Hit Rate            : ${String.format("%.2f", getHitRate())}%                        ║
+                ╠═════════════════════════════════════════════════════════╣
+                ║  Extrações           : $extractionCount                   ║
+                ║  Tempo médio         : ${getAverageExtractionTime()}ms                         ║
+                ║  Última extração     : $lastExtractionTime ms                       ║
+                ╠═════════════════════════════════════════════════════════╣
+                ║  Corrupções          : $cacheCorruptionsDetected                  ║
+                ║  Evictions           : $evictions                           ║
+                ╚═════════════════════════════════════════════════════════╝
+            """.trimIndent()
+        }
+    }
+
     /**
      * Inicializa o ThumbnailCacheManager com o contexto da aplicação.
      * Deve ser chamado no Application.onCreate()
@@ -152,38 +236,54 @@ object ThumbnailCacheManager {
         durationMs: Long,
         thumbWidth: Int,
         thumbHeight: Int,
-        thumbsPerStrip: Int
+        thumbsPerStrip: Int,
+        onlyFirstFrame: Boolean = false
     ): Bitmap? {
-        Timber.d("ThumbnailCacheManager.getStrip called: segment=$segmentIndex, duration=$durationMs, size=${thumbWidth}x$thumbHeight")
+        Timber.d("ThumbnailCacheManager.getStrip called: segment=$segmentIndex, duration=$durationMs, size=${thumbWidth}x$thumbHeight, overview=$onlyFirstFrame")
         ensureInitialized()
 
         // ✅ OTIMIZAÇÃO: Configurar stripManager APENAS se realmente necessário
-        // Se as dimensões forem as mesmas, REUSAR o stripManager existente
-        // Isso evita recriar instâncias e melhora hit rate do cache de disco
         val needsNewStripManager = stripManager == null ||
             stripManager!!.thumbWidth != thumbWidth ||
             stripManager!!.thumbHeight != thumbHeight ||
-            stripManager!!.thumbsPerStrip != thumbsPerStrip
+            (!onlyFirstFrame && stripManager!!.thumbsPerStrip != thumbsPerStrip)
 
         if (needsNewStripManager) {
-            configureStripManager(thumbWidth, thumbHeight, thumbsPerStrip)
-            Timber.d("ThumbnailCacheManager: Configured new stripManager for dimensions ${thumbWidth}x${thumbHeight}")
-        } else {
-            Timber.d("ThumbnailCacheManager: Reusing existing stripManager")
+            // Se for overview, não precisamos mudar o thumbsPerStrip do manager fixo
+            val targetThumbsPerStrip = if (onlyFirstFrame) 1 else thumbsPerStrip
+            configureStripManager(thumbWidth, thumbHeight, targetThumbsPerStrip)
+            Timber.d("ThumbnailCacheManager: Configured manager (ov=$onlyFirstFrame)")
         }
 
         val uriString = uri.toString()
-        val positionKey = segmentIndex.toLong()
+        val positionKey = if (onlyFirstFrame) (segmentIndex.toLong() or (1L shl 32)) else segmentIndex.toLong()
+
+        val startTime = System.currentTimeMillis()
 
         // Single lookup via getOrPut (isRecycled check is inside ThumbnailCache.get)
         return try {
-            memoryCache.getOrPut(uriString, positionKey) {
-                val strip = stripManager!!.extractSegment(uri, segmentIndex, durationMs)
+            val result = memoryCache.get(uriString, positionKey)
+            if (result != null) {
+                metrics.recordHit()
+                Timber.tag("CacheMetrics").d("🔵 Cache hit — uri=$uriString, segment=$segmentIndex (ov=$onlyFirstFrame)")
+                result
+            } else {
+                metrics.recordMiss()
+                Timber.tag("CacheMetrics").d("🟠 Cache miss — uri=$uriString, segment=$segmentIndex, extracting (ov=$onlyFirstFrame)...")
+
+                val strip = stripManager!!.extractSegment(uri, segmentIndex, durationMs, onlyFirstFrame)
                     ?: run {
                         Timber.e("ThumbnailCacheManager: Failed to extract segment $segmentIndex")
                         throw NoSuchElementException("Failed to extract segment $segmentIndex")
                     }
+
+                val extractionTime = System.currentTimeMillis() - startTime
+                metrics.recordExtraction(extractionTime)
+
+                Timber.tag("CacheMetrics").d("⚪ Extraction completed — segment=$segmentIndex, time=${extractionTime}ms")
                 Timber.d("ThumbnailCacheManager: segment $segmentIndex extracted (${strip.width}x${strip.height})")
+
+                memoryCache.put(uriString, positionKey, strip)
                 strip
             }
         } catch (e: NoSuchElementException) {
@@ -217,7 +317,7 @@ object ThumbnailCacheManager {
         
         val job = scope.launch {
             try {
-                val strip = getStrip(uri, segmentIndex, durationMs, thumbWidth, thumbHeight, thumbsPerStrip)
+                val strip = getStrip(uri, segmentIndex, durationMs, thumbWidth, thumbHeight, thumbsPerStrip, false)
                 
                 withContext(Dispatchers.Main) {
                     onResult(strip)
@@ -341,7 +441,7 @@ object ThumbnailCacheManager {
             val jobs = (0 until minOf(initialSegments, segmentCount)).map { segIdx ->
                 async(Dispatchers.IO) {
                     try {
-                        val strip = getStrip(uri, segIdx, durationMs, thumbWidth, thumbHeight, thumbsPerStrip)
+                        val strip = getStrip(uri, segIdx, durationMs, thumbWidth, thumbHeight, thumbsPerStrip, false)
                         if (strip != null) {
                             segIdx to strip
                         } else {
@@ -432,6 +532,16 @@ object ThumbnailCacheManager {
     }
 
     /**
+     * Limpa todo o cache (disco e memória) com um context específico.
+     * Útil para testes onde um context diferente pode ser necessário.
+     */
+    fun clearAll(context: Context) {
+        ThumbnailStripManager.clearCache(context)
+        clearMemoryCache()
+        Timber.i("ThumbnailCacheManager: All caches cleared (with provided context)")
+    }
+
+    /**
      * Estatísticas do cache manager.
      */
     data class CacheStats(
@@ -443,4 +553,124 @@ object ThumbnailCacheManager {
         val activeVideoJobsCount: Int,
         val activeSegmentJobsCount: Int
     )
+
+    // ========== CACHE HEALTH METRICS API ==========
+
+    /**
+     * Retorna o resumo das métricas de cache health.
+     * Útil para debugging e monitoramento.
+     */
+    fun getCacheHealthSummary(): String = metrics.getSummary()
+
+    /**
+     * Imprime as métricas de cache health no log.
+     * Usa logcat tag "CacheMetrics" para fácil filtragem.
+     */
+    fun logCacheHealth() {
+        Timber.tag("CacheMetrics").i(metrics.getSummary())
+    }
+
+    /**
+     * Retorna o hit rate atual do cache em porcentagem (0.0 - 100.0).
+     */
+    fun getHitRate(): Double = metrics.getHitRate()
+
+    /**
+     * Retorna o tempo médio de extração em ms.
+     */
+    fun getAverageExtractionTime(): Long = metrics.getAverageExtractionTime()
+
+    /**
+     * Retorna o número total de cache hits.
+     */
+    fun getTotalHits(): Long = metrics.hits
+
+    /**
+     * Retorna o número total de cache misses.
+     */
+    fun getTotalMisses(): Long = metrics.misses
+
+    /**
+     * Retorna o número de corrupções de cache detectadas.
+     */
+    fun getCorruptionCount(): Long = metrics.cacheCorruptionsDetected
+
+    /**
+     * Retorna o número de evictions que ocorreram.
+     */
+    fun getEvictionCount(): Long = metrics.evictions
+
+    /**
+     * Retorna o tamanho atual do cache de memória (número de itens).
+     */
+    fun getCacheSize(): Int = memoryCache.size()
+
+    /**
+     * Retorna o uso de memória do cache em bytes.
+     */
+    fun getMemoryUsage(): Long = memoryCache.totalSizeBytes()
+
+    /**
+     * Reseta todas as métricas.
+     * Útil para começar uma nova sessão de medição.
+     */
+    fun resetMetrics() {
+        metrics.reset()
+        Timber.tag("CacheMetrics").i("📊 Métricas resetadas")
+    }
+
+    /**
+     * Verifica rapidamente se um segmento específico está no cache (memória ou disco).
+     */
+    fun isSegmentCached(uri: Uri, segmentIndex: Int): Boolean {
+        val uriString = uri.toString()
+        val positionKey = segmentIndex.toLong()
+        
+        // 1. Check memory cache
+        if (memoryCache.get(uriString, positionKey) != null) return true
+        
+        // 2. Check disk cache
+        try {
+            // Se o stripManager não estiver configurado, não podemos garantir a chave correta
+            // mas podemos tentar com o stripManager atual se ele existir
+            val manager = stripManager ?: return false
+            val cacheKey = "strip_v${com.chopcut.config.constants.ThumbnailConstants.Cache.CACHE_VERSION}_${manager.getFileIdentifier(uri)}_${segmentIndex}.webp"
+            val dir = File(appContext?.cacheDir, "thumbnail_strips")
+            return File(dir, cacheKey).exists()
+        } catch (e: Exception) {
+            return false
+        }
+    }
+
+    /**
+     * Verifica se o vídeo tem pelo menos o número inicial de strips em cache.
+     */
+    fun hasInitialStripsCached(uri: Uri, segmentCount: Int, initialCount: Int = 6): Boolean {
+        val countToCheck = minOf(segmentCount, initialCount)
+        if (countToCheck <= 0) return false
+        
+        // Se pelo menos metade dos iniciais estiverem em cache, consideramos "cached" para UX
+        var cachedCount = 0
+        for (i in 0 until countToCheck) {
+            if (isSegmentCached(uri, i)) cachedCount++
+        }
+        return cachedCount >= (countToCheck / 2).coerceAtLeast(1)
+    }
+
+    /**
+     * Registra uma corrupção de cache detectada.
+     * Chamado internamente pelo ThumbnailStripManager ao encontrar arquivos corrompidos.
+     */
+    fun recordCorruption() {
+        metrics.recordCorruption()
+        Timber.tag("CacheMetrics").w("🔴 Corrupção de cache detectada — total=${metrics.cacheCorruptionsDetected}")
+    }
+
+    /**
+     * Registra um eviction do cache LRU.
+     * Chamado internamente pelo ThumbnailCache ao remover itens.
+     */
+    fun recordEviction() {
+        metrics.recordEviction()
+    }
 }

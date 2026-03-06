@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import com.chopcut.data.model.ExtractionStage
+import com.chopcut.data.model.PerformanceEvent
 import com.chopcut.data.model.ThumbnailQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -58,9 +60,10 @@ open class ThumbnailExtractorBatch(
             retriever.setDataSource(context, uri)
 
             // Extrair cada posição
-            sortedPositions.forEach { positionMs ->
+            sortedPositions.forEachIndexed { index, positionMs ->
+                val currentQueueSize = sortedPositions.size - (index + 1)
                 try {
-                    val bitmap = extractFrameAt(retriever, positionMs, width, height, ThumbnailQuality.LOW)
+                    val bitmap = extractFrameAt(retriever, positionMs, width, height, ThumbnailQuality.LOW, currentQueueSize)
                     if (bitmap != null) {
                         results[positionMs] = bitmap
                     } else {
@@ -71,6 +74,7 @@ open class ThumbnailExtractorBatch(
                 }
             }
 
+            PerformanceMonitor.calculateMetrics() // Reportar métricas ao final do batch
             val totalTime = System.currentTimeMillis() - startTime
             val avgTime = if (results.isNotEmpty()) totalTime / results.size else 0
             Timber.i("extractBatch: ${results.size}/${positionsMs.size} frames in ${totalTime}ms (avg ${avgTime}ms/frame)")
@@ -140,21 +144,41 @@ open class ThumbnailExtractorBatch(
         positionMs: Long,
         width: Int,
         height: Int,
-        quality: ThumbnailQuality = ThumbnailQuality.LOW
+        quality: ThumbnailQuality = ThumbnailQuality.LOW,
+        queueSize: Int = 0
     ): Bitmap? {
+        val taskId = "${positionMs}ms"
         return try {
             if (quality == ThumbnailQuality.LOW) {
-                return retriever.getScaledFrameAtTime(
+                val startDecode = System.currentTimeMillis()
+                val bitmap = retriever.getScaledFrameAtTime(
                     positionMs * 1000,
                     MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                     width,
                     height
                 )
+                val decodeDuration = System.currentTimeMillis() - startDecode
+                
+                PerformanceMonitor.log(PerformanceEvent(
+                    stage = ExtractionStage.DECODE,
+                    taskId = taskId,
+                    durationMs = decodeDuration,
+                    queueSize = queueSize
+                ))
+                
+                // Em LOW, o PROCESS é negligível (já feito pelo hardware no decode)
+                PerformanceMonitor.log(PerformanceEvent(
+                    stage = ExtractionStage.PROCESS,
+                    taskId = taskId,
+                    durationMs = 0,
+                    queueSize = queueSize
+                ))
+                
+                return bitmap
             }
 
             // A partir daqui, lógica para HIGH quality (Export/Preview Detalhado)
-            // Get frame at position
-            // For HIGH quality, we extract slightly larger and scale down with filtering (Anti-Aliasing)
+            val startDecode = System.currentTimeMillis()
             // Obter dimensões reais do vídeo para evitar distorção no getScaledFrameAtTime
             val videoWidth = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: width
             val videoHeight = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: height
@@ -185,7 +209,15 @@ open class ThumbnailExtractorBatch(
                 finalWidth,
                 finalHeight
             )
+            val decodeDuration = System.currentTimeMillis() - startDecode
+            PerformanceMonitor.log(PerformanceEvent(
+                stage = ExtractionStage.DECODE,
+                taskId = taskId,
+                durationMs = decodeDuration,
+                queueSize = queueSize
+            ))
 
+            val startProcess = System.currentTimeMillis()
             val frame = if (rawFrame != null && (rawFrame.width != width || rawFrame.height != height)) {
 
                 // Criar bitmap de destino no tamanho exato solicitado (Force RGB_565 para economizar RAM)
@@ -221,6 +253,13 @@ open class ThumbnailExtractorBatch(
             } else {
                 rawFrame
             }
+            val processDuration = System.currentTimeMillis() - startProcess
+            PerformanceMonitor.log(PerformanceEvent(
+                stage = ExtractionStage.PROCESS,
+                taskId = taskId,
+                durationMs = processDuration,
+                queueSize = queueSize
+            ))
 
             if (frame == null) {
                 null

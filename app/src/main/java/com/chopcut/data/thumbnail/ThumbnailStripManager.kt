@@ -231,17 +231,18 @@ class ThumbnailStripManager(
      * Gera uma chave única de cache baseada no URI do vídeo
      * Usa lastModified + tamanho do arquivo para detectar modificações
      */
-    private fun getCacheKey(uri: Uri, segmentIndex: Int): String {
+    private fun getCacheKey(uri: Uri, segmentIndex: Int, onlyFirstFrame: Boolean = false): String {
         val fileInfo = getFileIdentifier(uri)
+        val suffix = if (onlyFirstFrame) "_ov" else ""
         // Incluir CACHE_VERSION na chave para invalidar automaticamente versões antigas
-        return "strip_v${CACHE_VERSION}_${fileInfo}_${segmentIndex}.webp"
+        return "strip_v${CACHE_VERSION}_${fileInfo}_${segmentIndex}${suffix}.webp"
     }
 
     /**
      * Obtém um identificador único para o arquivo de vídeo
      * Combina path e tamanho para detectar mudanças
      */
-    private fun getFileIdentifier(uri: Uri): String {
+    internal fun getFileIdentifier(uri: Uri): String {
         return try {
             val cursor = context.contentResolver.query(
                 uri,
@@ -270,9 +271,9 @@ class ThumbnailStripManager(
      * Tenta carregar uma strip do cache
      * @return Bitmap se encontrado e válido, null caso contrário
      */
-    private fun loadFromCache(uri: Uri, segmentIndex: Int): Bitmap? {
+    private fun loadFromCache(uri: Uri, segmentIndex: Int, onlyFirstFrame: Boolean = false): Bitmap? {
         try {
-            val cacheKey = getCacheKey(uri, segmentIndex)
+            val cacheKey = getCacheKey(uri, segmentIndex, onlyFirstFrame)
             val cacheFile = File(cacheDir, cacheKey)
             
             if (!cacheFile.exists()) {
@@ -299,9 +300,11 @@ class ThumbnailStripManager(
                     Timber.d("✓ Cache HIT for segment $segmentIndex (${elapsed}ms)")
                 }
             } else {
-                Timber.w("ThumbnailStrip: Cache file corrupted for segment $segmentIndex")
+                Timber.tag("StripPerf").w("🔴 Cache file corrupted for segment $segmentIndex")
                 // Delete sem lock, filesystem cuida da atomicidade
                 cacheFile.delete()
+                // Record corruption in metrics
+                ThumbnailCacheManager.recordCorruption()
             }
             
             return bitmap
@@ -325,14 +328,15 @@ class ThumbnailStripManager(
      * 
      * @return true se salvo com sucesso, false caso contrário
      */
-    private fun saveToCache(uri: Uri, segmentIndex: Int, strip: Bitmap): Boolean {
+    private fun saveToCache(uri: Uri, segmentIndex: Int, strip: Bitmap, onlyFirstFrame: Boolean = false): Boolean {
         try {
-            val cacheKey = getCacheKey(uri, segmentIndex)
+            val cacheKey = getCacheKey(uri, segmentIndex, onlyFirstFrame)
             val finalFile = File(cacheDir, cacheKey)
             val tempFile = File(cacheDir, "${cacheKey}.tmp")
-            
+
             val startTime = System.currentTimeMillis()
-            
+            val compressStart = System.currentTimeMillis()
+
             // 1. COMPRESSÃO FORA DO LOCK (operação pesada, paralela)
             FileOutputStream(tempFile).use { out ->
                 val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -343,23 +347,26 @@ class ThumbnailStripManager(
                 }
                 strip.compress(format, COMPRESSION_QUALITY, out)
             }
-            
+
+            val compressTime = System.currentTimeMillis() - compressStart
+
             // 2. OPERAÇÃO ATÔMICA DENTRO DO LOCK
             synchronized(cacheLock) {
                 if (tempFile.renameTo(finalFile)) {
                     val elapsed = System.currentTimeMillis() - startTime
                     val sizeKB = finalFile.length() / 1024
-                    Timber.d("ThumbnailStrip: Cached segment $segmentIndex (${elapsed}ms, ${sizeKB}KB)")
-                    
+                    Timber.tag("StripPerf").d("💾 Cached segment $segmentIndex (compress=${compressTime}ms, total=${elapsed}ms, ${sizeKB}KB)")
+
                     trimCacheIfNeeded()
                     return true
                 } else {
                     tempFile.delete()
+                    Timber.tag("StripPerf").w("⚠️ Failed to rename temp file for segment $segmentIndex")
                     return false
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "ThumbnailStrip: Failed to save cache for segment $segmentIndex")
+            Timber.tag("StripPerf").e(e, "🔴 Failed to save cache for segment $segmentIndex")
             return false
         }
     }
@@ -372,32 +379,37 @@ class ThumbnailStripManager(
         synchronized(cacheLock) {
             try {
                 val cacheFiles = cacheDir.listFiles() ?: return
-                
+
                 val currentSize = cacheFiles.sumOf { it.length() }
-                
+
                 if (currentSize <= MAX_CACHE_SIZE) {
                     return
                 }
-                
-                Timber.d("ThumbnailStrip: Cache size ${(currentSize / 1024 / 1024)}MB exceeds limit, trimming...")
-                
+
+                val currentSizeMB = currentSize / 1024 / 1024
+                val maxSizeMB = MAX_CACHE_SIZE / 1024 / 1024
+                Timber.tag("StripPerf").w("🟠 Cache size ${currentSizeMB}MB exceeds limit ${maxSizeMB}MB, trimming...")
+
                 // Ordenar por lastModified (mais antigos primeiro)
                 val sortedFiles: List<File> = cacheFiles.sortedBy { file -> file.lastModified() }
                 val filesToDelete: List<File> = sortedFiles.take(cacheFiles.size / CacheConstants.Thumbnail.TRIM_RATIO_DIVISOR)
-                
+
                 var deletedSize = 0L
                 filesToDelete.forEach { file: File ->
                     try {
                         deletedSize += file.length()
                         file.delete()
                     } catch (e: Exception) {
-                        Timber.w(e, "Failed to delete cache file: ${file.name}")
+                        Timber.tag("StripPerf").w(e, "Failed to delete cache file: ${file.name}")
                     }
                 }
-                
-                Timber.d("ThumbnailStrip: Trimmed cache, deleted ${deletedSize / 1024}KB")
+
+                Timber.tag("StripPerf").i("🟢 Trimmed cache: deleted ${filesToDelete.size} files, ${deletedSize / 1024}KB")
+
+                // Record eviction in metrics
+                ThumbnailCacheManager.recordEviction()
             } catch (e: Exception) {
-                Timber.e(e, "ThumbnailStrip: Failed to trim cache")
+                Timber.tag("StripPerf").e(e, "🔴 Failed to trim cache")
             }
         }
     }
@@ -424,10 +436,11 @@ class ThumbnailStripManager(
     suspend fun extractSegment(
         uri: Uri,
         segmentIndex: Int,
-        durationMs: Long
+        durationMs: Long,
+        onlyFirstFrame: Boolean = false
     ): Bitmap? {
         val totalSegments = getSegmentCount(durationMs)
-        return extractSegment(uri, segmentIndex, durationMs, totalSegments)
+        return extractSegment(uri, segmentIndex, durationMs, totalSegments, onlyFirstFrame)
     }
     
     /**
@@ -445,46 +458,56 @@ class ThumbnailStripManager(
      * @param segmentIndex Índice do segmento (0-based)
      * @param durationMs Duração total do vídeo em milissegundos
      * @param totalSegments Número total de segmentos (obrigatório para strips adaptativas)
+     * @param onlyFirstFrame Se true, extrai apenas o primeiro frame do segmento (fast overview)
      * @return Bitmap horizontal RGB_565 com frames stitchados, ou null se falhar
      */
     suspend fun extractSegment(
         uri: Uri,
         segmentIndex: Int,
         durationMs: Long,
-        totalSegments: Int
+        totalSegments: Int,
+        onlyFirstFrame: Boolean = false
     ): Bitmap? = withContext(Dispatchers.IO) {
-        Timber.d("=== ThumbnailStripManager.extractSegment STARTED ===")
-        Timber.d("segmentIndex: $segmentIndex, totalSegments: $totalSegments, durationMs: $durationMs")
-        
+        val startTime = System.currentTimeMillis()
+
+        Timber.tag("StripPerf").d("=== extractSegment STARTED ===")
+        Timber.tag("StripPerf").d("segmentIndex: $segmentIndex, totalSegments: $totalSegments, durationMs: $durationMs")
+
         // Fail-fast se o job já foi cancelado
         coroutineContext.ensureActive()
 
                 // MELHORIA: Tentar carregar do cache primeiro (se habilitado)
-                Timber.d("Cache enabled: ${prefsManager.thumbnailCacheEnabled}")
+                Timber.tag("StripPerf").d("Cache enabled: ${prefsManager.thumbnailCacheEnabled}")
                 if (prefsManager.thumbnailCacheEnabled) {
-                    val cachedStrip = loadFromCache(uri, segmentIndex)
+                    val cacheKey = getCacheKey(uri, segmentIndex, onlyFirstFrame)
+                    val cachedStrip = loadFromCache(uri, segmentIndex, onlyFirstFrame)
                     if (cachedStrip != null) {
-                        Timber.i("ThumbnailStrip: CACHE HIT - Segment $segmentIndex loaded from disk, size=${cachedStrip.width}x${cachedStrip.height}")
+                        val cacheHitTime = System.currentTimeMillis() - startTime
+                        Timber.tag("StripPerf").i("🔵 CACHE HIT - Segment $segmentIndex ${if (onlyFirstFrame) "(overview)" else ""} loaded from disk, time=${cacheHitTime}ms, size=${cachedStrip.width}x${cachedStrip.height}")
                         return@withContext cachedStrip
                     }
-
-                    Timber.i("ThumbnailStrip: CACHE MISS - Segment $segmentIndex will be extracted")
+    
+                    Timber.tag("StripPerf").i("🟠 CACHE MISS - Segment $segmentIndex ${if (onlyFirstFrame) "(overview)" else ""} will be extracted")
                 } else {
-                    Timber.d("ThumbnailStrip: Cache disabled - Segment $segmentIndex will be extracted")
+                    Timber.tag("StripPerf").d("Cache disabled - Segment $segmentIndex will be extracted")
                 }
-
+    
         extractSemaphore.withPermit {
             // Verificar novamente após adquirir permissão (pode ter demorado na fila)
             coroutineContext.ensureActive()
-
+    
             // Calcular thumbsPerStrip adaptativo se habilitado
-            val currentThumbsPerStrip = getThumbsPerStripForSegment(segmentIndex, totalSegments)
+            val currentThumbsPerStrip = if (onlyFirstFrame) 1 else getThumbsPerStripForSegment(segmentIndex, totalSegments)
             
             val totalSeconds = ((durationMs + 999) / 1000).toInt()
-            val startSec = segmentIndex * currentThumbsPerStrip
+            
+            // Se for overview, usamos o índice para pular o intervalo correto
+            val segDuration = getThumbsPerStripForSegment(segmentIndex, totalSegments)
+            val startSec = segmentIndex * segDuration
+            
             if (startSec >= totalSeconds) return@withPermit null
-
-            val framesInSegment = minOf(currentThumbsPerStrip, totalSeconds - startSec)
+    
+            val framesInSegment = if (onlyFirstFrame) 1 else minOf(currentThumbsPerStrip, totalSeconds - startSec)
 
               try {
                 Timber.d("Extracting segment $segmentIndex: $framesInSegment frames, strip size=${thumbWidth * framesInSegment}x$thumbHeight")
@@ -543,12 +566,15 @@ class ThumbnailStripManager(
                 }
 
                 Timber.d("ThumbnailStrip: Segment $segmentIndex ($framesInSegment frames, ${stripWidth}x$thumbHeight, RGB_565) - BATCH MODE")
-                Timber.d("=== ThumbnailStripManager.extractSegment COMPLETED for segment $segmentIndex ===")
+
+                val totalTime = System.currentTimeMillis() - startTime
+                Timber.tag("StripPerf").i("⚪ extractSegment COMPLETED for segment $segmentIndex, time=${totalTime}ms")
+                Timber.tag("StripPerf").d("=== ThumbnailStripManager.extractSegment COMPLETED for segment $segmentIndex ===")
 
                 // MELHORIA: Salvar no cache após extração bem-sucedida (se habilitado)
                 if (prefsManager.thumbnailCacheEnabled) {
-                    Timber.d("Saving segment $segmentIndex to cache...")
-                    saveToCache(uri, segmentIndex, strip)
+                    Timber.tag("StripPerf").d("Saving segment $segmentIndex ${if (onlyFirstFrame) "(overview)" else ""} to cache...")
+                    saveToCache(uri, segmentIndex, strip, onlyFirstFrame)
                 }
 
                 strip
