@@ -593,14 +593,24 @@ fun TimelineEditor(
                                     bgPaint
                                 )
 
-                                // Shimmer diagonal
+                                // Shimmer diagonal suave - SEQÜENCIAL (Phase-Shift por segIdx)
                                 val shimmerPaint = android.graphics.Paint().apply {
                                     val width = stripWidthPx
                                     val height = thumbnailHeightPx
                                     val gradientSize = (width + height) * 0.8f
 
-                                    val offsetX = shimmerProgress * (width + gradientSize) - gradientSize
-                                    val offsetY = shimmerProgress * (height + gradientSize) - gradientSize
+                                    // Aplicar deslocamento de fase baseado no índice do segmento
+                                    // A animação original vai de -1f a 2f (range 3f)
+                                    val phaseShift = segIdx * 0.05f
+                                    var adjustedProgress = shimmerProgress - phaseShift
+                                    
+                                    // Manter no range -1..2 circulando (wrapping)
+                                    // -1 + ((adjustedProgress + 1) % 3)
+                                    while (adjustedProgress < -1f) adjustedProgress += 3f
+                                    while (adjustedProgress > 2f) adjustedProgress -= 3f
+
+                                    val offsetX = adjustedProgress * (width + gradientSize) - gradientSize
+                                    val offsetY = adjustedProgress * (height + gradientSize) - gradientSize
 
                                     shader = android.graphics.LinearGradient(
                                         x + offsetX, thumbnailTop + offsetY,
