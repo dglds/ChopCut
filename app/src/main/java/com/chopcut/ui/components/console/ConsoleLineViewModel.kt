@@ -1,0 +1,229 @@
+package com.chopcut.ui.components.console
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+class ConsoleLineViewModel : ViewModel() {
+    
+    data class LogEntry(
+        val tag: String,
+        val message: String,
+        val count: Int,
+        val fullText: String
+    )
+    
+    private val _logs = MutableStateFlow<LogEntry?>(null)
+    val logs: StateFlow<LogEntry?> = _logs.asStateFlow()
+    
+    private val _logHistory = MutableStateFlow<List<LogEntry>>(emptyList())
+    val logHistory: StateFlow<List<LogEntry>> = _logHistory.asStateFlow()
+    
+    private val _currentTheme = MutableStateFlow(ConsoleThemes.DEFAULT)
+    val currentTheme: StateFlow<ConsoleTheme> = _currentTheme.asStateFlow()
+    
+    private val _isVisible = MutableStateFlow(true)
+    val isVisible: StateFlow<Boolean> = _isVisible.asStateFlow()
+    
+    private val _hasPendingLogs = MutableStateFlow(false)
+    val hasPendingLogs: StateFlow<Boolean> = _hasPendingLogs.asStateFlow()
+    
+    private val _isMultiLine = MutableStateFlow(false)
+    val isMultiLine: StateFlow<Boolean> = _isMultiLine.asStateFlow()
+    
+    private val _maxDisplayLines = MutableStateFlow(3)
+    val maxDisplayLines: StateFlow<Int> = _maxDisplayLines.asStateFlow()
+    
+    enum class ConsolePosition {
+        HEADER, FOOTER
+    }
+    
+    private val _position = MutableStateFlow(ConsolePosition.FOOTER)
+    val position: StateFlow<ConsolePosition> = _position.asStateFlow()
+    
+    private val logQueue = ArrayDeque<Pair<String, String?>>()
+    private val maxQueueSize = 100
+    private var isProcessing = false
+    private val logCountMap = mutableMapOf<String, Int>()
+    
+    init {
+        setupTimberTree()
+        startLogProcessor()
+    }
+    
+    private fun setupTimberTree() {
+        try {
+            val tree = object : timber.log.Timber.Tree() {
+                override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                    try {
+                        val formattedMessage = if (tag != null) "[$tag] $message" else message
+                        addLog(formattedMessage, tag)
+                    } catch (e: Exception) {
+                        // Ignorar erros de logging para evitar loop infinito
+                    }
+                }
+            }
+            timber.log.Timber.plant(tree)
+        } catch (e: Exception) {
+            // Ignorar erros ao plantar tree de logging
+        }
+    }
+    
+    private fun startLogProcessor() {
+        viewModelScope.launch {
+            while (true) {
+                try {
+                    ensureActive()
+                    if (logQueue.isNotEmpty() && !isProcessing) {
+                        isProcessing = true
+                        
+                        try {
+                            val (log, tag) = logQueue.removeFirst()
+                            
+                            val messageKey = tag ?: log.substringBefore(" ")
+                            val count = (logCountMap[messageKey] ?: 0) + 1
+                            logCountMap[messageKey] = count
+                            
+                            val logEntry = LogEntry(
+                                tag = tag ?: messageKey,
+                                message = log,
+                                count = count,
+                                fullText = if (tag != null) "[$tag] $log [$count]" else "$log [$count]"
+                            )
+                            
+                            if (_isMultiLine.value) {
+                                _logHistory.update { current ->
+                                    val updated = current + logEntry
+                                    if (updated.size > _maxDisplayLines.value) {
+                                        updated.takeLast(_maxDisplayLines.value)
+                                    } else {
+                                        updated
+                                    }
+                                }
+                            } else {
+                                _logs.value = logEntry
+                            }
+                        } catch (e: Exception) {
+                            // Ignorar erros de processamento individual de log
+                        }
+                        
+                        _hasPendingLogs.value = logQueue.isNotEmpty()
+                        delay(100)
+                        isProcessing = false
+                    } else {
+                        delay(50)
+                    }
+                } catch (e: Exception) {
+                    // Ignorar erros do loop principal
+                    isProcessing = false
+                }
+            }
+        }
+    }
+    
+    fun addLog(message: String, tag: String? = null) {
+        viewModelScope.launch {
+            try {
+                if (logQueue.size >= maxQueueSize) {
+                    logQueue.removeFirst()
+                }
+                logQueue.addLast(message to tag)
+                _hasPendingLogs.value = true
+            } catch (e: Exception) {
+                // Ignorar erros ao adicionar log
+            }
+        }
+    }
+    
+    fun clear() {
+        logQueue.clear()
+        _logs.value = null
+        _logHistory.value = emptyList()
+        _hasPendingLogs.value = false
+        logCountMap.clear()
+    }
+    
+    fun setTheme(theme: ConsoleTheme) {
+        _currentTheme.value = theme
+    }
+    
+    fun toggleTheme() {
+        _currentTheme.value = when (_currentTheme.value) {
+            ConsoleThemes.DEFAULT -> ConsoleThemes.EIGHTIES
+            ConsoleThemes.EIGHTIES -> ConsoleThemes.AMBER_EIGHTIES
+            else -> ConsoleThemes.DEFAULT
+        }
+    }
+    
+    fun toggleVisibility() {
+        _isVisible.value = !_isVisible.value
+    }
+    
+    fun dismiss() {
+        _isVisible.value = false
+    }
+    
+    fun show() {
+        _isVisible.value = true
+    }
+    
+    fun toggleMultiLine() {
+        _isMultiLine.value = !_isMultiLine.value
+        if (_isMultiLine.value) {
+            _logs.value = null
+        } else {
+            _logHistory.value = emptyList()
+        }
+    }
+    
+    fun setMultiLine(enabled: Boolean) {
+        _isMultiLine.value = enabled
+        if (enabled) {
+            _logs.value = null
+        } else {
+            _logHistory.value = emptyList()
+        }
+    }
+    
+    fun setMaxDisplayLines(lines: Int) {
+        _maxDisplayLines.value = lines.coerceAtLeast(1).coerceAtMost(10)
+        if (_isMultiLine.value) {
+            _logHistory.update { current ->
+                if (current.size > lines) {
+                    current.takeLast(lines)
+                } else {
+                    current
+                }
+            }
+        }
+    }
+    
+    fun increaseDisplayLines() {
+        setMaxDisplayLines(_maxDisplayLines.value + 1)
+    }
+    
+    fun decreaseDisplayLines() {
+        setMaxDisplayLines(_maxDisplayLines.value - 1)
+    }
+    
+    fun setPosition(position: ConsolePosition) {
+        _position.value = position
+    }
+    
+    fun togglePosition() {
+        _position.value = when (_position.value) {
+            ConsolePosition.HEADER -> ConsolePosition.FOOTER
+            ConsolePosition.FOOTER -> ConsolePosition.HEADER
+        }
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+    }
+}

@@ -11,6 +11,7 @@ import com.chopcut.data.repository.VideoRepository
 import com.chopcut.data.local.PreferencesManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -324,14 +325,14 @@ class ThumbnailViewModel(
     
     /**
      * Limita o número de bitmaps em memória para evitar OOM.
-     * Mantém apenas os 100 segmentos mais recentes/importantes.
+     * Mantém os 500 segmentos mais recentes para suportar vídeos longos (> 1h).
      */
     private fun trimMemory() {
         val currentStrips = _strips.value
-        if (currentStrips.size > 100) {
+        if (currentStrips.size > 500) {
             Timber.d("ThumbnailViewModel: Trimming memory (size=${currentStrips.size})")
-            // Manter os últimos 100 adicionados (heurística simples)
-            val keysToRemove = currentStrips.keys.toList().take(currentStrips.size - 100)
+            // Manter os últimos 500 adicionados (FIFO)
+            val keysToRemove = currentStrips.keys.toList().take(currentStrips.size - 500)
             _strips.update { current ->
                 current.toMutableMap().apply {
                     keysToRemove.forEach { remove(it) }
@@ -342,12 +343,6 @@ class ThumbnailViewModel(
 
     /**
      * Extrai thumbnails em estágios (LOD) com processamento em lotes.
-     * 
-     * @param uri URI do vídeo
-     * @param totalSegments Número total de segmentos
-     * @param durationMs Duração em ms
-     * @param onlyFirstFrame Se true, extrai apenas o 1º frame de cada strip (Rápido)
-     * @return Map parcial de strips
      */
     private suspend fun extractThumbnailsLOD(
         uri: Uri,
@@ -355,9 +350,13 @@ class ThumbnailViewModel(
         durationMs: Long,
         onlyFirstFrame: Boolean
     ): Map<Int, Bitmap> = kotlinx.coroutines.withContext(Dispatchers.IO) {
-        Timber.d("extractThumbnailsLOD: total=$totalSegments, onlyFirstFrame=$onlyFirstFrame")
+        val density = getApplication<Application>().resources.displayMetrics.density
+        val defaultThumbWidth = (60 * density).toInt().coerceAtLeast(1)
+        val defaultThumbHeight = (defaultThumbWidth / 1.77f).toInt().coerceAtLeast(1)
         
-        val batchSize = 5 // Processar em lotes de 5 para não sobrecarregar o decoder
+        Timber.d("extractThumbnailsLOD: total=$totalSegments, onlyFirstFrame=$onlyFirstFrame, density=$density")
+        
+        val batchSize = 5 
         
         for (i in 0 until totalSegments step batchSize) {
             ensureActive()
@@ -365,49 +364,37 @@ class ThumbnailViewModel(
             val end = (i + batchSize).coerceAtMost(totalSegments)
             val batchIndices = i until end
             
-            Timber.d("Processing batch: $i to ${end - 1}")
-
             val jobs = batchIndices.map { segIdx ->
                 async {
                     ensureActive()
                     
-                    val strip = if (onlyFirstFrame) {
-                        com.chopcut.data.thumbnail.ThumbnailCacheManager.getStrip(
-                            uri = uri,
-                            segmentIndex = segIdx,
-                            durationMs = durationMs,
-                            thumbWidth = stripManager?.thumbWidth ?: 60,
-                            thumbHeight = stripManager?.thumbHeight ?: 40,
-                            thumbsPerStrip = 1 
-                        )
-                    } else {
-                        com.chopcut.data.thumbnail.ThumbnailCacheManager.getStrip(
-                            uri = uri,
-                            segmentIndex = segIdx,
-                            durationMs = durationMs,
-                            thumbWidth = stripManager?.thumbWidth ?: 60,
-                            thumbHeight = stripManager?.thumbHeight ?: 40,
-                            thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10
-                        )
-                    }
+                    val strip = com.chopcut.data.thumbnail.ThumbnailCacheManager.getStrip(
+                        uri = uri,
+                        segmentIndex = segIdx,
+                        durationMs = durationMs,
+                        thumbWidth = stripManager?.thumbWidth ?: defaultThumbWidth,
+                        thumbHeight = stripManager?.thumbHeight ?: defaultThumbHeight,
+                        thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10,
+                        onlyFirstFrame = onlyFirstFrame
+                    )
                     strip?.let { segIdx to it }
                 }
             }
 
-            // Aguardar o lote atual
-            val results = jobs.awaitAll().filterNotNull()
+            val results: List<Pair<Int, Bitmap>> = jobs.awaitAll().filterNotNull()
             
             _strips.update { current ->
                 current.toMutableMap().apply {
-                    results.forEach { put(it.first, it.second) }
+                    results.forEach { (segmentIndex, strip) -> put(segmentIndex, strip) }
                 }
             }
             
-            // Gerenciar memória após cada lote
             trimMemory()
             
-            // Pequeno respiro entre lotes (maior no Estágio 2)
-            kotlinx.coroutines.delay(if (onlyFirstFrame) 10 else 50)
+            val baseDelay = if (onlyFirstFrame) 10L else {
+                if (durationMs > 3_600_000L) 150L else 50L
+            }
+            kotlinx.coroutines.delay(baseDelay)
         }
 
         _strips.value

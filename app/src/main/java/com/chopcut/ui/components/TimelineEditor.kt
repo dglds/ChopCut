@@ -546,12 +546,16 @@ fun TimelineEditor(
                    val frameCount = remember { androidx.compose.runtime.mutableIntStateOf(0) }
                    val lastLogTime = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
 
-                   Canvas(modifier = Modifier.fillMaxSize()) {
-                       // Régua: ticks a cada 0.1s, timestamps a cada 5s
-                       val tickSpacingSeconds = 0.1f
-                       val tickSpacingPx = pxPerSecond * tickSpacingSeconds
-                       val startTickIndex = ((currentScroll - centerOffset) / tickSpacingPx).toInt() - 1
-                       val endTickIndex = ((currentScroll - centerOffset + timelineWidth) / tickSpacingPx).toInt() + 2
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        // Régua: ticks a cada 0.1s, timestamps a cada 5s
+                        val tickSpacingSeconds = 0.1f
+                        val tickSpacingPx = pxPerSecond * tickSpacingSeconds
+                        val startTickIndex = ((currentScroll - centerOffset) / tickSpacingPx).toInt() - 1
+                        val endTickIndex = ((currentScroll - centerOffset + timelineWidth) / tickSpacingPx).toInt() + 2
+                        
+                        // Largura dos ticks baseada no zoom - mais fino quando zoomed out
+                        val tickWidth = (1f / density.density).coerceAtMost(1f)
+                        val tickWidthSecond = (1.5f / density.density).coerceAtMost(1.5f)
 
 
                      val rulerTopY = 0f
@@ -595,70 +599,67 @@ fun TimelineEditor(
                             val stripWidthPx = pxPerSecond * thumbsPerStrip // Largura visual TOTAL do segmento
                             val x = centerOffset + (startSec * pxPerSecond) - currentScroll
 
-                            drawCallCount.intValue++
+                             drawCallCount.intValue++
 
-                            // 1. SEMPRE desenhar o Background/Shimmer para o segmento inteiro
-                            // Isso garante que não haja buracos e que o overview de 1 frame não seja esticado
-                            drawIntoCanvas { canvas ->
-                                // Base background
-                                canvas.nativeCanvas.drawRect(
-                                    x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
-                                    bgPaint
-                                )
+                             // 1. Desenhar a STRIP se disponível (sem shimmer por baixo)
+                             if (strip != null && !strip.isRecycled) {
+                                 val verticalOffset = (thumbnailHeightPx - thumbH) / 2f
+                                 
+                                 // OTIMIZAÇÃO CRÍTICA: Calcular largura baseada na duração real do bitmap
+                                 // Se o bitmap tem 1 frame (overview), ele deve ocupar apenas pxPerSecond.
+                                 // Se tem 20 frames (detailed), ele ocupa pxPerSecond * 20.
+                                 val actualDurationSeconds = strip.width.toFloat() / thumbW
+                                 val actualStripVisualWidth = actualDurationSeconds * pxPerSecond
 
-                                // Shimmer diagonal suave - SEQÜENCIAL (Phase-Shift por segIdx)
-                                val shimmerPaint = android.graphics.Paint().apply {
-                                    val width = stripWidthPx
-                                    val height = thumbnailHeightPx
-                                    val gradientSize = (width + height) * 0.8f
+                                 dstRect.set(
+                                     x.toInt(), (thumbnailTop + verticalOffset).toInt(),
+                                     (x + actualStripVisualWidth).toInt(), (thumbnailTop + verticalOffset + thumbH).toInt()
+                                 )
 
-                                    // Aplicar deslocamento de fase baseado no índice do segmento
-                                    // v4.0: Flow Sutil (Quase imperceptível, mas orgânico)
-                                    val phaseShift = segIdx * 0.02f 
-                                    var adjustedProgress = shimmerProgress - phaseShift
-                                    
-                                    // Manter no range -1..2 circulando (wrapping)
-                                    val range = 3f
-                                    while (adjustedProgress < -1f) adjustedProgress += range
-                                    while (adjustedProgress > 2f) adjustedProgress -= range
+                                 drawIntoCanvas { canvas ->
+                                     canvas.nativeCanvas.drawBitmap(strip, null, dstRect, renderPaint)
+                                 }
+                             } else {
+                                 // 2. Desenhar Shimmer apenas quando não há strip disponível
+                                 drawIntoCanvas { canvas ->
+                                     // Base background
+                                     canvas.nativeCanvas.drawRect(
+                                         x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
+                                         bgPaint
+                                     )
 
-                                    val offsetX = adjustedProgress * (width + gradientSize) - gradientSize
-                                    val offsetY = adjustedProgress * (height + gradientSize) - gradientSize
+                                     // Shimmer diagonal suave - SEQÜENCIAL (Phase-Shift por segIdx)
+                                     val shimmerPaint = android.graphics.Paint().apply {
+                                         val width = stripWidthPx
+                                         val height = thumbnailHeightPx
+                                         val gradientSize = (width + height) * 0.8f
 
-                                    shader = android.graphics.LinearGradient(
-                                        x + offsetX, thumbnailTop + offsetY,
-                                        x + offsetX + gradientSize, thumbnailTop + offsetY + gradientSize,
-                                        shimmerGradient, shimmerPositions,
-                                        android.graphics.Shader.TileMode.CLAMP
-                                    )
-                                }
-                                canvas.nativeCanvas.drawRect(
-                                    x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
-                                    shimmerPaint
-                                )
-                            }
+                                         // Aplicar deslocamento de fase baseado no índice do segmento
+                                         // v4.0: Flow Sutil (Quase imperceptível, mas orgânico)
+                                         val phaseShift = segIdx * 0.02f 
+                                         var adjustedProgress = shimmerProgress - phaseShift
+                                         
+                                         // Manter no range -1..2 circulando (wrapping)
+                                         val range = 3f
+                                         while (adjustedProgress < -1f) adjustedProgress += range
+                                         while (adjustedProgress > 2f) adjustedProgress -= range
 
-                            // 2. Desenhar a STRIP se disponível (sem esticar)
-                            if (strip != null && !strip.isRecycled) {
-                                val verticalOffset = (thumbnailHeightPx - thumbH) / 2f
-                                
-                                // OTIMIZAÇÃO CRÍTICA: Calcular largura baseada na duração real do bitmap
-                                // Se o bitmap tem 1 frame (overview), ele deve ocupar apenas pxPerSecond.
-                                // Se tem 20 frames (detailed), ele ocupa pxPerSecond * 20.
-                                val actualDurationSeconds = strip.width.toFloat() / thumbW
-                                val actualStripVisualWidth = actualDurationSeconds * pxPerSecond
+                                         val offsetX = adjustedProgress * (width + gradientSize) - gradientSize
+                                         val offsetY = adjustedProgress * (height + gradientSize) - gradientSize
 
-                                dstRect.set(
-                                    x.toInt(), (thumbnailTop + verticalOffset).toInt(),
-                                    (x + actualStripVisualWidth).toInt(), (thumbnailTop + verticalOffset + thumbH).toInt()
-                                )
-
-                                drawIntoCanvas { canvas ->
-                                    // Usamos o dstRect calculado para desenhar os frames sem esticá-los
-                                    // Se actualStripVisualWidth < stripWidthPx, o shimmer desenhado acima continuará visível no resto
-                                    canvas.nativeCanvas.drawBitmap(strip, null, dstRect, renderPaint)
-                                }
-                            }
+                                         shader = android.graphics.LinearGradient(
+                                             x + offsetX, thumbnailTop + offsetY,
+                                             x + offsetX + gradientSize, thumbnailTop + offsetY + gradientSize,
+                                             shimmerGradient, shimmerPositions,
+                                             android.graphics.Shader.TileMode.CLAMP
+                                         )
+                                     }
+                                     canvas.nativeCanvas.drawRect(
+                                         x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
+                                         shimmerPaint
+                                     )
+                                 }
+                             }
                         }
 
                        // ═══════════════════════════════════════════════════════════════
@@ -844,17 +845,18 @@ fun TimelineEditor(
                               else -> 0.3f
                           }
 
-                          val tickHeight = tickZoneHeight * tickHeightRatio * 0.95f
-                          val tickTopY = tickCenterY - (tickHeight / 2)
-                          val tickBottomY = tickCenterY + (tickHeight / 2)
+                           val tickHeight = tickZoneHeight * tickHeightRatio * 0.95f
+                           val tickTopY = tickCenterY - (tickHeight / 2)
+                           val tickBottomY = tickCenterY + (tickHeight / 2)
 
-                          // Linha vertical simples
-                          drawLine(
-                              color = Color.White.copy(alpha = tickAlpha),
-                              start = Offset(x, tickTopY),
-                              end = Offset(x, tickBottomY),
-                              strokeWidth = 1.dp.toPx()
-                          )
+                           // Linha vertical com largura baseada no zoom
+                           val strokeWidth = if (isSecond) tickWidthSecond else tickWidth
+                           drawLine(
+                               color = Color.White.copy(alpha = tickAlpha),
+                               start = Offset(x, tickTopY),
+                               end = Offset(x, tickBottomY),
+                               strokeWidth = strokeWidth
+                           )
 
                           // Timestamp acima dos ticks a cada 5 segundos
                           if (isSecond && totalSec % 50 == 0) {
