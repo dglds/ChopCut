@@ -34,10 +34,10 @@ class ConsoleLineViewModel : ViewModel() {
     private val _hasPendingLogs = MutableStateFlow(false)
     val hasPendingLogs: StateFlow<Boolean> = _hasPendingLogs.asStateFlow()
     
-    private val _isMultiLine = MutableStateFlow(false)
+    private val _isMultiLine = MutableStateFlow(true)
     val isMultiLine: StateFlow<Boolean> = _isMultiLine.asStateFlow()
     
-    private val _maxDisplayLines = MutableStateFlow(3)
+    private val _maxDisplayLines = MutableStateFlow(5)
     val maxDisplayLines: StateFlow<Int> = _maxDisplayLines.asStateFlow()
     
     enum class ConsolePosition {
@@ -84,54 +84,66 @@ class ConsoleLineViewModel : ViewModel() {
                         isProcessing = true
                         
                         try {
-                            val (log, timberTag) = logQueue.removeFirst()
+                            // Processar TODOS os logs concorrentemente (não um por um)
+                            val allLogs = logQueue.toList()
+                            logQueue.clear()
                             
-                            // Extrair a primeira palavra (com caracteres especiais) como tag
-                            val firstSpaceIndex = log.indexOf(" ")
-                            val tagKey = if (firstSpaceIndex > 0) {
-                                log.substring(0, firstSpaceIndex)
-                            } else {
-                                log
-                            }
-                            
-                            // O resto da mensagem (sem a primeira palavra)
-                            val messageContent = if (firstSpaceIndex > 0) {
-                                log.substring(firstSpaceIndex + 1)
-                            } else {
-                                ""
-                            }
-                            
-                            val count = (logCountMap[tagKey] ?: 0) + 1
-                            logCountMap[tagKey] = count
-                            
-                            val logEntry = LogEntry(
-                                tag = tagKey,
-                                message = messageContent,
-                                count = count,
-                                fullText = "[$count]$tagKey $messageContent"
-                            )
-                            
-                            if (_isMultiLine.value) {
-                                _logHistory.update { current ->
-                                    val updated = current + logEntry
-                                    if (updated.size > _maxDisplayLines.value) {
-                                        updated.takeLast(_maxDisplayLines.value)
+                            val logEntries = allLogs.mapNotNull { (log, timberTag) ->
+                                try {
+                                    // Extrair a primeira palavra (com caracteres especiais) como tag
+                                    val firstSpaceIndex = log.indexOf(" ")
+                                    val tagKey = if (firstSpaceIndex > 0) {
+                                        log.substring(0, firstSpaceIndex)
                                     } else {
-                                        updated
+                                        log
                                     }
+                                    
+                                    // O resto da mensagem (sem a primeira palavra)
+                                    val messageContent = if (firstSpaceIndex > 0) {
+                                        log.substring(firstSpaceIndex + 1)
+                                    } else {
+                                        ""
+                                    }
+                                    
+                                    val count = (logCountMap[tagKey] ?: 0) + 1
+                                    logCountMap[tagKey] = count
+                                    
+                                    LogEntry(
+                                        tag = tagKey,
+                                        message = messageContent,
+                                        count = count,
+                                        fullText = "[$count]$tagKey $messageContent"
+                                    )
+                                } catch (e: Exception) {
+                                    null
                                 }
-                            } else {
-                                _logs.value = logEntry
+                            }
+                            
+                            // Atualizar histórico com todos os logs processados
+                            if (logEntries.isNotEmpty()) {
+                                if (_isMultiLine.value) {
+                                    _logHistory.update { current ->
+                                        val updated = current + logEntries
+                                        if (updated.size > _maxDisplayLines.value) {
+                                            updated.takeLast(_maxDisplayLines.value)
+                                        } else {
+                                            updated
+                                        }
+                                    }
+                                } else {
+                                    // Modo single-line: mostrar apenas o último
+                                    _logs.value = logEntries.lastOrNull()
+                                }
                             }
                         } catch (e: Exception) {
-                            // Ignorar erros de processamento individual de log
+                            // Ignorar erros de processamento de lote
                         }
                         
                         _hasPendingLogs.value = logQueue.isNotEmpty()
-                        delay(100)
+                        delay(50)
                         isProcessing = false
                     } else {
-                        delay(50)
+                        delay(20)
                     }
                 } catch (e: Exception) {
                     // Ignorar erros do loop principal
