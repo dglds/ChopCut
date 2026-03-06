@@ -49,14 +49,30 @@ class PreloadViewModel(
     val uiState: StateFlow<PreloadUiState> = _uiState.asStateFlow()
 
     // StateFlow reativo para isReady (Apenas thumbnails são críticas para entrar no editor)
-    // Regra: Liberar com 6 strips, ou com todas se o vídeo tiver menos de 6.
+    // Regra: Liberar com 50% das strips OU se estiver em cache.
     val isReadyFlow: StateFlow<Boolean> = combine(
         thumbnailVM.strips,
-        thumbnailVM.totalSegments
-    ) { strips, total ->
+        thumbnailVM.totalSegments,
+        thumbnailVM.isCached
+    ) { strips, total, isCached ->
         if (total == 0) return@combine false
-        val ready = strips.size >= total
-        Timber.v("isReadyFlow check: strips=${strips.size}, total=$total, ready=$ready")
+        
+        // Se já está em cache, libera automático!
+        if (isCached) {
+            Timber.i("isReadyFlow: READY (Cache Hit!)")
+            return@combine true
+        }
+
+        // Critério: 50% das strips prontas
+        // Para vídeos muito curtos, garantimos um mínimo de 1 ou o total se o total for pequeno
+        val threshold = if (total <= 6) total else (total * 0.5).toInt().coerceAtLeast(6)
+        val ready = strips.size >= threshold
+        
+        if (ready) {
+            Timber.i("isReadyFlow: READY threshold met! (${strips.size}/$total, target=$threshold)")
+        } else {
+            Timber.v("isReadyFlow check: strips=${strips.size}, total=$total, target=$threshold, ready=false")
+        }
         ready
     }.stateIn(
         scope = viewModelScope,
@@ -87,6 +103,11 @@ class PreloadViewModel(
      */
     fun startPreload(uri: Uri) {
         Timber.d("PreloadViewModel.startPreload: uri=$uri, activeUri=$activeUri, state=${_uiState.value}")
+        
+        if (activeUri != null && activeUri != uri) {
+            Timber.d("Limpando estado anterior para novo vídeo: $uri")
+            clear()
+        }
         
         if (activeUri == uri && _uiState.value is PreloadUiState.Ready) {
             Timber.d("Preload já está pronto para $uri, pulando restart")

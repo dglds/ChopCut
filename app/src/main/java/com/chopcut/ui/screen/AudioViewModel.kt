@@ -57,6 +57,11 @@ class AudioViewModel(
      * @param targetBarCount Número de barras de waveform (opcional)
      */
     fun loadWaveform(uri: Uri, targetBarCount: Int? = null) {
+        if (activeUri != null && activeUri != uri) {
+            Timber.d("Limpando waveform anterior para novo vídeo: $uri")
+            clear()
+        }
+        
         if (activeUri == uri && _uiState.value is AudioUiState.Ready) {
             Timber.d("Waveform já está pronta para $uri, pulando")
             return

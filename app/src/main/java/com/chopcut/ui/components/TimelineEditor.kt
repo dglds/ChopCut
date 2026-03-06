@@ -403,6 +403,8 @@ fun TimelineEditor(
               val waveformHeightDp = 36.dp
               val thumbnailsHeightDp = 48.dp
             
+            // OTIMIZAÇÃO: Precisão over Velocidade
+            // Aplicamos um multiplicador de 0.7f (dampening) para tornar o scroll mais "pesado" e preciso.
             val scrollableState = androidx.compose.foundation.gestures.rememberScrollableState { delta ->
                 // PAUSE ON MANIPULATION
                 if (isPlaying) {
@@ -410,16 +412,39 @@ fun TimelineEditor(
                     exoPlayer.pause()
                 }
                 
-                val newOffset = (scrollOffsetPx - delta).coerceIn(0f, durationPx)
+                // Aplicar amortecimento (30% de redução na velocidade/sensibilidade)
+                val dampenedDelta = delta * 0.7f
+                
+                val newOffset = (scrollOffsetPx - dampenedDelta).coerceIn(0f, durationPx)
                 val consumed = scrollOffsetPx - newOffset
                 scrollOffsetPx = newOffset
-                consumed
+                
+                // Retornar quanto delta foi "consumido" (em termos do delta original)
+                // Se o offset mudou, consideramos que o delta foi consumido proporcionalmente
+                if (delta == 0f) 0f else (consumed / 0.7f)
+            }
+
+            // FlingBehavior customizado para parar mais rápido (Reduzimos a velocidade inicial da inércia em 50%)
+            val defaultFling = androidx.compose.foundation.gestures.ScrollableDefaults.flingBehavior()
+            val flingBehavior = remember(defaultFling) {
+                object : androidx.compose.foundation.gestures.FlingBehavior {
+                    override suspend fun androidx.compose.foundation.gestures.ScrollScope.performFling(initialVelocity: Float): Float {
+                        // Reduzir a inércia para dar mais controle (Parar mais rápido)
+                        return with(defaultFling) {
+                            performFling(initialVelocity * 0.5f)
+                        }
+                    }
+                }
             }
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .scrollable(scrollableState, Orientation.Horizontal)
+                    .scrollable(
+                        state = scrollableState,
+                        orientation = Orientation.Horizontal,
+                        flingBehavior = flingBehavior
+                    )
             ) {
                 val currentScroll = scrollOffsetPx
 

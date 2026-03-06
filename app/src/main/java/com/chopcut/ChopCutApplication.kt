@@ -3,6 +3,7 @@ package com.chopcut
 import android.app.Application
 import com.chopcut.data.thumbnail.ThumbnailCacheManager
 import com.chopcut.data.thumbnail.ThumbnailStripManager
+import com.chopcut.data.thumbnail.PerformanceMonitor
 import com.chopcut.util.logging.FileLoggingTree
 import com.chopcut.util.logging.LocalFileLoggingTree
 import com.chopcut.data.local.PreferencesManager
@@ -54,6 +55,9 @@ class ChopCutApplication : Application() {
         Timber.d("ChopCutApplication: Chamando ThumbnailCacheManager.initSync()")
         ThumbnailCacheManager.initSync(this)
         Timber.d("ChopCutApplication: ThumbnailCacheManager.initSync() completado")
+        
+        // Inicializar Telemetria de Performance
+        PerformanceMonitor.init(this)
 
         // 🧹 LIMPAR CACHE DE THUMBNAILS AO INICIAR
         clearThumbnailCacheOnStartup()

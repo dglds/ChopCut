@@ -48,6 +48,9 @@ class ThumbnailViewModel(
     private val _totalSegments = MutableStateFlow<Int>(0)
     val totalSegments: StateFlow<Int> = _totalSegments.asStateFlow()
     
+    private val _isCached = MutableStateFlow<Boolean>(false)
+    val isCached: StateFlow<Boolean> = _isCached.asStateFlow()
+    
     private val _uiState = MutableStateFlow<ThumbnailUiState>(ThumbnailUiState.Idle)
     val uiState: StateFlow<ThumbnailUiState> = _uiState.asStateFlow()
     
@@ -107,7 +110,7 @@ class ThumbnailViewModel(
                     if (!_strips.value.containsKey(segIdx)) {
                         loadStrip(uri, segIdx, durationMs)
                         // Delay para não travar o decoder e permitir outras tarefas
-                        kotlinx.coroutines.delay(150)
+                        kotlinx.coroutines.delay(50)
                     }
                 }
                 
@@ -136,6 +139,8 @@ class ThumbnailViewModel(
             try {
                 _uiState.value = ThumbnailUiState.Loading
                 _thumbnailProgress.value = 0f
+                _strips.value = emptyMap()
+                _totalSegments.value = 0
                 
                 Timber.d("=== ThumbnailViewModel.preload STARTED ===")
                 Timber.d("URI: $uri, strips to preload: $stripsToPreload")
@@ -161,49 +166,54 @@ class ThumbnailViewModel(
 
                 val totalSegments = stripManager!!.getSegmentCount(videoInfo.durationMs)
                 _totalSegments.value = totalSegments
+                
+                // 3. Verificar se já está em cache para liberação automática
+                val hasCache = com.chopcut.data.thumbnail.ThumbnailCacheManager.hasInitialStripsCached(uri, totalSegments)
+                _isCached.value = hasCache
+                if (hasCache) {
+                    Timber.i("ThumbnailViewModel: Cache Hit inicial detectado para $uri")
+                }
 
                 Timber.d("Total segments: $totalSegments")
-                // Calcular segmentos baseado em percentual do vídeo ao invés de número fixo
-                val preloadPercent = 0.05  // 5% do vídeo
-                val preloadSeconds = ((videoInfo.durationMs / 1000) * preloadPercent).toLong()
-                val minPreloadSeconds = 30L  // Mínimo de 30 segundos
-                val effectivePreloadSeconds = maxOf(preloadSeconds, minPreloadSeconds)
-
-                // Calcular segmentos baseado em thumbsPerStrip
-                val calculatedStripsToPreload = (effectivePreloadSeconds / thumbsPerStrip).toInt()
-                    .coerceAtLeast(3)  // Mínimo de 3 segmentos
-                    .coerceAtMost(totalSegments)
 
                 // Carregar TODOS os segmentos do vídeo
                 val effectiveStripsToPreload = totalSegments
 
-                Timber.d("""
-                    Extração Inteligente Adaptativa:
-                    • Duração do vídeo: ${videoInfo.durationMs / 1000}s
-                    • 5% do vídeo: ${preloadSeconds}s
-                    • Preload efetivo: ${effectivePreloadSeconds}s
-                    • Segmentos calculados: $calculatedStripsToPreload
-                    • Segmentos fornecidos: $stripsToPreload
-                    • Segmentos finais: $effectiveStripsToPreload/$totalSegments
-                """.trimIndent())
+                Timber.d("Carregando $effectiveStripsToPreload segmentos (total)")
                 
-                // 3. Carregar strips com progresso em estágios (0%, 25%, 50%, 75%, 100%)
-                Timber.d("Starting thumbnail extraction: targetSegments=$effectiveStripsToPreload, totalSegments=$totalSegments")
-                val strips = extractThumbnailsWithProgress(
+                // 3. Carregar em Dois Estágios (LOD)
+                // Estágio 1: Apenas o primeiro frame de cada strip (Rápido!)
+                Timber.i("ThumbnailViewModel: Iniciando ESTÁGIO 1 (Overview)")
+                val overviewStrips = extractThumbnailsLOD(
                     uri = uri,
-                    targetSegments = effectiveStripsToPreload,
                     totalSegments = totalSegments,
-                    durationMs = videoInfo.durationMs
+                    durationMs = videoInfo.durationMs,
+                    onlyFirstFrame = true
                 )
-                Timber.d("Thumbnail extraction completed: ${strips.size} strips loaded")
                 
-                // 4. Atualizar estado
-                _strips.value = strips
-                _thumbnailProgress.value = 1f
-                _uiState.value = ThumbnailUiState.Ready(strips.size, totalSegments)
+                _strips.value = overviewStrips
+                _thumbnailProgress.value = 0.5f // 50% do progresso total (Overview pronta)
                 
-                Timber.d("=== ThumbnailViewModel.preload COMPLETED ===")
-                Timber.d("Loaded: ${strips.size}/$totalSegments strips")
+                // Notificar que a visualização básica está pronta
+                _uiState.value = ThumbnailUiState.Ready(overviewStrips.size, totalSegments)
+                Timber.i("ThumbnailViewModel: ESTÁGIO 1 COMPLETO. Editor liberado.")
+
+                // Estágio 2: Preencher o resto em background (Sem bloquear a UI)
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        Timber.i("ThumbnailViewModel: Iniciando ESTÁGIO 2 (Detailing)")
+                        extractThumbnailsLOD(
+                            uri = uri,
+                            totalSegments = totalSegments,
+                            durationMs = videoInfo.durationMs,
+                            onlyFirstFrame = false // Carrega o resto
+                        )
+                        _thumbnailProgress.value = 1f
+                        Timber.i("ThumbnailViewModel: ESTÁGIO 2 COMPLETO. Todos os frames carregados.")
+                    } catch (e: Exception) {
+                        Timber.e(e, "ThumbnailViewModel: Erro no Estágio 2")
+                    }
+                }
                 
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
@@ -303,85 +313,79 @@ class ThumbnailViewModel(
         _strips.value = emptyMap()
         _thumbnailProgress.value = 0f
         _totalSegments.value = 0
+        _isCached.value = false
         _uiState.value = ThumbnailUiState.Idle
     }
     
     // ========== MÉTODOS PRIVADOS ==========
     
     /**
-     * Extrai thumbnails com progresso em estágios (0%, 25%, 50%, 75%, 100%).
+     * Extrai thumbnails em estágios (LOD).
      * 
      * @param uri URI do vídeo
-     * @param targetSegments Número de segmentos a carregar
-     * @param totalSegments Número total de segmentos do vídeo
-     * @param durationMs Duração do vídeo em ms
-     * @return Map de segmentIndex para Bitmap
+     * @param totalSegments Número total de segmentos
+     * @param durationMs Duração em ms
+     * @param onlyFirstFrame Se true, extrai apenas o 1º frame de cada strip (Rápido)
+     * @return Map parcial de strips
      */
-    private suspend fun extractThumbnailsWithProgress(
+    private suspend fun extractThumbnailsLOD(
         uri: Uri,
-        targetSegments: Int,
         totalSegments: Int,
-        durationMs: Long
+        durationMs: Long,
+        onlyFirstFrame: Boolean
     ): Map<Int, Bitmap> = kotlinx.coroutines.withContext(Dispatchers.IO) {
-        Timber.d("extractThumbnailsWithProgress: target=$targetSegments/$totalSegments, duration=${durationMs}ms")
+        Timber.d("extractThumbnailsLOD: total=$totalSegments, onlyFirstFrame=$onlyFirstFrame")
         
-        val progressStages = listOf(0.0f, 0.25f, 0.5f, 0.75f, 1.0f)
-        var lastReportedStage = -1
-
-        Timber.d("Extraindo $targetSegments segmentos com cache (paralelo)")
-
-        // CARREGAMENTO PARALELO usando ThumbnailCacheManager
-        val jobs = (0 until targetSegments).map { segIdx ->
+        // CARREGAMENTO PARALELO (O ThumbnailCacheManager gerencia o semáforo de hardware)
+        val jobs = (0 until totalSegments).map { segIdx ->
             async {
-                com.chopcut.data.thumbnail.ThumbnailCacheManager.getStrip(
-                    uri = uri,
-                    segmentIndex = segIdx,
-                    durationMs = durationMs,
-                    thumbWidth = stripManager?.thumbWidth ?: 60,
-                    thumbHeight = stripManager?.thumbHeight ?: 40,
-                    thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10
-                )?.let { bitmap ->
-                    segIdx to bitmap
-                } ?: run {
-                    Timber.e("Strip $segIdx returned null!")
-                    null
+                ensureActive()
+                
+                // Se onlyFirstFrame = true, chamamos uma versão que extrai apenas o início
+                // Se false, extraímos a strip completa
+                val strip = if (onlyFirstFrame) {
+                    com.chopcut.data.thumbnail.ThumbnailCacheManager.getStrip(
+                        uri = uri,
+                        segmentIndex = segIdx,
+                        durationMs = durationMs,
+                        thumbWidth = stripManager?.thumbWidth ?: 60,
+                        thumbHeight = stripManager?.thumbHeight ?: 40,
+                        thumbsPerStrip = 1 // FORÇAR 1 frame para overview rápido
+                    )
+                } else {
+                    com.chopcut.data.thumbnail.ThumbnailCacheManager.getStrip(
+                        uri = uri,
+                        segmentIndex = segIdx,
+                        durationMs = durationMs,
+                        thumbWidth = stripManager?.thumbWidth ?: 60,
+                        thumbHeight = stripManager?.thumbHeight ?: 40,
+                        thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10
+                    )
                 }
+                
+                strip?.let { segIdx to it }
             }
         }
 
-        // Aguardar todas as strips carregarem e reportar progresso
-        val results = jobs.mapIndexed { index, deferred ->
+        // Processar resultados conforme chegam
+        val results = jobs.map { deferred ->
             val result = deferred.await()
             if (result != null) {
-                // OTIMIZAÇÃO: Atualizar _strips incrementalmente para feedback visual e liberação rápida
                 _strips.update { current ->
                     current.toMutableMap().apply {
                         put(result.first, result.second)
                     }
                 }
             }
-
-            // Calcular progresso atual
-            val progress = (index + 1).toFloat() / targetSegments
-
-            // Verificar se atingiu um novo estágio
-            val currentStage = progressStages.indexOfFirst { progress >= it }
-            if (currentStage != lastReportedStage && currentStage >= 0) {
-                val percent = (progressStages[currentStage] * 100).toInt()
-                _thumbnailProgress.value = progressStages[currentStage]
-                Timber.d("Thumbnail extraction: ${percent}% (${_strips.value.size}/$targetSegments)")
-                lastReportedStage = currentStage
-            }
-
             result
         }
 
-        // Garantir que 100% seja reportado
-        if (lastReportedStage < progressStages.size - 1) {
-            _thumbnailProgress.value = 1f
-        }
         _strips.value
     }
+    
+    /**
+     * Extrai thumbnails com progresso em estágios (DEPRECATED: Usar LOD).
+     */
     
     override fun onCleared() {
         super.onCleared()
