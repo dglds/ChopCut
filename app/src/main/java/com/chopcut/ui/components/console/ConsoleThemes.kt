@@ -15,7 +15,7 @@ data class ConsoleTheme(
 object ConsoleThemes {
     
     val DEFAULT = ConsoleTheme(
-        backgroundColor = Color.Black,
+        backgroundColor = Color(0xFF212121), // Cinza escuro (Material Grey 900)
         textColor = Color(0xFF00FF00),
         fontSize = 8f,
         fontFamily = FontFamily.Monospace,
@@ -23,7 +23,7 @@ object ConsoleThemes {
     )
     
     val EIGHTIES = ConsoleTheme(
-        backgroundColor = Color(0xFF0A0A0A),
+        backgroundColor = Color(0xFF1A1A1A), // Cinza um pouco mais escuro
         textColor = Color(0xFF33FF33),
         fontSize = 8f,
         fontFamily = FontFamily.Monospace,
@@ -31,7 +31,7 @@ object ConsoleThemes {
     )
     
     val AMBER_EIGHTIES = ConsoleTheme(
-        backgroundColor = Color(0xFF080800),
+        backgroundColor = Color(0xFF1E1E1E), // Cinza muito escuro
         textColor = Color(0xFFFFB000),
         fontSize = 8f,
         fontFamily = FontFamily.Monospace,

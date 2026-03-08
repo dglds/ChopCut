@@ -57,6 +57,7 @@ fun ConsoleLine(
     val isMultiLine by viewModel.isMultiLine.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedLevel by viewModel.selectedLevel.collectAsStateWithLifecycle()
+    val maxLines by viewModel.maxDisplayLines.collectAsStateWithLifecycle()
     
     val context = LocalContext.current
     val infiniteTransition = rememberInfiniteTransition(label = "led")
@@ -100,6 +101,13 @@ fun ConsoleLine(
     }
     
     if (isVisible) {
+        val dynamicHeight = if (isMultiLine) {
+            // Header (aprox 48dp) + (linhas * altura da linha) + padding
+            (48 + (maxLines * (theme.fontSize.toInt() + 4)) + 16).dp
+        } else {
+            40.dp
+        }
+
         Column(
             modifier = modifier
                 .padding(8.dp)
@@ -122,23 +130,25 @@ fun ConsoleLine(
                 }
         ) {
             if (isMultiLine) {
-                // Header com Busca e Ações
+                // Header com Busca e Ações na mesma linha
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                 ) {
                     TextField(
                         value = searchQuery,
                         onValueChange = { viewModel.setSearchQuery(it) },
-                        placeholder = { Text("Filter logs...", color = theme.textColor.copy(alpha = 0.5f), fontSize = 12.sp) },
+                        placeholder = { Text("Filter...", color = theme.textColor.copy(alpha = 0.5f), fontSize = 12.sp) },
                         modifier = Modifier
                             .weight(1f)
-                            .height(56.dp),
+                            .height(48.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
                             cursorColor = theme.textColor
@@ -147,44 +157,14 @@ fun ConsoleLine(
                         singleLine = true
                     )
                     
-                    IconButton(onClick = { viewModel.copyToClipboard(context) }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = theme.textColor, modifier = Modifier.size(18.dp))
+                    IconButton(onClick = { viewModel.copyToClipboard(context) }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = theme.textColor, modifier = Modifier.size(16.dp))
                     }
-                    IconButton(onClick = { viewModel.clear() }) {
-                        Icon(Icons.Default.DeleteSweep, contentDescription = "Clear", tint = theme.textColor, modifier = Modifier.size(18.dp))
+                    IconButton(onClick = { viewModel.clear() }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.DeleteSweep, contentDescription = "Clear", tint = theme.textColor, modifier = Modifier.size(16.dp))
                     }
-                    IconButton(onClick = { viewModel.toggleMultiLine() }) {
-                        Icon(Icons.Default.CloseFullscreen, contentDescription = "Minimize", tint = theme.textColor, modifier = Modifier.size(18.dp))
-                    }
-                }
-                
-                // Níveis de Log (Chips)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    LogLevel.values().forEach { level ->
-                        val isSelected = selectedLevel == level
-                        val color = when (level) {
-                            LogLevel.ERROR -> Color(0xFFFF5252)
-                            LogLevel.WARN -> Color(0xFFFFD740)
-                            LogLevel.INFO -> Color(0xFF40C4FF)
-                            LogLevel.VERBOSE -> Color(0xFFBDBDBD)
-                            LogLevel.DEBUG -> theme.textColor
-                        }
-                        
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { viewModel.setSelectedLevel(if (isSelected) null else level) },
-                            label = { Text(level.name.first().toString(), fontSize = 10.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = color.copy(alpha = 0.3f),
-                                selectedLabelColor = color,
-                                labelColor = color.copy(alpha = 0.5f)
-                            )
-                        )
+                    IconButton(onClick = { viewModel.toggleMultiLine() }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.CloseFullscreen, contentDescription = "Minimize", tint = theme.textColor, modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -192,7 +172,7 @@ fun ConsoleLine(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (isMultiLine) 200.dp else 40.dp)
+                    .height(dynamicHeight)
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = { tapCount++ },
@@ -205,7 +185,8 @@ fun ConsoleLine(
                     state = listState,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     items(logHistory) { log ->
                         val levelColor = when {
