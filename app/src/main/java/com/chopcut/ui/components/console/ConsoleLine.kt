@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -80,8 +81,17 @@ fun ConsoleLine(
     if (isVisible.value) {
         Row(
             modifier = modifier
+                .padding(8.dp) // Distância visual do fundo/bordas
                 .fillMaxWidth()
-                .background(theme.value.backgroundColor)
+                .background(
+                    color = theme.value.backgroundColor.copy(alpha = 0.9f),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = theme.value.textColor.copy(alpha = 0.3f),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                )
                 .pointerInput(Unit) {
                     detectDragGestures { _, dragAmount ->
                         val horizontalDrag = dragAmount.x
