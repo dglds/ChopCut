@@ -155,18 +155,6 @@ fun TimelineEditor(
               emptyMap()
           }
 
-          val individualFrames = if (thumbnailViewModel != null) {
-              thumbnailViewModel.individualFrames.collectAsState().value
-          } else {
-              emptyMap()
-          }
-
-          val thumbnailProgress = if (thumbnailViewModel != null) {
-              thumbnailViewModel.thumbnailProgress.collectAsState().value
-          } else {
-              0f
-          }
-
           // Estado mutável local para strips
           val strips = remember {
               androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
@@ -341,17 +329,6 @@ fun TimelineEditor(
                 delay(16)
             }
         }    
-        // PREFETCH REPORTING: Informar ao ViewModel qual segmento está visível
-        // OTIMIZAÇÃO: Dampening (150ms delay) para evitar spam durante scroll rápido
-        LaunchedEffect(scrollOffsetPx, videoDurationMs) {
-            if (thumbnailViewModel != null && videoDurationMs > 0) {
-                delay(150) // Aguardar o scroll estabilizar
-                val centerSec = (scrollOffsetPx / pxPerSecond).toInt()
-                val centerSegIdx = centerSec / thumbsPerStrip
-                thumbnailViewModel.updateVisibleRange(centerSegIdx)
-            }
-        }
-    
         LaunchedEffect(scrollOffsetPx) {
             if (!isPlaying) {
                 currentTimeMs = if (pxPerSecond > 0) {
@@ -624,78 +601,65 @@ fun TimelineEditor(
 
                              drawCallCount.intValue++
 
-                              // 1. Desenhar a STRIP se disponível (sem shimmer por baixo)
-                              if (strip != null && !strip.isRecycled) {
-                                  val verticalOffset = (thumbnailHeightPx - thumbH) / 2f
-                                  
-                                  val actualDurationSeconds = strip.width.toFloat() / thumbW
-                                  val actualStripVisualWidth = actualDurationSeconds * pxPerSecond
+                             // 1. Desenhar a STRIP se disponível (sem shimmer por baixo)
+                             if (strip != null && !strip.isRecycled) {
+                                 val verticalOffset = (thumbnailHeightPx - thumbH) / 2f
+                                 
+                                 // OTIMIZAÇÃO CRÍTICA: Calcular largura baseada na duração real do bitmap
+                                 // Se o bitmap tem 1 frame (overview), ele deve ocupar apenas pxPerSecond.
+                                 // Se tem 20 frames (detailed), ele ocupa pxPerSecond * 20.
+                                 val actualDurationSeconds = strip.width.toFloat() / thumbW
+                                 val actualStripVisualWidth = actualDurationSeconds * pxPerSecond
 
-                                  dstRect.set(
-                                      x.toInt(), (thumbnailTop + verticalOffset).toInt(),
-                                      (x + actualStripVisualWidth).toInt(), (thumbnailTop + verticalOffset + thumbH).toInt()
-                                  )
+                                 dstRect.set(
+                                     x.toInt(), (thumbnailTop + verticalOffset).toInt(),
+                                     (x + actualStripVisualWidth).toInt(), (thumbnailTop + verticalOffset + thumbH).toInt()
+                                 )
 
-                                  drawIntoCanvas { canvas ->
-                                      canvas.nativeCanvas.drawBitmap(strip, null, dstRect, renderPaint)
-                                  }
-                              } else {
-                                  // 2. Renderização de Híbrida/Streaming (Frames Individuais + Shimmer)
-                                  val verticalOffset = (thumbnailHeightPx - thumbH) / 2f
-                                  
-                                  for (i in 0 until thumbsPerStrip) {
-                                      val frameSec = startSec + i
-                                      val frameMs = frameSec * 1000L
-                                      if (frameMs >= videoDurationMs) break
-                                      
-                                      val frameX = x + (i * pxPerSecond)
-                                      val individualFrame = individualFrames[frameMs]
-                                      
-                                      if (individualFrame != null && !individualFrame.isRecycled) {
-                                          // Desenhar frame individual (Streaming)
-                                          dstRect.set(
-                                              frameX.toInt(), (thumbnailTop + verticalOffset).toInt(),
-                                              (frameX + pxPerSecond).toInt(), (thumbnailTop + verticalOffset + thumbH).toInt()
-                                          )
-                                          drawIntoCanvas { canvas ->
-                                              canvas.nativeCanvas.drawBitmap(individualFrame, null, dstRect, renderPaint)
-                                          }
-                                       } else {
-                                           // 🔥 OTIMIZAÇÃO: Shimmer ultra-eficiente (Zero-Allocation no draw loop)
-                                           // Base background
-                                           drawRect(
-                                               color = Color(0xFF1A1A1A),
-                                               topLeft = Offset(frameX, thumbnailTop),
-                                               size = Size(pxPerSecond, thumbnailHeightPx)
-                                           )
+                                 drawIntoCanvas { canvas ->
+                                     canvas.nativeCanvas.drawBitmap(strip, null, dstRect, renderPaint)
+                                 }
+                             } else {
+                                 // 2. Desenhar Shimmer apenas quando não há strip disponível
+                                 drawIntoCanvas { canvas ->
+                                     // Base background
+                                     canvas.nativeCanvas.drawRect(
+                                         x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
+                                         bgPaint
+                                     )
 
-                                           val width = pxPerSecond
-                                           val height = thumbnailHeightPx
-                                           val gradientSize = (width + height) * 0.8f
+                                     // Shimmer diagonal suave - SEQÜENCIAL (Phase-Shift por segIdx)
+                                     val shimmerPaint = android.graphics.Paint().apply {
+                                         val width = stripWidthPx
+                                         val height = thumbnailHeightPx
+                                         val gradientSize = (width + height) * 0.8f
 
-                                           val phaseShift = (segIdx + (i * 0.1f)) * 0.02f 
-                                           var adjustedProgress = shimmerProgress - phaseShift
-                                           
-                                           val range = 3f
-                                           while (adjustedProgress < -1f) adjustedProgress += range
-                                           while (adjustedProgress > 2f) adjustedProgress -= range
+                                         // Aplicar deslocamento de fase baseado no índice do segmento
+                                         // v4.0: Flow Sutil (Quase imperceptível, mas orgânico)
+                                         val phaseShift = segIdx * 0.02f 
+                                         var adjustedProgress = shimmerProgress - phaseShift
+                                         
+                                         // Manter no range -1..2 circulando (wrapping)
+                                         val range = 3f
+                                         while (adjustedProgress < -1f) adjustedProgress += range
+                                         while (adjustedProgress > 2f) adjustedProgress -= range
 
-                                           val offsetX = adjustedProgress * (width + gradientSize) - gradientSize
-                                           val offsetY = adjustedProgress * (height + gradientSize) - gradientSize
+                                         val offsetX = adjustedProgress * (width + gradientSize) - gradientSize
+                                         val offsetY = adjustedProgress * (height + gradientSize) - gradientSize
 
-                                           // Usar o linearGradient do Compose que é mais eficiente e evita alocação de Paint nativo
-                                           drawRect(
-                                               brush = Brush.linearGradient(
-                                                   colors = listOf(Color.Transparent, Color.White.copy(alpha = 0.05f), Color.Transparent),
-                                                   start = Offset(frameX + offsetX, thumbnailTop + offsetY),
-                                                   end = Offset(frameX + offsetX + gradientSize, thumbnailTop + offsetY + gradientSize)
-                                               ),
-                                               topLeft = Offset(frameX, thumbnailTop),
-                                               size = Size(pxPerSecond, thumbnailHeightPx)
-                                           )
-                                       }
-                                   }
-                               }
+                                         shader = android.graphics.LinearGradient(
+                                             x + offsetX, thumbnailTop + offsetY,
+                                             x + offsetX + gradientSize, thumbnailTop + offsetY + gradientSize,
+                                             shimmerGradient, shimmerPositions,
+                                             android.graphics.Shader.TileMode.CLAMP
+                                         )
+                                     }
+                                     canvas.nativeCanvas.drawRect(
+                                         x, thumbnailTop, x + stripWidthPx, thumbnailTop + thumbnailHeightPx,
+                                         shimmerPaint
+                                     )
+                                 }
+                             }
                         }
 
                        // ═══════════════════════════════════════════════════════════════
@@ -815,24 +779,6 @@ fun TimelineEditor(
                              }
                          }
                         drawContext.canvas.restore()
- 
-                       // 📊 PROGRESS INDICATOR: Garantia visual de carregamento (LOD Stage 2)
-                       if (thumbnailProgress > 0f && thumbnailProgress < 1f) {
-                           val totalTimelineWidth = (videoDurationMs / 1000f) * pxPerSecond
-                           val progressWidth = totalTimelineWidth * thumbnailProgress
-                           val progressBarHeight = with(density) { 2.dp.toPx() }
-                           val progressBarY = thumbnailTop + thumbnailHeightPx - progressBarHeight
-                           val startX = centerOffset - currentScroll
-                           
-                           // Só desenhar se a área estiver visível
-                           if (startX + progressWidth > 0 && startX < size.width) {
-                               drawRect(
-                                   color = Color(0xFF00B2FF), // Azul vibrante (carregando)
-                                   topLeft = Offset(startX, progressBarY),
-                                   size = Size(progressWidth, progressBarHeight)
-                               )
-                           }
-                       }
 
                        // MÉTRICA DE PERFORMANCE: Logar draw calls por frame (a cada 60 frames ≈ 1s)
                        val frameTimeMs = (System.nanoTime() - frameStartTime) / 1_000_000

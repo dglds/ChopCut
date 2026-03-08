@@ -59,49 +59,27 @@ class ThumbnailViewModel(
     
     private var stripManager: com.chopcut.data.thumbnail.ThumbnailStripManager? = null
     
-    private val _individualFrames = MutableStateFlow<Map<Long, Bitmap>>(emptyMap())
-    val individualFrames: StateFlow<Map<Long, Bitmap>> = _individualFrames.asStateFlow()
-    
     // Controle para persistência de carregamento
     private var activeLoadingUri: Uri? = null
     private var loadingJob: kotlinx.coroutines.Job? = null
     
-    private val _visibleSegmentIndex = MutableStateFlow<Int>(0)
-    
     // ========== MÉTODOS PÚBLICOS ==========
     
     /**
-     * Reporta o índice do segmento atualmente visível para priorizar carregamento.
-     * OTIMIZAÇÃO: Histerese de 2 segmentos para evitar re-sorts constantes.
-     */
-    fun updateVisibleRange(index: Int) {
-        val current = _visibleSegmentIndex.value
-        val diff = kotlin.math.abs(current - index)
-        
-        // Só atualizar se a mudança for significativa OU se for o primeiro carregamento (0)
-        // Isso evita que pequenos movimentos de scroll causem re-sort radial
-        if (diff >= 2 || (current == 0 && index != 0)) {
-            _visibleSegmentIndex.value = index
-            Timber.v("Visible segment updated: $index (diff: $diff)")
-        }
-    }
-
-    private var activeLoadingDuration: Long = 0L
-
-    /**
      * Carrega todos os segmentos de um vídeo sequencialmente em background.
+     * Esta função sobrevive à navegação pois está no viewModelScope.
+     * 
+     * @param uri URI do vídeo
+     * @param durationMs Duração em ms
      */
     fun loadAllStripsSequentially(uri: Uri, durationMs: Long) {
-        val durationDiff = kotlin.math.abs(activeLoadingDuration - durationMs)
-        
-        if (activeLoadingUri == uri && loadingJob?.isActive == true && durationDiff < 5000) {
-            Timber.d("Sequencial loading já em andamento e estável para $uri")
+        if (activeLoadingUri == uri && loadingJob?.isActive == true) {
+            Timber.d("Sequencial loading já em andamento para $uri")
             return
         }
 
         loadingJob?.cancel()
         activeLoadingUri = uri
-        activeLoadingDuration = durationMs
         
         loadingJob = viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -163,13 +141,6 @@ class ThumbnailViewModel(
                 _uiState.value = ThumbnailUiState.Loading
                 _thumbnailProgress.value = 0f
                 _strips.value = emptyMap()
-                
-                // Limpar frames individuais da sessão anterior
-                _individualFrames.update { current ->
-                    current.values.forEach { if (!it.isRecycled) it.recycle() }
-                    emptyMap()
-                }
-                
                 _totalSegments.value = 0
                 
                 Timber.d("=== ThumbnailViewModel.preload STARTED ===")
@@ -206,18 +177,44 @@ class ThumbnailViewModel(
 
                 Timber.d("Total segments: $totalSegments")
 
-                // Carregamento uniforme: um único passo, sem overview (Stage 1)
-                Timber.i("ThumbnailViewModel: Iniciando CARREGAMENTO UNIFORME (onlyFirstFrame=false)")
-                extractThumbnailsLOD(
+                // Carregar TODOS os segmentos do vídeo
+                val effectiveStripsToPreload = totalSegments
+
+                Timber.d("Carregando $effectiveStripsToPreload segmentos (total)")
+                
+                // 3. Carregar em Dois Estágios (LOD)
+                // Estágio 1: Apenas o primeiro frame de cada strip (Rápido!)
+                Timber.i("ThumbnailViewModel: Iniciando ESTÁGIO 1 (Overview)")
+                val overviewStrips = extractThumbnailsLOD(
                     uri = uri,
                     totalSegments = totalSegments,
                     durationMs = videoInfo.durationMs,
-                    onlyFirstFrame = false
+                    onlyFirstFrame = true
                 )
+                
+                _strips.value = overviewStrips
+                _thumbnailProgress.value = 0.5f // 50% do progresso total (Overview pronta)
+                
+                // Notificar que a visualização básica está pronta
+                _uiState.value = ThumbnailUiState.Ready(overviewStrips.size, totalSegments)
+                Timber.i("ThumbnailViewModel: ESTÁGIO 1 COMPLETO. Editor liberado.")
 
-                _thumbnailProgress.value = 1f
-                _uiState.value = ThumbnailUiState.Ready(_strips.value.size, totalSegments)
-                Timber.i("ThumbnailViewModel: CARREGAMENTO COMPLETO. ${_strips.value.size}/$totalSegments strips.")
+                // Estágio 2: Preencher o resto em background (Sem bloquear a UI)
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        Timber.i("ThumbnailViewModel: Iniciando ESTÁGIO 2 (Detailing)")
+                        extractThumbnailsLOD(
+                            uri = uri,
+                            totalSegments = totalSegments,
+                            durationMs = videoInfo.durationMs,
+                            onlyFirstFrame = false // Carrega o resto
+                        )
+                        _thumbnailProgress.value = 1f
+                        Timber.i("ThumbnailViewModel: ESTÁGIO 2 COMPLETO. Todos os frames carregados.")
+                    } catch (e: Exception) {
+                        Timber.e(e, "ThumbnailViewModel: Erro no Estágio 2")
+                    }
+                }
                 
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
@@ -252,12 +249,7 @@ class ThumbnailViewModel(
                     durationMs = durationMs,
                     thumbWidth = stripManager?.thumbWidth ?: 60,
                     thumbHeight = stripManager?.thumbHeight ?: 40,
-                    thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10,
-                    onFrameExtracted = { posMs, bmp ->
-                        _individualFrames.update { current ->
-                            current.toMutableMap().apply { put(posMs, bmp) }
-                        }
-                    }
+                    thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10
                 )
                 
                 if (strip != null) {
@@ -266,18 +258,6 @@ class ThumbnailViewModel(
                             put(segmentIndex, strip)
                         }
                     }
-                    
-                    // Limpar frames individuais que agora fazem parte da strip
-                    val thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10
-                    val startTimeMs = segmentIndex * thumbsPerStrip * 1000L
-                    val endTimeMs = (segmentIndex + 1) * thumbsPerStrip * 1000L
-                    
-                    _individualFrames.update { current ->
-                        val toRemove = current.filterKeys { it in startTimeMs until endTimeMs }
-                        toRemove.values.forEach { if (!it.isRecycled) it.recycle() }
-                        current.filterKeys { it < startTimeMs || it >= endTimeMs }
-                    }
-
                     trimMemory() // Evitar OOM durante scroll
                     Timber.d("Strip $segmentIndex carregada")
                 }
@@ -335,7 +315,6 @@ class ThumbnailViewModel(
         // }
 
         _strips.value = emptyMap()
-        _individualFrames.value = emptyMap()
         _thumbnailProgress.value = 0f
         _totalSegments.value = 0
         _isCached.value = false
@@ -375,76 +354,42 @@ class ThumbnailViewModel(
         val defaultThumbWidth = (60 * density).toInt().coerceAtLeast(1)
         val defaultThumbHeight = (defaultThumbWidth / 1.77f).toInt().coerceAtLeast(1)
         
-        Timber.d("extractThumbnailsLOD: total=$totalSegments, onlyFirstFrame=$onlyFirstFrame (Uniform=true)")
+        Timber.d("extractThumbnailsLOD: total=$totalSegments, onlyFirstFrame=$onlyFirstFrame, density=$density")
         
         val batchSize = 5 
-        val remainingIndices = (0 until totalSegments).toMutableList()
         
-        // Se já temos algumas strips (devido ao Estágio 1 ou cache), não precisamos re-extrair
-        // Mas para o Estágio 2, precisamos extrair a versão completa (thumbsPerStrip > 1) 
-        // mesmo que já tenhamos o overview.
-
-        while (remainingIndices.isNotEmpty()) {
+        for (i in 0 until totalSegments step batchSize) {
             ensureActive()
             
-            // Carregamento Uniforme: Processar na ordem original (0..N)
+            val end = (i + batchSize).coerceAtMost(totalSegments)
+            val batchIndices = i until end
             
-            val currentBatch = remainingIndices.take(batchSize)
-            remainingIndices.removeAll(currentBatch)
-            
-            val jobs = currentBatch.map { segIdx ->
+            val jobs = batchIndices.map { segIdx ->
                 async {
                     ensureActive()
-                    val strip = try {
-                        com.chopcut.data.thumbnail.ThumbnailCacheManager.getStrip(
-                            uri = uri,
-                            segmentIndex = segIdx,
-                            durationMs = durationMs,
-                            thumbWidth = stripManager?.thumbWidth ?: defaultThumbWidth,
-                            thumbHeight = stripManager?.thumbHeight ?: defaultThumbHeight,
-                            thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10,
-                            onlyFirstFrame = onlyFirstFrame,
-                            onFrameExtracted = { posMs, bmp ->
-                                // Streaming: Atualizar frames individuais enquanto a strip não está pronta
-                                _individualFrames.update { current ->
-                                    current.toMutableMap().apply { put(posMs, bmp) }
-                                }
-                            }
-                        )
-                    } catch (e: Exception) {
-                        Timber.e(e, "Error extracting segment $segIdx")
-                        null
-                    }
                     
-                    if (strip != null) {
-                        // 🚀 OTIMIZAÇÃO: Commit imediato do segmento para a UI
-                        _strips.update { current ->
-                            current.toMutableMap().apply { put(segIdx, strip) }
-                        }
-                        
-                        // Limpar frames individuais que agora fazem parte da strip carregada
-                        val tps = stripManager?.thumbsPerStrip ?: 10
-                        val startMs = segIdx * tps * 1000L
-                        val endMs = (segIdx + 1) * tps * 1000L
-                        
-                        _individualFrames.update { current ->
-                            val toRemove = current.filterKeys { it in startMs until endMs }
-                            toRemove.values.forEach { if (!it.isRecycled) it.recycle() }
-                            current.filterKeys { it < startMs || it >= endMs }
-                        }
-                        
-                        trimMemory()
-                    }
-                    
+                    val strip = com.chopcut.data.thumbnail.ThumbnailCacheManager.getStrip(
+                        uri = uri,
+                        segmentIndex = segIdx,
+                        durationMs = durationMs,
+                        thumbWidth = stripManager?.thumbWidth ?: defaultThumbWidth,
+                        thumbHeight = stripManager?.thumbHeight ?: defaultThumbHeight,
+                        thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10,
+                        onlyFirstFrame = onlyFirstFrame
+                    )
                     strip?.let { segIdx to it }
                 }
             }
 
-            jobs.awaitAll()
+            val results: List<Pair<Int, Bitmap>> = jobs.awaitAll().filterNotNull()
             
-            // Atualizar progresso real
-            val loadedCount = totalSegments - remainingIndices.size
-            _thumbnailProgress.value = loadedCount.toFloat() / totalSegments
+            _strips.update { current ->
+                current.toMutableMap().apply {
+                    results.forEach { (segmentIndex, strip) -> put(segmentIndex, strip) }
+                }
+            }
+            
+            trimMemory()
             
             val baseDelay = if (onlyFirstFrame) 10L else {
                 if (durationMs > 3_600_000L) 150L else 50L

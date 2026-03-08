@@ -63,8 +63,9 @@ class PreloadViewModel(
             return@combine true
         }
 
-        // Critério: 20% das strips prontas (abre mais cedo mesmo sem overview)
-        val threshold = if (total <= 6) total else (total * 0.2).toInt().coerceAtLeast(3)
+        // Critério: 50% das strips prontas
+        // Para vídeos muito curtos, garantimos um mínimo de 1 ou o total se o total for pequeno
+        val threshold = if (total <= 6) total else (total * 0.5).toInt().coerceAtLeast(6)
         val ready = strips.size >= threshold
         
         if (ready) {

@@ -42,13 +42,6 @@ object PerformanceMonitor {
     /**
      * Calcula métricas da janela atual (eventos desde o último cálculo)
      */
-    /**
-     * Sinal de pressão para o escalonador dinâmico.
-     * Retorna true se a fila média estiver saturada (> 8 itens).
-     */
-    val isHighPressure: Boolean
-        get() = previousAverageQueueSize > 8f
-
     fun calculateMetrics(): PerformanceMetrics {
         val now = System.currentTimeMillis()
         val durationMs = now - lastCalculationTime

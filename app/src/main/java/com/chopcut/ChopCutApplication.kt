@@ -73,44 +73,72 @@ class ChopCutApplication : Application() {
      *
      * Útil para testes e para garantir cache limpo entre sessões
      */
-    /**
-     * Limpa o cache de thumbnails ao iniciar o app (Middleware de Inicialização)
-     *
-     * Estratégia:
-     * 1. Limpar obrigatoriamente o cache de disco para evitar resíduos de sessões anteriores
-     * 2. Limpar cache de memória
-     * 3. Logar estatísticas antes/depois
-     */
     private fun clearThumbnailCacheOnStartup() {
-        Timber.i("🚀 Middleware: Iniciando limpeza obrigatória de cache no startup")
+        val prefsManager = PreferencesManager(this)
+        val clearCacheOnStartup = prefsManager.clearCacheOnStartup
 
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                // 1. Limpar cache de memória
-                ThumbnailCacheManager.clearMemoryCache()
+        Timber.i("""
+            ╔═══════════════════════════════════════════════════════╗
+            ║          LIMPEZA DE CACHE AO INICIAR APP                   ║
+            ╚═══════════════════════════════════════════════════════╝
 
-                // 2. Limpar cache de disco (thumbnail_strips)
-                val cacheDir = File(cacheDir, "thumbnail_strips")
-                if (cacheDir.exists()) {
-                    val sizeBefore = cacheDir.walk().map { it.length() }.sum()
-                    val filesDeleted = cacheDir.listFiles()?.size ?: 0
-                    
-                    cacheDir.deleteRecursively()
-                    cacheDir.mkdirs()
+            ⚙️  Configuração:
+               • clearCacheOnStartup: $clearCacheOnStartup
 
-                    Timber.i("🧹 Cache de disco limpo: $filesDeleted arquivos removidos (${sizeBefore / 1024} KB liberados)")
+            ${if (clearCacheOnStartup) "✅ Cache será limpo ao iniciar" else "❌ Cache NÃO será limpo ao iniciar"}
+
+            ═══════════════════════════════════════════════════════
+        """.trimIndent())
+
+        if (clearCacheOnStartup) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    // Logar estatísticas ANTES da limpeza
+                    val statsBefore = ThumbnailCacheManager.getStats()
+                    logCacheStats("ANTES da limpeza", statsBefore)
+
+                    // Limpar cache de memória (ThumbnailCacheManager)
+                    ThumbnailCacheManager.clearMemoryCache()
+
+                    // Limpar cache de disco (ThumbnailStripManager)
+                    val cacheDir = File(cacheDir, "thumbnail_strips")
+                    if (cacheDir.exists()) {
+                        val filesDeleted = cacheDir.listFiles()?.size ?: 0
+                        val sizeBefore = cacheDir.walk().map { it.length() }.sum()
+
+                        cacheDir.deleteRecursively()
+                        cacheDir.mkdirs()
+
+                        val sizeAfter = 0L
+                        val sizeSaved = sizeBefore - sizeAfter
+
+                        Timber.i("""
+                            ╔═══════════════════════════════════════════════════════╗
+                            ║              CACHE LIMPO COM SUCESSO                      ║
+                            ╚═══════════════════════════════════════════════════════╝
+
+                            📊 ESTATÍSTICAS:
+                            • Arquivos deletados: $filesDeleted
+                            • Espaço liberado: ${sizeSaved / 1024 / 1024}MB
+
+                            🗄️  CACHE DISCO:
+                            • Diretório: ${cacheDir.absolutePath}
+                            • Status: LIMPO
+
+                            🧠 CACHE MEMÓRIA:
+                            • Status: LIMPO
+
+                            ═══════════════════════════════════════════════════════
+                        """.trimIndent())
+                    }
+
+                    // Logar estatísticas DEPOIS da limpeza
+                    val statsAfter = ThumbnailCacheManager.getStats()
+                    logCacheStats("DEPOIS da limpeza", statsAfter)
+
+                } catch (e: Exception) {
+                    Timber.e(e, "❌ Erro ao limpar cache no startup")
                 }
-
-                // 3. Limpar cache de áudio (se houver diretório específico)
-                val audioCacheDir = File(cacheDir, "audio_waveforms")
-                if (audioCacheDir.exists()) {
-                    audioCacheDir.deleteRecursively()
-                    audioCacheDir.mkdirs()
-                    Timber.i("🧹 Cache de áudio limpo")
-                }
-
-            } catch (e: Exception) {
-                Timber.e(e, "❌ Erro no middleware de limpeza de cache")
             }
         }
     }
