@@ -58,6 +58,7 @@ fun ConsoleLine(
     val isMultiLine by viewModel.isMultiLine.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val maxLines by viewModel.maxDisplayLines.collectAsStateWithLifecycle()
+    val assertsOnly by viewModel.assertsOnly.collectAsStateWithLifecycle()
     
     val context = LocalContext.current
     val infiniteTransition = rememberInfiniteTransition(label = "led")
@@ -158,6 +159,14 @@ fun ConsoleLine(
                     singleLine = true
                 )
                 
+                IconButton(onClick = { viewModel.toggleAssertsOnly() }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Default.CheckCircle, 
+                        contentDescription = "Filter Asserts", 
+                        tint = if (assertsOnly) Color(0xFF4CAF50) else theme.textColor.copy(alpha = 0.5f), 
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
                 IconButton(onClick = { viewModel.copyToClipboard(context) }, modifier = Modifier.size(28.dp)) {
                     Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = theme.textColor, modifier = Modifier.size(14.dp))
                 }

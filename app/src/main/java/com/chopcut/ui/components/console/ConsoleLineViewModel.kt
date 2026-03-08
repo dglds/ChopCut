@@ -55,6 +55,9 @@ class ConsoleLineViewModel : ViewModel() {
     private val _selectedLevel = MutableStateFlow<LogLevel?>(null)
     val selectedLevel: StateFlow<LogLevel?> = _selectedLevel.asStateFlow()
 
+    private val _assertsOnly = MutableStateFlow(false)
+    val assertsOnly: StateFlow<Boolean> = _assertsOnly.asStateFlow()
+
     enum class ConsolePosition {
         HEADER, FOOTER
     }
@@ -77,6 +80,7 @@ class ConsoleLineViewModel : ViewModel() {
                         android.util.Log.INFO -> LogLevel.INFO
                         android.util.Log.WARN -> LogLevel.WARN
                         android.util.Log.ERROR -> LogLevel.ERROR
+                        android.util.Log.ASSERT -> LogLevel.ERROR // Mapeia ASSERT/WTF para ERROR para garantir visibilidade
                         else -> LogLevel.DEBUG
                     }
                     
@@ -115,17 +119,21 @@ class ConsoleLineViewModel : ViewModel() {
                 DebugLogger.logs,
                 _searchQuery,
                 _selectedLevel,
-                _maxDisplayLines
-            ) { logs, query, level, maxLines ->
+                _assertsOnly
+            ) { logs, query, level, isAssertsOnly ->
                 val assetKeywords = listOf("Thumbnail", "Strip", "Activity", "Asset", "Video", "Performance")
                 
                 logs.filter { entry ->
-                    // Se houver busca manual, usa ela. Caso contrário, filtra por assets/importantes.
+                    val isAssert = entry.message.contains("■") || entry.message.contains("concluída", ignoreCase = true)
+                    
+                    if (isAssertsOnly) {
+                        return@filter isAssert
+                    }
+
                     val matchesQuery = if (query.isNotEmpty()) {
                         entry.tag.contains(query, ignoreCase = true) || 
                         entry.message.contains(query, ignoreCase = true)
                     } else {
-                        // Filtro padrão: Assets ou logs de alto nível (INFO/WARN/ERROR/WTF)
                         assetKeywords.any { entry.tag.contains(it, ignoreCase = true) || entry.message.contains(it, ignoreCase = true) } ||
                         entry.level.ordinal >= LogLevel.INFO.ordinal
                     }
@@ -133,7 +141,7 @@ class ConsoleLineViewModel : ViewModel() {
                     val matchesLevel = level == null || entry.level == level
                     
                     matchesQuery && matchesLevel
-                }.takeLast(maxLines).map { entry ->
+                }.takeLast(_maxDisplayLines.value).map { entry ->
                     LogEntry(
                         tag = entry.tag,
                         message = entry.message,
@@ -165,6 +173,10 @@ class ConsoleLineViewModel : ViewModel() {
 
     fun setSelectedLevel(level: LogLevel?) {
         _selectedLevel.value = level
+    }
+
+    fun toggleAssertsOnly() {
+        _assertsOnly.value = !_assertsOnly.value
     }
 
     fun copyToClipboard(context: android.content.Context) {
