@@ -59,6 +59,7 @@ fun ConsoleLine(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val maxLines by viewModel.maxDisplayLines.collectAsStateWithLifecycle()
     val assertsOnly by viewModel.assertsOnly.collectAsStateWithLifecycle()
+    val topCountMode by viewModel.topCountMode.collectAsStateWithLifecycle()
     
     val context = LocalContext.current
     val infiniteTransition = rememberInfiniteTransition(label = "led")
@@ -164,6 +165,14 @@ fun ConsoleLine(
                         Icons.Default.CheckCircle, 
                         contentDescription = "Filter Asserts", 
                         tint = if (assertsOnly) Color(0xFF4CAF50) else theme.textColor.copy(alpha = 0.5f), 
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                IconButton(onClick = { viewModel.toggleTopCountMode() }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Default.FormatListNumbered, 
+                        contentDescription = "Top Count Mode", 
+                        tint = if (topCountMode) Color(0xFF4CAF50) else theme.textColor.copy(alpha = 0.5f), 
                         modifier = Modifier.size(14.dp)
                     )
                 }

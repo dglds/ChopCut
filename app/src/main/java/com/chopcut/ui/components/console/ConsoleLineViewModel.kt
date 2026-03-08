@@ -52,11 +52,11 @@ class ConsoleLineViewModel : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    private val _selectedLevel = MutableStateFlow<LogLevel?>(null)
-    val selectedLevel: StateFlow<LogLevel?> = _selectedLevel.asStateFlow()
-
     private val _assertsOnly = MutableStateFlow(false)
     val assertsOnly: StateFlow<Boolean> = _assertsOnly.asStateFlow()
+
+    private val _topCountMode = MutableStateFlow(false)
+    val topCountMode: StateFlow<Boolean> = _topCountMode.asStateFlow()
 
     enum class ConsolePosition {
         HEADER, FOOTER
@@ -118,36 +118,52 @@ class ConsoleLineViewModel : ViewModel() {
             kotlinx.coroutines.flow.combine(
                 DebugLogger.logs,
                 _searchQuery,
-                _selectedLevel,
-                _assertsOnly
-            ) { logs, query, level, isAssertsOnly ->
+                _assertsOnly,
+                _topCountMode,
+                _maxDisplayLines
+            ) { logs, query, isAssertsOnly, isTopCount, maxLines ->
                 val assetKeywords = listOf("Thumbnail", "Strip", "Activity", "Asset", "Video", "Performance")
                 
-                logs.filter { entry ->
+                val filteredLogs = logs.filter { entry ->
                     val isAssert = entry.message.contains("■") || entry.message.contains("concluída", ignoreCase = true)
                     
                     if (isAssertsOnly) {
                         return@filter isAssert
                     }
 
-                    val matchesQuery = if (query.isNotEmpty()) {
+                    if (query.isNotEmpty()) {
                         entry.tag.contains(query, ignoreCase = true) || 
                         entry.message.contains(query, ignoreCase = true)
                     } else {
                         assetKeywords.any { entry.tag.contains(it, ignoreCase = true) || entry.message.contains(it, ignoreCase = true) } ||
                         entry.level.ordinal >= LogLevel.INFO.ordinal
                     }
-                    
-                    val matchesLevel = level == null || entry.level == level
-                    
-                    matchesQuery && matchesLevel
-                }.takeLast(_maxDisplayLines.value).map { entry ->
-                    LogEntry(
-                        tag = entry.tag,
-                        message = entry.message,
-                        count = entry.count,
-                        fullText = "[${entry.level}] ${entry.tag}: ${entry.message}"
-                    )
+                }
+
+                if (isTopCount) {
+                    // Modo Top Count: Agrupa por tag, pega a última mensagem (que tem o count maior) e ordena
+                    filteredLogs.groupBy { it.tag }
+                        .mapNotNull { (_, entries) -> entries.maxByOrNull { it.timestamp } }
+                        .sortedByDescending { it.count }
+                        .take(maxLines)
+                        .map { entry ->
+                            LogEntry(
+                                tag = entry.tag,
+                                message = entry.message,
+                                count = entry.count,
+                                fullText = "[${entry.level}] ${entry.tag}: ${entry.message}"
+                            )
+                        }
+                } else {
+                    // Modo Histórico (Cronológico)
+                    filteredLogs.takeLast(maxLines).map { entry ->
+                        LogEntry(
+                            tag = entry.tag,
+                            message = entry.message,
+                            count = entry.count,
+                            fullText = "[${entry.level}] ${entry.tag}: ${entry.message}"
+                        )
+                    }
                 }
             }.collect { mappedLogs ->
                 _logHistory.value = mappedLogs
@@ -171,12 +187,12 @@ class ConsoleLineViewModel : ViewModel() {
         _searchQuery.value = query
     }
 
-    fun setSelectedLevel(level: LogLevel?) {
-        _selectedLevel.value = level
-    }
-
     fun toggleAssertsOnly() {
         _assertsOnly.value = !_assertsOnly.value
+    }
+    
+    fun toggleTopCountMode() {
+        _topCountMode.value = !_topCountMode.value
     }
 
     fun copyToClipboard(context: android.content.Context) {
