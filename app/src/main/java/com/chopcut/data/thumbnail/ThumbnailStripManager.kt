@@ -16,6 +16,8 @@ import com.chopcut.config.constants.CacheConstants
 import com.chopcut.config.constants.PerformanceConstants
 import com.chopcut.data.local.PreferencesManager
 import com.chopcut.data.model.ThumbnailQuality
+import com.chopcut.util.logging.ActivityLogger
+import com.chopcut.util.logging.AppActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
@@ -63,8 +65,8 @@ class ThumbnailStripManager(
     private val minThumbsPerStrip = ThumbnailConstants.Quality.MIN_THUMBS_PER_STRIP
     
     companion object {
-        /** Limite de concorrência para extração (baseado no hardware) */
-        private val extractSemaphore = Semaphore(PerformanceConstants.ThreadCounts.calculateOptimalThreads(Runtime.getRuntime().availableProcessors()))
+        /** Limite de concorrência para extração (Aumentado para 2 para melhor throughput) */
+        private val extractSemaphore = Semaphore(2)
 
         /** Limite de concorrência para I/O de escrita (permite escrita paralela) */
         private val ioSemaphore = Semaphore(ThumbnailConstants.Concurrency.IO_SEMAPHORE_PERMITS)
@@ -437,10 +439,11 @@ class ThumbnailStripManager(
         uri: Uri,
         segmentIndex: Int,
         durationMs: Long,
-        onlyFirstFrame: Boolean = false
+        onlyFirstFrame: Boolean = false,
+        onFrameExtracted: ((Long, Bitmap) -> Unit)? = null
     ): Bitmap? {
         val totalSegments = getSegmentCount(durationMs)
-        return extractSegment(uri, segmentIndex, durationMs, totalSegments, onlyFirstFrame)
+        return extractSegment(uri, segmentIndex, durationMs, totalSegments, onlyFirstFrame, onFrameExtracted)
     }
     
     /**
@@ -466,9 +469,12 @@ class ThumbnailStripManager(
         segmentIndex: Int,
         durationMs: Long,
         totalSegments: Int,
-        onlyFirstFrame: Boolean = false
+        onlyFirstFrame: Boolean = false,
+        onFrameExtracted: ((Long, Bitmap) -> Unit)? = null
     ): Bitmap? = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
+
+        ActivityLogger.started(AppActivity.StripAssembly, "segmento" to segmentIndex, "total" to totalSegments)
 
         Timber.tag("StripPerf").d("=== extractSegment STARTED ===")
         Timber.tag("StripPerf").d("segmentIndex: $segmentIndex, totalSegments: $totalSegments, durationMs: $durationMs")
@@ -531,7 +537,20 @@ class ThumbnailStripManager(
                     uri = uri,
                     positionsMs = positions,
                     width = thumbWidth,
-                    height = thumbHeight
+                    height = thumbHeight,
+                    onFrameExtracted = { pos, bmp ->
+                        // Passar uma cópia para a UI para que o StripManager possa reciclar com segurança
+                        // Isso mantém o cache/manager alheio ao ciclo de vida da UI
+                        try {
+                            if (!bmp.isRecycled) {
+                                val config = bmp.config ?: android.graphics.Bitmap.Config.ARGB_8888
+                                val copy = bmp.copy(config, false)
+                                onFrameExtracted?.invoke(pos, copy)
+                            }
+                        } catch (e: Exception) {
+                            Timber.e(e, "ThumbnailStrip: Error streaming frame copy")
+                        }
+                    }
                 )
 
                 Timber.d("Batch extraction returned ${extractedFrames.size} frames for segment $segmentIndex")
@@ -570,6 +589,7 @@ class ThumbnailStripManager(
                 val totalTime = System.currentTimeMillis() - startTime
                 Timber.tag("StripPerf").i("⚪ extractSegment COMPLETED for segment $segmentIndex, time=${totalTime}ms")
                 Timber.tag("StripPerf").d("=== ThumbnailStripManager.extractSegment COMPLETED for segment $segmentIndex ===")
+                ActivityLogger.finished(AppActivity.StripAssembly, "segmento" to segmentIndex, "ms" to totalTime)
 
                 // MELHORIA: Salvar no cache após extração bem-sucedida (se habilitado)
                 if (prefsManager.thumbnailCacheEnabled) {
@@ -580,6 +600,7 @@ class ThumbnailStripManager(
                 strip
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                ActivityLogger.failed(AppActivity.StripAssembly, "segmento" to segmentIndex, "motivo" to e.message)
                 Timber.tag("ThumbnailAspectMonitor").e(e, "❌ EXCEÇÃO FATAL ao extrair segmento $segmentIndex: ${e.message}")
                 Timber.e(e, "ThumbnailStrip: Fatal error extracting segment $segmentIndex")
                 null

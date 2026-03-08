@@ -14,6 +14,8 @@ import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import com.chopcut.data.model.TimeRange
 import com.chopcut.data.repository.VideoRepository
+import com.chopcut.util.logging.ActivityLogger
+import com.chopcut.util.logging.AppActivity
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -33,6 +35,7 @@ class TransformerPipeline(
         val outputFile = videoRepository.createTempFile(".mp4")
 
         Timber.tag("TransformerPipeline").d("Starting trim with ${ranges.size} range(s)")
+        ActivityLogger.started(AppActivity.Trim, "ranges" to ranges.size)
 
         var isFinished = false
         var transformerRef: Transformer? = null
@@ -88,6 +91,7 @@ class TransformerPipeline(
                     isFinished = true
                     mainHandler.removeCallbacks(progressRunnable)
                     Timber.tag("TransformerPipeline").d("Export finished successfully, file exists: ${outputFile.exists()}, size: ${outputFile.length()}")
+                    ActivityLogger.finished(AppActivity.Trim, "arquivo" to outputFile.name, "tamanho" to outputFile.length())
                     trySend(TrimProgress.Completed(outputFile))
                     channel.close()
                 }
@@ -100,6 +104,7 @@ class TransformerPipeline(
                     isFinished = true
                     mainHandler.removeCallbacks(progressRunnable)
                     Timber.tag("TransformerPipeline").e(exception, "Export failed")
+                    ActivityLogger.failed(AppActivity.Trim, "motivo" to exception.message)
                     trySend(TrimProgress.Failed(exception))
                     channel.close()
                 }

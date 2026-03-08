@@ -7,6 +7,8 @@ import android.net.Uri
 import com.chopcut.data.model.ExtractionStage
 import com.chopcut.data.model.PerformanceEvent
 import com.chopcut.data.model.ThumbnailQuality
+import com.chopcut.util.logging.ActivityLogger
+import com.chopcut.util.logging.AppActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -39,12 +41,15 @@ open class ThumbnailExtractorBatch(
         uri: Uri,
         positionsMs: List<Long>,
         width: Int = 320,
-        height: Int = 180
+        height: Int = 180,
+        onFrameExtracted: ((Long, Bitmap) -> Unit)? = null
     ): Map<Long, Bitmap> = withContext(Dispatchers.IO) {
         if (positionsMs.isEmpty()) {
             Timber.w("No positions to extract, returning empty map")
             return@withContext emptyMap()
         }
+
+        ActivityLogger.started(AppActivity.ThumbnailExtraction, "frames" to positionsMs.size, "uri" to uri)
 
         val startTime = System.currentTimeMillis()
         val results = mutableMapOf<Long, Bitmap>()
@@ -66,6 +71,7 @@ open class ThumbnailExtractorBatch(
                     val bitmap = extractFrameAt(retriever, positionMs, width, height, ThumbnailQuality.LOW, currentQueueSize)
                     if (bitmap != null) {
                         results[positionMs] = bitmap
+                        onFrameExtracted?.invoke(positionMs, bitmap)
                     } else {
                         Timber.w("Frame at ${positionMs}ms returned null")
                     }
@@ -78,8 +84,10 @@ open class ThumbnailExtractorBatch(
             val totalTime = System.currentTimeMillis() - startTime
             val avgTime = if (results.isNotEmpty()) totalTime / results.size else 0
             Timber.i("extractBatch: ${results.size}/${positionsMs.size} frames in ${totalTime}ms (avg ${avgTime}ms/frame)")
+            ActivityLogger.finished(AppActivity.ThumbnailExtraction, "extraídos" to results.size, "total" to positionsMs.size, "ms" to totalTime)
 
         } catch (e: Exception) {
+            ActivityLogger.failed(AppActivity.ThumbnailExtraction, "motivo" to e.message)
             Timber.e(e, "extractBatch: Fatal error during batch extraction")
         } finally {
             try {
