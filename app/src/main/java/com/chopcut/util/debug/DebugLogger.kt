@@ -13,6 +13,7 @@ data class LogEntry(
     val level: LogLevel,
     val tag: String,
     val message: String,
+    val count: Int = 1,
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -21,6 +22,8 @@ object DebugLogger {
     
     private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
     val logs: StateFlow<List<LogEntry>> = _logs.asStateFlow()
+    
+    private val logCountMap = mutableMapOf<String, Int>()
 
     fun v(tag: String, message: String) = log(LogLevel.VERBOSE, tag, message)
     fun d(tag: String, message: String) = log(LogLevel.DEBUG, tag, message)
@@ -29,7 +32,10 @@ object DebugLogger {
     fun e(tag: String, message: String) = log(LogLevel.ERROR, tag, message)
 
     private fun log(level: LogLevel, tag: String, message: String) {
-        val entry = LogEntry(level, tag, message)
+        val count = (logCountMap[tag] ?: 0) + 1
+        logCountMap[tag] = count
+        
+        val entry = LogEntry(level, tag, message, count)
         _logs.update { currentLogs ->
             val updated = if (currentLogs.size >= MAX_RETENTION) {
                 currentLogs.drop(1) + entry
@@ -41,6 +47,7 @@ object DebugLogger {
     }
 
     fun clear() {
+        logCountMap.clear()
         _logs.value = emptyList()
     }
 

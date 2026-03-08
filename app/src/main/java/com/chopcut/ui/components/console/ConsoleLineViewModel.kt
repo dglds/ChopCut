@@ -43,7 +43,7 @@ class ConsoleLineViewModel : ViewModel() {
     private val _isMultiLine = MutableStateFlow(true)
     val isMultiLine: StateFlow<Boolean> = _isMultiLine.asStateFlow()
     
-    private val _maxDisplayLines = MutableStateFlow(50) // Aumentado conforme spec
+    private val _maxDisplayLines = MutableStateFlow(5) // Default to 5 lines as requested
     val maxDisplayLines: StateFlow<Int> = _maxDisplayLines.asStateFlow()
     
     private val _callStackMode = MutableStateFlow(false)
@@ -58,8 +58,6 @@ class ConsoleLineViewModel : ViewModel() {
     
     private val _position = MutableStateFlow(ConsolePosition.FOOTER)
     val position: StateFlow<ConsolePosition> = _position.asStateFlow()
-    
-    private val logCountMap = mutableMapOf<String, Int>()
 
     init {
         setupTimberTree()
@@ -111,18 +109,18 @@ class ConsoleLineViewModel : ViewModel() {
     private fun observeLogs() {
         viewModelScope.launch {
             DebugLogger.logs.collect { newLogs ->
-                val mappedLogs = newLogs.map { entry ->
-                    val count = (logCountMap[entry.tag] ?: 0) + 1
-                    logCountMap[entry.tag] = count
+                // Apenas mapeia as últimas linhas necessárias para a UI, evitando processar 1000 logs todas as vezes
+                val recentLogsToMap = newLogs.takeLast(_maxDisplayLines.value)
+                val mappedLogs = recentLogsToMap.map { entry ->
                     LogEntry(
                         tag = entry.tag,
                         message = entry.message,
-                        count = count,
+                        count = entry.count,
                         fullText = "[${entry.level}] ${entry.tag}: ${entry.message}"
                     )
                 }
                 
-                _logHistory.value = mappedLogs.takeLast(_maxDisplayLines.value)
+                _logHistory.value = mappedLogs
                 _logs.value = mappedLogs.lastOrNull()
                 _hasPendingLogs.value = false
             }
@@ -135,7 +133,6 @@ class ConsoleLineViewModel : ViewModel() {
     
     fun clear() {
         DebugLogger.clear()
-        logCountMap.clear()
         _logs.value = null
         _logHistory.value = emptyList()
     }
