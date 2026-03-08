@@ -36,5 +36,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [~] **Track: Refatore o console view de debug com Material 3, LazyColumn e gestos.**
+- [x] **Track: Refatore o console view de debug com Material 3, LazyColumn e gestos.**
 *Link: [./tracks/debug_console_refactor_20260308/](./tracks/debug_console_refactor_20260308/)*
