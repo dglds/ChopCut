@@ -2,7 +2,6 @@ package com.chopcut.data.thumbnail
 
 import android.content.Context
 import com.chopcut.data.model.PerformanceEvent
-import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
@@ -29,7 +28,6 @@ class FilePerformanceLogger(private val context: Context) {
                 out.write(line.toByteArray(StandardCharsets.UTF_8))
             }
         } catch (e: Exception) {
-            Timber.e(e, "Falha ao gravar log de performance")
         }
     }
 

@@ -14,7 +14,6 @@ import com.chopcut.data.audio.model.AudioInfo
 import com.chopcut.data.model.VideoInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 
@@ -65,16 +64,13 @@ class VideoRepository(
                 hasAudio = hasAudio,
                 sizeBytes = sizeBytes
             ).also {
-                Timber.d("Extracted metadata: ${it.fileName} (${it.width}x${it.height}, ${it.durationMs}ms)")
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error extracting metadata from $uri")
             null
         } finally {
             try {
                 retriever.release()
             } catch (e: Exception) {
-                Timber.e(e, "Error releasing MediaMetadataRetriever")
             }
         }
     }
@@ -100,7 +96,6 @@ class VideoRepository(
             }
 
             if (audioTrackIndex < 0) {
-                Timber.w("No audio track found in $uri")
                 return@withContext null
             }
 
@@ -129,17 +124,13 @@ class VideoRepository(
                 mimeType = mimeType,
                 language = language
             ).also {
-                Timber.d("Extracted audio metadata: ${it.codec}, ${it.sampleRate}Hz, " +
-                         "${it.channelCount}ch, ${it.bitrateKbps}kbps, ${it.durationMs}ms")
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error extracting audio metadata from $uri")
             null
         } finally {
             try {
                 extractor.release()
             } catch (e: Exception) {
-                Timber.e(e, "Error releasing MediaExtractor")
             }
         }
     }
@@ -155,7 +146,6 @@ class VideoRepository(
 
         val timestamp = System.currentTimeMillis()
         File(tempDir, "chopcut_$timestamp$extension").also {
-            Timber.d("Created temp file: ${it.absolutePath}")
         }
     }
 
@@ -191,11 +181,9 @@ class VideoRepository(
                 null
             )
 
-            Timber.d("Saved to root ChopCut folder: ${destFile.absolutePath}")
             return@withContext Uri.fromFile(destFile)
 
         } catch (e: Exception) {
-            Timber.w("Failed to save to root folder (${e.message}), falling back to MediaStore")
         }
 
         // 2. Fallback to MediaStore (Scoped Storage / Android 10+)
@@ -235,7 +223,6 @@ class VideoRepository(
             contentResolver.update(uri, contentValues, null, null)
         }
 
-        Timber.d("Saved video to gallery via MediaStore: $uri")
         uri
     }
 
@@ -245,14 +232,11 @@ class VideoRepository(
     suspend fun deleteTempFile(file: File): Boolean = withContext(Dispatchers.IO) {
         try {
             if (file.exists() && file.delete()) {
-                Timber.d("Deleted temp file: ${file.absolutePath}")
                 true
             } else {
-                Timber.w("Failed to delete temp file: ${file.absolutePath}")
                 false
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error deleting temp file")
             false
         }
     }
@@ -301,7 +285,6 @@ class VideoRepository(
                 descriptor.statSize
             } ?: 0
         } catch (e: Exception) {
-            Timber.w(e, "Error getting content size for $uri")
             0
         }
     }
@@ -317,13 +300,11 @@ class VideoRepository(
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) != null ||
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER) != null
         } catch (e: Exception) {
-            Timber.w(e, "Error checking audio track")
             false
         } finally {
             try {
                 retriever.release()
             } catch (e: Exception) {
-                Timber.e(e, "Error releasing MediaMetadataRetriever")
             }
         }
     }
@@ -347,7 +328,6 @@ class VideoRepository(
             // use MediaExtractor to get accurate frame rate
             30 // Default fallback
         } catch (e: Exception) {
-            Timber.w(e, "Error extracting frame rate")
             30 // Default fallback
         }
     }
@@ -370,10 +350,8 @@ class VideoRepository(
                     input.copyTo(output)
                 }
             }
-            Timber.d("Copied video to internal storage: ${destFile.absolutePath}")
             destFile
         } catch (e: Exception) {
-            Timber.e(e, "Error copying video to internal storage")
             // Cleanup on failure
             if (destFile.exists()) destFile.delete()
             null
@@ -392,10 +370,8 @@ class VideoRepository(
                     input.copyTo(output)
                 }
             }
-            Timber.d("Copied URI to temp file: ${tempFile.absolutePath}")
             tempFile
         } catch (e: Exception) {
-            Timber.e(e, "Error copying URI to temp file")
             tempFile.delete()
             null
         }
@@ -413,9 +389,7 @@ class VideoRepository(
             // This works for all Android versions and handles scoped storage properly
             deletedCount = deleteAllVideosInChopCutDirectories()
 
-            Timber.d("Total videos deleted: $deletedCount")
         } catch (e: Exception) {
-            Timber.e(e, "Error deleting saved videos")
             throw e
         }
 
@@ -440,12 +414,10 @@ class VideoRepository(
         )
 
         directories.forEach { dir ->
-            Timber.d("Checking directory: ${dir.absolutePath}, exists: ${dir.exists()}")
 
             if (dir.exists() && dir.isDirectory) {
                 try {
                     val files = dir.listFiles()
-                    Timber.d("Found ${files?.size ?: 0} files in ${dir.absolutePath}")
 
                     files?.forEach { file ->
                         // Only process video files
@@ -467,9 +439,7 @@ class VideoRepository(
                             if (deleted) {
                                 deletedCount++
                                 deletedFiles.add(file.name)
-                                Timber.d("Successfully deleted: ${file.name}")
                             } else {
-                                Timber.w("Failed to delete: ${file.name}")
                             }
                         }
                     }
@@ -477,15 +447,12 @@ class VideoRepository(
                     // Try to delete the directory if empty
                     if (dir.listFiles()?.isEmpty() == true) {
                         dir.delete()
-                        Timber.d("Deleted empty directory: ${dir.absolutePath}")
                     }
                 } catch (e: Exception) {
-                    Timber.e(e, "Error deleting files in directory: ${dir.absolutePath}")
                 }
             }
         }
 
-        Timber.d("Deleted files: ${deletedFiles.joinToString()}")
         return deletedCount
     }
 
@@ -501,16 +468,13 @@ class VideoRepository(
                 arrayOf("video/mp4")
             ) { path, uri ->
                 if (uri != null) {
-                    Timber.d("Scanned file to MediaStore: ${file.name}, URI: $uri")
                 } else {
-                    Timber.w("Failed to scan file to MediaStore: ${file.name}")
                 }
             }
 
             // Give MediaStore a moment to process
             Thread.sleep(100)
         } catch (e: Exception) {
-            Timber.w(e, "Error scanning file to MediaStore: ${file.name}")
         }
     }
 
@@ -542,15 +506,12 @@ class VideoRepository(
 
                     // Delete via ContentResolver
                     val rowsDeleted = contentResolver.delete(videoUri, null, null)
-                    Timber.d("MediaStore deletion: ${file.name}, rows: $rowsDeleted")
                     return rowsDeleted > 0
                 }
             }
 
-            Timber.w("File not found in MediaStore: ${file.absolutePath}")
             return false
         } catch (e: Exception) {
-            Timber.w(e, "Error deleting via MediaStore: ${file.name}")
             return false
         }
     }
@@ -562,7 +523,6 @@ class VideoRepository(
         return try {
             val deleted = file.delete()
             if (deleted) {
-                Timber.d("Direct deletion successful: ${file.name}")
                 // Notify MediaStore about the deletion
                 android.media.MediaScannerConnection.scanFile(
                     context,
@@ -571,11 +531,9 @@ class VideoRepository(
                     null
                 )
             } else {
-                Timber.w("Direct deletion failed: ${file.name}")
             }
             deleted
         } catch (e: Exception) {
-            Timber.w(e, "Error deleting physical file: ${file.name}")
             false
         }
     }

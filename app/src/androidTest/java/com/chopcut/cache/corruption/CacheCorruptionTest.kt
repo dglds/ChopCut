@@ -8,7 +8,6 @@ import com.chopcut.MainActivity
 import com.chopcut.data.thumbnail.ThumbnailCacheManager
 import com.chopcut.data.thumbnail.ThumbnailStripManager
 import kotlinx.coroutines.runBlocking
-import timber.log.Timber
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -63,7 +62,6 @@ class CacheCorruptionTest {
         val segmentIndex = 0
         val durationMs = 3_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de arquivo corrompido")
 
         val cacheKey = generateCacheKey(uri, segmentIndex, videoFile)
         val cacheFile = File(cacheDir, cacheKey)
@@ -81,7 +79,6 @@ class CacheCorruptionTest {
             raf.setLength(originalSize / 2)
         }
 
-        Timber.tag("TEST_INTEGRATION").i("Arquivo truncado: ${originalSize} → ${cacheFile.length()}")
 
         runBlocking {
             val strip = stripManager.loadFromCache(uri, segmentIndex)
@@ -110,7 +107,6 @@ class CacheCorruptionTest {
         val segmentIndex = 1
         val durationMs = 3_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de header corrompido")
 
         val cacheKey = generateCacheKey(uri, segmentIndex, videoFile)
         val cacheFile = File(cacheDir, cacheKey)
@@ -128,7 +124,6 @@ class CacheCorruptionTest {
             raf.write(originalBytes.reversedArray())
         }
 
-        Timber.tag("TEST_INTEGRATION").i("Header corrompido (bytes invertidos)")
 
         runBlocking {
             val strip = stripManager.loadFromCache(uri, segmentIndex)
@@ -153,7 +148,6 @@ class CacheCorruptionTest {
         val segmentIndex = 2
         val durationMs = 3_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de arquivo vazio")
 
         val cacheKey = generateCacheKey(uri, segmentIndex, videoFile)
         val cacheFile = File(cacheDir, cacheKey)
@@ -166,7 +160,6 @@ class CacheCorruptionTest {
 
         cacheFile.writeBytes(ByteArray(0))
 
-        Timber.tag("TEST_INTEGRATION").i("Arquivo truncado para 0 bytes")
 
         runBlocking {
             val strip = stripManager.loadFromCache(uri, segmentIndex)
@@ -191,7 +184,6 @@ class CacheCorruptionTest {
         val segmentIndex = 3
         val durationMs = 3_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de dimensões inválidas")
 
         val cacheKey = generateCacheKey(uri, segmentIndex, videoFile)
         val cacheFile = File(cacheDir, cacheKey)
@@ -213,7 +205,6 @@ class CacheCorruptionTest {
             raf.write(fakeHeader)
         }
 
-        Timber.tag("TEST_INTEGRATION").i("Dimensões modificadas para 0x0")
 
         runBlocking {
             val strip = stripManager.loadFromCache(uri, segmentIndex)
@@ -238,7 +229,6 @@ class CacheCorruptionTest {
         val segments = listOf(0, 1, 2, 3, 4)
         val durationMs = 15_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de múltiplos arquivos corrompidos")
 
         runBlocking {
             segments.forEach { segIdx ->
@@ -259,7 +249,6 @@ class CacheCorruptionTest {
             corruptedFiles.add(cacheFile)
         }
 
-        Timber.tag("TEST_INTEGRATION").i("Corrompidos: ${corruptedFiles.size} arquivos")
 
         runBlocking {
             segments.forEach { segIdx ->

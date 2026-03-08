@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 
 data class ExtractionMetrics(
     val extractionTimeMs: Long,
@@ -92,7 +91,6 @@ class WaveformTestViewModel(application: Application) : AndroidViewModel(applica
                 
                 Result.success(Pair(waveformData, metrics))
             } catch (e: Exception) {
-                Timber.e(e, "Error extracting waveform with config")
                 _state.update { it.copy(error = e.message) }
                 Result.failure(e)
             } finally {
@@ -117,10 +115,8 @@ class WaveformTestViewModel(application: Application) : AndroidViewModel(applica
                             isLoading = false
                         )
                     }
-                    Timber.d("Baseline generated in ${metrics.extractionTimeMs}ms")
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Error generating baseline")
                 _state.update { it.copy(isLoading = false, error = e.message) }
             }
         }
@@ -141,10 +137,8 @@ class WaveformTestViewModel(application: Application) : AndroidViewModel(applica
                             isLoading = false
                         )
                     }
-                    Timber.d("Waveform regenerated in ${metrics.extractionTimeMs}ms with config: $config")
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Error regenerating waveform")
                 _state.update { it.copy(isLoading = false, error = e.message) }
             }
         }

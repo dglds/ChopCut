@@ -6,7 +6,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.chopcut.MainActivity
 import com.chopcut.data.thumbnail.ThumbnailCacheManager
 import kotlinx.coroutines.runBlocking
-import timber.log.Timber
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -46,7 +45,6 @@ class CachePerformanceTest {
         val segmentCount = 20
         val durationMs = 60_000L
 
-        Timber.tag("TEST_PERF").i("Iniciando benchmark de extração — segmentos=$segmentCount")
 
         val times = mutableListOf<Long>()
 
@@ -68,7 +66,6 @@ class CachePerformanceTest {
                 val elapsed = System.currentTimeMillis() - start
                 times.add(elapsed)
 
-                Timber.tag("TEST_PERF").d("Segmento $segIdx: ${elapsed}ms")
             }
         }
 
@@ -102,13 +99,11 @@ class CachePerformanceTest {
         val durationMs = 15_000L
         val rounds = 3
 
-        Timber.tag("TEST_PERF").i("Iniciando benchmark de hit rate — vídeos=${uris.size}, rounds=$rounds")
 
         val hits = mutableListOf<Int>()
         val misses = mutableListOf<Int>()
 
         repeat(rounds) { round ->
-            Timber.tag("TEST_PERF").i("Round $round")
 
             var roundHits = 0
             var roundMisses = 0
@@ -145,7 +140,6 @@ class CachePerformanceTest {
 
             val totalRequests = roundHits + roundMisses
             val hitRate = if (totalRequests > 0) (roundHits * 100.0 / totalRequests) else 0.0
-            Timber.tag("TEST_PERF").i("Round $round: ${roundHits} hits, ${roundMisses} misses, hit rate=${String.format("%.1f", hitRate)}%")
         }
 
         val totalHits = hits.sum()
@@ -179,7 +173,6 @@ class CachePerformanceTest {
         val segmentCount = 50
         val durationMs = 150_000L
 
-        Timber.tag("TEST_PERF").i("Iniciando benchmark de uso de memória — segmentos=$segmentCount")
 
         val memorySnapshots = mutableListOf<Long>()
 
@@ -204,7 +197,6 @@ class CachePerformanceTest {
                 memorySnapshots.add(memoryUsed)
 
                 if (segIdx % 10 == 0) {
-                    Timber.tag("TEST_PERF").d("Segmento $segIdx: +${memoryUsed / 1024}KB")
                 }
             }
         }
@@ -231,7 +223,6 @@ class CachePerformanceTest {
         val segmentCount = 1
         val durationMs = 3_000L
 
-        Timber.tag("TEST_PERF").i("Iniciando benchmark de escrita em disco — vídeos=${uris.size}")
 
         val writeTimes = mutableListOf<Long>()
 
@@ -253,7 +244,6 @@ class CachePerformanceTest {
                 val elapsed = System.currentTimeMillis() - start
                 writeTimes.add(elapsed)
 
-                Timber.tag("TEST_PERF").d("Escrita ${uri.split("_").last()}: ${elapsed}ms")
             }
         }
 
@@ -277,7 +267,6 @@ class CachePerformanceTest {
         val segmentCount = 10
         val durationMs = 30_000L
 
-        Timber.tag("TEST_PERF").i("Iniciando comparação paralelo vs sequencial")
 
         ThumbnailCacheManager.clearMemoryCache()
         ThumbnailCacheManager.clearAll(testContext)

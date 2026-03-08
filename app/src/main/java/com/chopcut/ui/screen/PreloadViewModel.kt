@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * ViewModel coordenadora para pré-carregamento de vídeo.
@@ -59,7 +58,6 @@ class PreloadViewModel(
         
         // Se já está em cache, libera automático!
         if (isCached) {
-            Timber.i("isReadyFlow: READY (Cache Hit!)")
             return@combine true
         }
 
@@ -68,11 +66,6 @@ class PreloadViewModel(
         val threshold = if (total <= 6) total else (total * 0.5).toInt().coerceAtLeast(6)
         val ready = strips.size >= threshold
         
-        if (ready) {
-            Timber.i("isReadyFlow: READY threshold met! (${strips.size}/$total, target=$threshold)")
-        } else {
-            Timber.v("isReadyFlow check: strips=${strips.size}, total=$total, target=$threshold, ready=false")
-        }
         ready
     }.stateIn(
         scope = viewModelScope,
@@ -102,15 +95,12 @@ class PreloadViewModel(
      * @param stripsToPreload Número de strips a carregar (padrão: 6)
      */
     fun startPreload(uri: Uri) {
-        Timber.d("PreloadViewModel.startPreload: uri=$uri, activeUri=$activeUri, state=${_uiState.value}")
         
         if (activeUri != null && activeUri != uri) {
-            Timber.d("Limpando estado anterior para novo vídeo: $uri")
             clear()
         }
         
         if (activeUri == uri && _uiState.value is PreloadUiState.Ready) {
-            Timber.d("Preload já está pronto para $uri, pulando restart")
             return
         }
 
@@ -134,14 +124,12 @@ class PreloadViewModel(
                 val thumbPreloadJob = launch {
                     thumbnailVM.preload(uri)
                     thumbnailVM.uiState.first { it is ThumbnailViewModel.ThumbnailUiState.Ready }
-                    Timber.d("PreloadViewModel: ThumbnailViewModel is Ready")
                 }
 
                 /* 
                 // Job para áudio (Desabilitado temporariamente por performance)
                 val audioPreloadJob = launch {
                     audioVM.loadWaveform(uri, targetBarCount = calculateTargetBarCount(durationMs = 0))
-                    Timber.d("Parallel: Audio waveform ready")
                 }
                 */
 
@@ -189,11 +177,9 @@ class PreloadViewModel(
                     preloadPercentage = 1f
                 )
                 _uiState.value = PreloadUiState.Ready(preloadedData)
-                Timber.d("PreloadViewModel: startPreload READY (${thumbnailVM.strips.value.size} strips)")
                 
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
-                    Timber.e(e, "Preload failed")
                     _uiState.value = PreloadUiState.Error(e.message ?: "Erro desconhecido")
                 }
             }
@@ -204,7 +190,6 @@ class PreloadViewModel(
      * Cancela o pré-carregamento em andamento.
      */
     fun cancelPreload() {
-        Timber.d("Cancelling preload")
         
         preloadJob?.cancel()
         preloadJob = null
@@ -216,7 +201,6 @@ class PreloadViewModel(
      * Limpa todo o estado de pré-carregamento.
      */
     fun clear() {
-        Timber.d("Clearing PreloadViewModel")
         
         cancelPreload()
         activeUri = null

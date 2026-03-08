@@ -4,7 +4,6 @@ import com.chopcut.data.model.ExtractionStage
 import com.chopcut.data.model.PerformanceEvent
 import com.chopcut.data.model.PerformanceMetrics
 import android.content.Context
-import timber.log.Timber
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
@@ -21,7 +20,6 @@ object PerformanceMonitor {
      */
     fun init(context: Context) {
         logger = FilePerformanceLogger(context)
-        Timber.i("PerformanceMonitor inicializado")
     }
 
     /**
@@ -33,8 +31,6 @@ object PerformanceMonitor {
         // Persistência em arquivo
         logger?.logEvent(event)
         
-        // Logcat estruturado para ferramentas de análise (Tput = Throughput)
-        Timber.tag("TPUT_LOG").v("stage=${event.stage} task=${event.taskId} duration=${event.durationMs}ms queue=${event.queueSize} worker=${event.workerId}")
     }
 
     private var previousAverageQueueSize = 0f
@@ -82,13 +78,6 @@ object PerformanceMonitor {
         previousAverageQueueSize = avgQueueSize
 
         val metrics = PerformanceMetrics(throughput, avgDurations, maxDurations, bottleneck)
-        
-        if (isQueueSaturated) {
-            Timber.tag("PERF_ALERT").w("Pipeline saturado! Fila média: %.1f | Gargalo: %s", avgQueueSize, bottleneck)
-        }
-
-        Timber.tag("PERF_SUMMARY").i("Throughput: %.2f fps | Bottleneck: %s | Events: %d", 
-            metrics.throughput, metrics.bottleneckStage, currentEvents.size)
         
         return metrics
     }

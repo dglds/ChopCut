@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * ViewModel para HomeScreen.
@@ -48,8 +47,6 @@ class HomeViewModel(
     val errorState: StateFlow<ErrorHandler.ErrorState?> = _errorState.asStateFlow()
 
     fun selectVideo(uri: Uri) {
-        Timber.tag("HomeViewModel").d("=== selectVideo CALLED ===")
-        Timber.tag("HomeViewModel").d("uri: $uri")
         _selectedVideoUri.value = uri
         loadVideoMetadata(uri)
     }
@@ -60,31 +57,24 @@ class HomeViewModel(
     }
     
     private fun loadVideoMetadata(uri: Uri) {
-        Timber.d("=== HomeViewModel.loadVideoMetadata CALLED ===")
-        Timber.d("uri: $uri")
         
         viewModelScope.launch(DispatcherProvider.io) {
-            Timber.d("=== loadVideoMetadata coroutine STARTED ===")
             _uiState.value = HomeUiState.Loading
             _errorState.value = null
 
-            Timber.d("Chamando videoRepository.getMetadata...")
             val result = safeExecuteSuspend(context = getApplication()) {
                 videoRepository.getMetadata(uri)
             }
-            Timber.d("videoRepository.getMetadata retornou: $result")
 
             when (result) {
                 is com.chopcut.util.error.ErrorResult.Success -> {
                     val metadata = result.data
-                    Timber.d("Metadata obtido: $metadata")
                     if (metadata != null) {
                         // Validar duração
                         val validation = VideoConstraints.getValidationMessage(
                             metadata.durationMs
                         )
                         if (validation != null) {
-                            Timber.w("Vídeo rejeitado: $validation")
                             _errorState.value = ErrorHandler.ErrorState(
                                 title = "Vídeo muito longo",
                                 message = validation,
@@ -92,11 +82,7 @@ class HomeViewModel(
                             )
                             _uiState.value = HomeUiState.Error(validation)
                         } else {
-                            Timber.d("Vídeo válido, mudando estado para VideoLoaded")
                             _uiState.value = HomeUiState.VideoLoaded(metadata)
-                            Timber.d("Video loaded: ${metadata.fileName}")
-                            Timber.d("Duration: ${metadata.durationMs}ms")
-                            Timber.d("NOTA: HomeScreen vai chamar PreloadViewModel.startPreload()")
                         }
                     } else {
                         _errorState.value = ErrorHandler.ErrorState(
@@ -107,12 +93,10 @@ class HomeViewModel(
                     }
                 }
                 is com.chopcut.util.error.ErrorResult.Error -> {
-                    Timber.e("Erro ao carregar metadados: ${result.errorState}")
                     _errorState.value = result.errorState
                     _uiState.value = HomeUiState.Error(result.errorState.message)
                 }
             }
-            Timber.d("=== loadVideoMetadata coroutine FINISHED ===")
         }
     }
 
@@ -142,14 +126,12 @@ class HomeViewModel(
                             }
                             is com.chopcut.data.pipeline.TrimProgress.Completed -> {
                                 val file = progress.file
-                                Timber.d("Trim completed: ${file.absolutePath}")
                                 _uiState.value = HomeUiState.Success(
                                     "Trim completed!\nOutput: ${file.name}\nSize: ${file.length() / 1024} KB"
                                 )
                             }
                             is com.chopcut.data.pipeline.TrimProgress.Failed -> {
                                 val error = progress.error
-                                Timber.e(error, "Trim failed")
                                 val errorState = ErrorHandler.handle(error, getApplication())
                                 _errorState.value = errorState
                                 _uiState.value = HomeUiState.Error(errorState.message)
@@ -157,7 +139,6 @@ class HomeViewModel(
                         }
                     }
             } catch (e: Exception) {
-                Timber.e(e, "Error during trim")
                 val errorState = ErrorHandler.handle(e, getApplication())
                 _errorState.value = errorState
                 _uiState.value = HomeUiState.Error(errorState.message)

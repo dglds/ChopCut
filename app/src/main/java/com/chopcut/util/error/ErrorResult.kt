@@ -3,7 +3,6 @@ package com.chopcut.util.error
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
-import timber.log.Timber
 
 /**
  * Wrapper for operation results that can succeed or fail with a specific error type.
@@ -108,7 +107,6 @@ inline fun <T> safeExecute(
 ): ErrorResult<T> = try {
     ErrorResult.success(block())
 } catch (e: Exception) {
-    Timber.e(e, "safeExecute caught exception")
     if (context != null) {
         ErrorResult.fromThrowable(e, context)
     } else {
@@ -125,7 +123,6 @@ suspend inline fun <T> safeExecuteSuspend(
 ): ErrorResult<T> = try {
     ErrorResult.success(block())
 } catch (e: Exception) {
-    Timber.e(e, "safeExecuteSuspend caught exception")
     if (context != null) {
         ErrorResult.fromThrowable(e, context)
     } else {

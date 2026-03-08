@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * ViewModel especializada para gerenciar áudio e waveform.
@@ -58,12 +57,10 @@ class AudioViewModel(
      */
     fun loadWaveform(uri: Uri, targetBarCount: Int? = null) {
         if (activeUri != null && activeUri != uri) {
-            Timber.d("Limpando waveform anterior para novo vídeo: $uri")
             clear()
         }
         
         if (activeUri == uri && _uiState.value is AudioUiState.Ready) {
-            Timber.d("Waveform já está pronta para $uri, pulando")
             return
         }
         
@@ -72,18 +69,13 @@ class AudioViewModel(
             try {
                 _uiState.value = AudioUiState.Loading
                 
-                Timber.d("=== AudioViewModel.loadWaveform STARTED ===")
-                Timber.d("URI: $uri, targetBarCount: $targetBarCount")
-                
                 // Calcular número de barras se não fornecido
                 val barCount = targetBarCount ?: calculateBarCount(durationMs = 0, screenWidthDp = 400f)
                 
-                Timber.d("Loading waveform with $barCount bars (quality: ${waveformQuality.displayName})")
                 
                 // Extrair dados brutos de áudio
                 val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = barCount)
                 
-                Timber.d("Raw data extracted: ${rawData.pcmSamples.size} samples, ${rawData.durationMs}ms")
                 
                 // Gerar waveform
                 val amplitudesList = WaveFormGenerator.generateWaveform(
@@ -107,11 +99,8 @@ class AudioViewModel(
                 _amplitudes.value = amplitudesList
                 _uiState.value = AudioUiState.Ready(amplitudesList.size)
                 
-                Timber.d("=== AudioViewModel.loadWaveform COMPLETED ===")
-                Timber.d("Waveform generated: ${amplitudesList.size} bars")
                 
             } catch (e: Exception) {
-                Timber.e(e, "Waveform loading failed")
                 _uiState.value = AudioUiState.Error(e.message ?: "Erro desconhecido")
             }
         }
@@ -124,7 +113,6 @@ class AudioViewModel(
      */
     fun setWaveformQuality(quality: WaveformQuality) {
         waveformQuality = quality
-        Timber.d("Waveform quality set to: ${quality.displayName}")
     }
     
     /**
@@ -134,7 +122,6 @@ class AudioViewModel(
      */
     fun isReady(): Boolean {
         val ready = _uiState.value is AudioUiState.Ready
-        Timber.d("isReady check: result=$ready")
         return ready
     }
     
@@ -142,7 +129,6 @@ class AudioViewModel(
      * Limpa o estado da waveform.
      */
     fun clear() {
-        Timber.d("Clearing AudioViewModel")
         _waveform.value = null
         _amplitudes.value = emptyList()
         _uiState.value = AudioUiState.Idle

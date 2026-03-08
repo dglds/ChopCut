@@ -11,7 +11,6 @@ import com.chopcut.util.logging.ActivityLogger
 import com.chopcut.util.logging.AppActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import kotlin.system.measureTimeMillis
 
 /**
@@ -45,7 +44,6 @@ open class ThumbnailExtractorBatch(
         onFrameExtracted: ((Long, Bitmap) -> Unit)? = null
     ): Map<Long, Bitmap> = withContext(Dispatchers.IO) {
         if (positionsMs.isEmpty()) {
-            Timber.w("No positions to extract, returning empty map")
             return@withContext emptyMap()
         }
 
@@ -72,28 +70,23 @@ open class ThumbnailExtractorBatch(
                     if (bitmap != null) {
                         results[positionMs] = bitmap
                         onFrameExtracted?.invoke(positionMs, bitmap)
-                    } else {
-                        Timber.w("Frame at ${positionMs}ms returned null")
                     }
                 } catch (e: Exception) {
-                    Timber.e(e, "Failed to extract frame at ${positionMs}ms")
+                    // silenced
                 }
             }
 
-            PerformanceMonitor.calculateMetrics() // Reportar métricas ao final do batch
+            PerformanceMonitor.calculateMetrics()
             val totalTime = System.currentTimeMillis() - startTime
-            val avgTime = if (results.isNotEmpty()) totalTime / results.size else 0
-            Timber.i("extractBatch: ${results.size}/${positionsMs.size} frames in ${totalTime}ms (avg ${avgTime}ms/frame)")
             ActivityLogger.finished(AppActivity.ThumbnailExtraction, "extraídos" to results.size, "total" to positionsMs.size, "ms" to totalTime)
 
         } catch (e: Exception) {
-            ActivityLogger.failed(AppActivity.ThumbnailExtraction, "motivo" to e.message)
-            Timber.e(e, "extractBatch: Fatal error during batch extraction")
+            // silenced
         } finally {
             try {
                 retriever.release()
             } catch (e: Exception) {
-                Timber.e(e, "extractBatch: Error releasing MediaMetadataRetriever")
+                // silenced
             }
         }
 
@@ -122,18 +115,14 @@ open class ThumbnailExtractorBatch(
             retriever.setDataSource(context, uri)
             val bitmap = extractFrameAt(retriever, positionMs, width, height, ThumbnailQuality.HIGH)
 
-            val elapsedTime = System.currentTimeMillis() - startTime
-            Timber.d("extractSingle: Completed in ${elapsedTime}ms for frame at ${positionMs}ms")
-
             bitmap
         } catch (e: Exception) {
-            Timber.e(e, "extractSingle: Failed to extract frame at ${positionMs}ms")
             null
         } finally {
             try {
                 retriever.release()
             } catch (e: Exception) {
-                Timber.e(e, "extractSingle: Error releasing MediaMetadataRetriever")
+                // silenced
             }
         }
     }
@@ -275,8 +264,6 @@ open class ThumbnailExtractorBatch(
                 frame
             }
         } catch (e: Exception) {
-            Timber.tag("ThumbnailAspectMonitor").e(e, "❌ EXCEÇÃO durante extração na posição ${positionMs}ms: ${e.message}")
-            Timber.w(e, "extractFrameAt: Error extracting frame at ${positionMs}ms")
             null
         }
     }

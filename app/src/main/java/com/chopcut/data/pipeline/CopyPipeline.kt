@@ -14,7 +14,6 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import timber.log.Timber
 import java.io.File
 
 class CopyPipeline(
@@ -32,7 +31,6 @@ class CopyPipeline(
     @OptIn(FlowPreview::class)
     fun trim(uri: Uri, ranges: List<TimeRange>): Flow<Result<File>> = flow {
         val timer = TimeTracker.start("trim")
-        Timber.d("Starting trim operation for $uri with ${ranges.size} range(s)")
 
         val outputFile = videoRepository.createTempFile(".mp4")
 
@@ -67,7 +65,6 @@ class CopyPipeline(
                     metadata.rotation
                 }
 
-                Timber.d("Video rotation: format=${rotationFromFormat}°, metadata=${metadata.rotation}°")
 
                 // Create a clean output format with essential fields
                 val outputVideoFormat = MediaFormat()
@@ -112,7 +109,6 @@ class CopyPipeline(
                     val startUs = range.startMs * 1000
                     val endUs = range.endMs * 1000
 
-                    Timber.d("Processing range ${index + 1}/${ranges.size}: [${range.startMs}ms, ${range.endMs}ms], offsetUs=${offsetUs}")
 
                     // Create fresh extractors for each range to avoid seek issues
                     val rangeVideoExtractor = MediaExtractor().apply { setDataSource(context, uri, null) }
@@ -143,7 +139,6 @@ class CopyPipeline(
                 try {
                     muxer.stop()
                 } catch (e: Exception) {
-                    Timber.w(e, "Muxer stop failed (may already be stopped)")
                 }
                 emit(Result.success(outputFile))
 
@@ -153,11 +148,9 @@ class CopyPipeline(
                 try {
                     muxer?.release()
                 } catch (e: Exception) {
-                    Timber.w(e, "Muxer release failed (may already be released)")
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error during trim operation")
             emit(Result.failure(e))
             if (outputFile.exists()) {
                 outputFile.delete()
@@ -181,7 +174,6 @@ class CopyPipeline(
             return@flow
         }
 
-        Timber.d("Starting concat operation for ${uris.size} video(s)")
 
         val outputFile = videoRepository.createTempFile(".mp4")
 
@@ -232,7 +224,6 @@ class CopyPipeline(
                 // Preserve rotation from first video
                 if (firstMetadata.rotation != 0) {
                     outputVideoFormat.setInteger(MediaFormat.KEY_ROTATION, firstMetadata.rotation)
-                    Timber.d("Preserving video rotation for concat: ${firstMetadata.rotation}°")
                 }
 
                 val videoTrackOutputIndex = muxer.addTrack(outputVideoFormat)
@@ -248,7 +239,6 @@ class CopyPipeline(
 
                 // Process each source
                 sources.forEachIndexed { index, source ->
-                    Timber.d("Processing source ${index + 1}/${sources.size}")
 
                     // Copy video track
                     copyTrack(
@@ -278,14 +268,12 @@ class CopyPipeline(
                 }
 
                 muxer.stop()
-                Timber.d("Concat completed successfully: ${outputFile.absolutePath}")
                 emit(Result.success(outputFile))
 
             } finally {
                 muxer?.release()
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error during concat operation")
             emit(Result.failure(e))
             if (outputFile.exists()) {
                 outputFile.delete()
@@ -325,7 +313,6 @@ class CopyPipeline(
         extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
         val actualStartUs = extractor.sampleTime
 
-        Timber.d("processTrack: requestedStart=${startUs}, actualStart=${actualStartUs}, end=${endUs}, offset=${offsetUs}")
 
         val buffer = MediaCodec.BufferInfo()
         val byteBuffer = java.nio.ByteBuffer.allocate(1024 * 1024)
@@ -336,18 +323,15 @@ class CopyPipeline(
         while (true) {
             val sampleSize = extractor.readSampleData(byteBuffer, 0)
             if (sampleSize < 0) {
-                Timber.d("processTrack: No more samples (sampleSize=$sampleSize)")
                 break
             }
 
             val sampleTime = extractor.sampleTime
             if (sampleTime == -1L) {
-                Timber.d("processTrack: Reached end (sampleTime=-1)")
                 break
             }
 
             if (sampleTime >= endUs) {
-                Timber.d("processTrack: Reached endUs, breaking. sampleTime=${sampleTime} >= endUs=${endUs}")
                 break
             }
 
@@ -360,7 +344,6 @@ class CopyPipeline(
                 if (!firstSampleWritten) {
                     buffer.flags = buffer.flags or MediaCodec.BUFFER_FLAG_KEY_FRAME
                     firstSampleWritten = true
-                    Timber.d("processTrack: First sample written at ${sampleTime}, flags=${buffer.flags}")
                 }
 
                 muxer.writeSampleData(outputTrackIndex, byteBuffer, buffer)
@@ -370,7 +353,6 @@ class CopyPipeline(
             extractor.advance()
         }
 
-        Timber.d("processTrack: Completed. Wrote $sampleCount samples")
         onProgress(1f)
     }
 

@@ -60,7 +60,6 @@ import com.chopcut.utils.FormatUtils
 import com.chopcut.data.thumbnail.ThumbnailStripManager
 import com.chopcut.data.local.PreferencesManager
 import kotlinx.coroutines.NonCancellable
-import timber.log.Timber
 import androidx.compose.animation.core.rememberInfiniteTransition
 import com.chopcut.ui.theme.ChopCutMonoFont
 import com.chopcut.data.model.ThumbnailQuality
@@ -129,7 +128,6 @@ fun TimelineEditor(
              
              // Log apenas quando a velocidade mudar significativamente
              if (scrollVelocity > 1000f || scrollVelocity < 100f) {
-                 Timber.v("Scroll velocity: ${scrollVelocity.toInt()} px/ms")
              }
          }
      
@@ -277,7 +275,6 @@ fun TimelineEditor(
                     isPlaying = playing
                 }
                 override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                    Timber.tag("TimelineEditor").e(error, "ExoPlayer error: ${error.message}")
                     val cause = error.cause
                     // Check for SecurityException (Permission denied)
                     val isPermError = cause?.toString()?.contains("SecurityException") == true || 
@@ -784,34 +781,6 @@ fun TimelineEditor(
                        val frameTimeMs = (System.nanoTime() - frameStartTime) / 1_000_000
                        val currentTime = System.currentTimeMillis()
 
-                       if (currentTime - lastLogTime.longValue > 1000) {
-                           frameCount.intValue++
-                           Timber.i("""
-                               ═══════════════════════════════════════════════════════
-                               TIMELINE PERFORMANCE LOG (Frame #${frameCount.intValue})
-                               ═══════════════════════════════════════════════════════
-                               ✅ OTIMIZAÇÃO ATIVA: Renderização por STRIP
-                               ────────────────────────────────────────────────
-                               📊 MÉTRICAS DO FRAME:
-                               • Draw calls: ${drawCallCount.intValue}
-                               • Strips visíveis: ${visibleSegmentIndices.size}
-                               • Frame time: ${frameTimeMs}ms
-                               • FPS estimado: ${if (frameTimeMs > 0) 1000f / frameTimeMs else 60f} fps
-                               ────────────────────────────────────────────────
-                               📐 CONFIGURAÇÃO:
-                               • thumbsPerStrip: $thumbsPerStrip
-                               • thumbWidth: ${thumbW.toInt()}px
-                               • thumbHeight: ${thumbH.toInt()}px
-                               • pxPerSecond: ${pxPerSecond.toInt()}px
-                               • Timeline width: ${timelineWidth.toInt()}px
-                               ────────────────────────────────────────────────
-                               📈 PERFORMANCE (vs implementação antiga):
-                               • Draw calls redução: ~${(endSecond - startSecond + 1) / visibleSegmentIndices.size.coerceAtLeast(1)}x menos
-                               • Iterações: ${visibleSegmentIndices.size} strips (antigo: ${endSecond - startSecond + 1} frames)
-                               ═══════════════════════════════════════════════════════
-                           """.trimIndent())
-                           lastLogTime.longValue = currentTime
-                       }
                      }
 
                         // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.

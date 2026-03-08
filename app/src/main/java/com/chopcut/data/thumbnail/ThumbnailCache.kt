@@ -1,7 +1,6 @@
 package com.chopcut.data.thumbnail
 
 import android.graphics.Bitmap
-import timber.log.Timber
 
 /**
  * Cache LRU (Least Recently Used) para thumbnails de timeline

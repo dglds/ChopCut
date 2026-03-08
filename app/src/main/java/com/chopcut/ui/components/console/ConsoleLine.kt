@@ -1,6 +1,5 @@
 package com.chopcut.ui.components.console
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -8,7 +7,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,22 +21,16 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
-import kotlin.math.max
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import com.chopcut.util.debug.LogLevel
@@ -57,9 +49,12 @@ fun ConsoleLine(
     val hasPendingLogs by viewModel.hasPendingLogs.collectAsStateWithLifecycle()
     val isMultiLine by viewModel.isMultiLine.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val maxLines by viewModel.maxDisplayLines.collectAsStateWithLifecycle()
     val assertsOnly by viewModel.assertsOnly.collectAsStateWithLifecycle()
     val topCountMode by viewModel.topCountMode.collectAsStateWithLifecycle()
+    val position by viewModel.position.collectAsStateWithLifecycle()
+
+    val isHeader = position == ConsoleLineViewModel.ConsolePosition.HEADER
+    val displayLogs = if (isHeader && !topCountMode) logHistory.asReversed() else logHistory
     
     val context = LocalContext.current
     val infiniteTransition = rememberInfiniteTransition(label = "led")
@@ -85,8 +80,12 @@ fun ConsoleLine(
     }
 
     LaunchedEffect(logHistory.size) {
-        if (logHistory.isNotEmpty() && isAtBottom.value) {
-            listState.animateScrollToItem(logHistory.size - 1)
+        if (logHistory.isNotEmpty()) {
+            if (isHeader) {
+                listState.scrollToItem(0)
+            } else if (isAtBottom.value) {
+                listState.animateScrollToItem(logHistory.size - 1)
+            }
         }
     }
 
@@ -191,7 +190,12 @@ fun ConsoleLine(
                     )
                 }
                 IconButton(onClick = { viewModel.togglePosition() }, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.SwapVert, contentDescription = "Swap Position", tint = theme.textColor, modifier = Modifier.size(14.dp))
+                    Icon(
+                        if (isHeader) Icons.Default.VerticalAlignBottom else Icons.Default.VerticalAlignTop,
+                        contentDescription = if (isHeader) "Move to bottom" else "Move to top",
+                        tint = theme.textColor,
+                        modifier = Modifier.size(14.dp)
+                    )
                 }
                 IconButton(onClick = { viewModel.dismiss() }, modifier = Modifier.size(28.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = theme.textColor, modifier = Modifier.size(14.dp))
@@ -223,14 +227,14 @@ fun ConsoleLine(
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    items(logHistory) { log ->
+                    items(displayLogs) { log ->
                         val levelColor = when {
                             log.message.contains("■") || log.message.contains("concluída", ignoreCase = true) -> Color(0xFF4CAF50) // VERDE para asserts/conclusão
                             log.message.contains("▶") || log.message.contains("iniciada", ignoreCase = true) -> Color(0xFF2196F3) // AZUL para início
-                            log.fullText.contains("[ERROR]") || log.message.contains("✕") -> Color(0xFFFF5252) // RED
-                            log.fullText.contains("[WARN]") -> Color(0xFFFFD740) // YELLOW
-                            log.fullText.contains("[INFO]") -> Color(0xFF40C4FF) // CYAN
-                            log.fullText.contains("[VERBOSE]") -> Color(0xFFBDBDBD) // GREY
+                            log.level == LogLevel.ERROR || log.message.contains("✕") -> Color(0xFFFF5252) // RED
+                            log.level == LogLevel.WARN -> Color(0xFFFFD740) // YELLOW
+                            log.level == LogLevel.INFO -> Color(0xFF40C4FF) // CYAN
+                            log.level == LogLevel.VERBOSE -> Color(0xFFBDBDBD) // GREY
                             else -> theme.textColor
                         }
 
@@ -267,6 +271,7 @@ fun ConsoleLine(
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
+                            lineHeight = theme.fontSize.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )

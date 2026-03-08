@@ -7,7 +7,6 @@ import com.chopcut.MainActivity
 import com.chopcut.data.thumbnail.ThumbnailCacheManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import timber.log.Timber
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -48,7 +47,6 @@ class PreloadIntegrationTest {
         val totalSegments = 15
         val durationMs = 45_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando fluxo completo de preload — inicial=$initialSegments, total=$totalSegments")
 
         val startTime = System.currentTimeMillis()
 
@@ -134,7 +132,6 @@ class PreloadIntegrationTest {
         val segmentCount = 30
         val durationMs = 90_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de cancelamento de preload")
 
         val startTime = System.currentTimeMillis()
 
@@ -231,11 +228,9 @@ class PreloadIntegrationTest {
         val segmentsPerVideo = 10
         val durationMs = 30_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de múltiplos vídeos — vídeos=${videos.size}")
 
         runBlocking {
             videos.forEachIndexed { videoIdx, uri ->
-                Timber.tag("TEST_INTEGRATION").i("Preload do vídeo $videoIdx")
 
                 ThumbnailCacheManager.startPreload(
                     uri = uri,
@@ -336,7 +331,6 @@ class PreloadIntegrationTest {
         val segmentCount = 120
         val durationMs = 360_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de pressão de memória — segmentos=$segmentCount")
 
         runBlocking {
             ThumbnailCacheManager.startPreload(
@@ -374,10 +368,8 @@ class PreloadIntegrationTest {
         val segmentCount = 10
         val durationMs = 30_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de persistência de cache")
 
         runBlocking {
-            Timber.tag("TEST_INTEGRATION").i("Primeira execução - preload")
 
             ThumbnailCacheManager.startPreload(
                 uri = uri,
@@ -394,7 +386,6 @@ class PreloadIntegrationTest {
 
             ThumbnailCacheManager.clearMemoryCache()
 
-            Timber.tag("TEST_INTEGRATION").i("Segunda execução - memória limpa")
 
             var hits = 0
             var misses = 0

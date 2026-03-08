@@ -6,7 +6,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.chopcut.MainActivity
 import com.chopcut.data.thumbnail.ThumbnailCacheManager
 import kotlinx.coroutines.*
-import timber.log.Timber
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -49,7 +48,6 @@ class CacheConcurrencyTest {
         val threadCount = 10
         val durationMs = 5_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de leitura concorrente — threads=$threadCount")
 
         val successCount = AtomicInteger(0)
         val exceptionCount = AtomicInteger(0)
@@ -74,11 +72,9 @@ class CacheConcurrencyTest {
                         bitmapHashes[threadId] = hash
                         successCount.incrementAndGet()
                     } else {
-                        Timber.tag("TEST_INTEGRATION").w("⚪ Thread $threadId: strip retornou null")
                     }
                 } catch (e: Exception) {
                     exceptionCount.incrementAndGet()
-                    Timber.tag("TEST_INTEGRATION").e(e, "🔴 Thread $threadId: exceção")
                 }
             }
         }
@@ -103,7 +99,6 @@ class CacheConcurrencyTest {
         val uris = (1..5).map { "content://test/rapid_$it" }
         val durationMs = 3_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de seleção rápida — vídeos=5")
 
         val successCount = AtomicInteger(0)
         val cacheHits = AtomicInteger(0)
@@ -111,7 +106,6 @@ class CacheConcurrencyTest {
         uris.forEachIndexed { idx, uri ->
             runBlocking {
                 try {
-                    Timber.tag("TEST_INTEGRATION").d("Selecionando vídeo $idx: $uri")
 
                     val strip = ThumbnailCacheManager.getStrip(
                         uri = uri,
@@ -126,10 +120,8 @@ class CacheConcurrencyTest {
 
                     if (strip != null) {
                         successCount.incrementAndGet()
-                        Timber.tag("TEST_INTEGRATION").d("✓ Vídeo $idx carregado")
                     }
                 } catch (e: Exception) {
-                    Timber.tag("TEST_INTEGRATION").e(e, "🔴 Vídeo $idx falhou")
                 }
             }
         }
@@ -170,7 +162,6 @@ class CacheConcurrencyTest {
         val segmentCount = 20
         val durationMs = 60_000L
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de escrita concorrente — segmentos=$segmentCount")
 
         val successCount = AtomicInteger(0)
         val startTime = System.currentTimeMillis()
@@ -193,7 +184,6 @@ class CacheConcurrencyTest {
                         successCount.incrementAndGet()
                     }
                 } catch (e: Exception) {
-                    Timber.tag("TEST_INTEGRATION").e(e, "🔴 Segmento $segmentIndex falhou")
                 }
             }
         }
@@ -221,7 +211,6 @@ class CacheConcurrencyTest {
         val durationMs = 5_000L
         val readCount = 10
 
-        Timber.tag("TEST_INTEGRATION").i("Iniciando teste de read-during-write — leituras=$readCount")
 
         val writeJob = launch(Dispatchers.IO) {
             ThumbnailCacheManager.getStrip(
@@ -253,10 +242,8 @@ class CacheConcurrencyTest {
                     )
 
                     if (strip != null) {
-                        Timber.tag("TEST_INTEGRATION").d("Leitura $readId bem-sucedida")
                     }
                 } catch (e: Exception) {
-                    Timber.tag("TEST_INTEGRATION").e(e, "🔴 Leitura $readId falhou")
                 }
             }
         }

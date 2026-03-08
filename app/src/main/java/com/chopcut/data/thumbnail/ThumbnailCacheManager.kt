@@ -17,7 +17,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.File
 import kotlin.math.abs
 
@@ -141,32 +140,11 @@ object ThumbnailCacheManager {
     suspend fun init(context: Context) {
         initLock.withLock {
             if (appContext != null) {
-                Timber.d("ThumbnailCacheManager: Já inicializado, ignorando")
                 return@withLock
             }
             
             appContext = context.applicationContext
             
-            Timber.i("""
-                ╔═════════════════════════════════════════════════════════╗
-                ║          THUMBNAIL CACHE MANAGER - INICIALIZADO        ║
-                ╚═════════════════════════════════════════════════════════╝
-                
-                🗄️  CACHE EM MEMÓRIA (LRU):
-                   • Capacidade: 100 strips (~43MB)
-                   • Auto-eviction: Least Recently Used
-                 
-                💾  CACHE EM DISCO:
-                   • Formato: WEBP (70% qualidade)
-                   • Capacidade: 200MB
-                   • LRU baseado em lastModified
-                 
-                🔗 ARQUITETURA:
-                   • Memória: ThumbnailCache (LRU)
-                   • Disco: ThumbnailStripManager
-                   • Jobs: Tracking inteligente por vídeo/segmento
-                 ╚═════════════════════════════════════════════════════════╝
-            """.trimIndent())
         }
     }
     
@@ -202,7 +180,6 @@ object ThumbnailCacheManager {
             adaptiveStrips = false
         )
 
-        Timber.d("ThumbnailCacheManager: StripManager configured with thumbWidth=$thumbWidth, thumbHeight=$thumbHeight, thumbsPerStrip=$thumbsPerStrip")
     }
 
     /**
@@ -239,7 +216,6 @@ object ThumbnailCacheManager {
         thumbsPerStrip: Int,
         onlyFirstFrame: Boolean = false
     ): Bitmap? {
-        Timber.d("ThumbnailCacheManager.getStrip called: segment=$segmentIndex, duration=$durationMs, size=${thumbWidth}x$thumbHeight, overview=$onlyFirstFrame")
         ensureInitialized()
 
         // ✅ OTIMIZAÇÃO: Configurar stripManager APENAS se realmente necessário
@@ -252,7 +228,6 @@ object ThumbnailCacheManager {
             // Se for overview, não precisamos mudar o thumbsPerStrip do manager fixo
             val targetThumbsPerStrip = if (onlyFirstFrame) 1 else thumbsPerStrip
             configureStripManager(thumbWidth, thumbHeight, targetThumbsPerStrip)
-            Timber.d("ThumbnailCacheManager: Configured manager (ov=$onlyFirstFrame)")
         }
 
         val uriString = uri.toString()
@@ -265,23 +240,17 @@ object ThumbnailCacheManager {
             val result = memoryCache.get(uriString, positionKey)
             if (result != null) {
                 metrics.recordHit()
-                Timber.tag("CacheMetrics").d("🔵 Cache hit — uri=$uriString, segment=$segmentIndex (ov=$onlyFirstFrame)")
                 result
             } else {
                 metrics.recordMiss()
-                Timber.tag("CacheMetrics").d("🟠 Cache miss — uri=$uriString, segment=$segmentIndex, extracting (ov=$onlyFirstFrame)...")
 
                 val strip = stripManager!!.extractSegment(uri, segmentIndex, durationMs, onlyFirstFrame)
                     ?: run {
-                        Timber.e("ThumbnailCacheManager: Failed to extract segment $segmentIndex")
                         throw NoSuchElementException("Failed to extract segment $segmentIndex")
                     }
 
                 val extractionTime = System.currentTimeMillis() - startTime
                 metrics.recordExtraction(extractionTime)
-
-                Timber.tag("CacheMetrics").d("⚪ Extraction completed — segment=$segmentIndex, time=${extractionTime}ms")
-                Timber.d("ThumbnailCacheManager: segment $segmentIndex extracted (${strip.width}x${strip.height})")
 
                 memoryCache.put(uriString, positionKey, strip)
                 strip
@@ -323,9 +292,7 @@ object ThumbnailCacheManager {
                     onResult(strip)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
-                Timber.d("Segment job cancelled: $jobKey")
             } catch (e: Exception) {
-                Timber.e(e, "Failed to load strip: $jobKey")
             } finally {
                 withContext(Dispatchers.Main + NonCancellable) {
                     jobsLock.withLock {
@@ -346,7 +313,6 @@ object ThumbnailCacheManager {
      * Resolve Problema 2: Jobs persistem ao navegar (não cancelam)
      */
     fun cancelJobsForUri(uri: Uri) {
-        Timber.d("Cancelling all jobs for URI: $uri")
         
         scope.launch {
             jobsLock.withLock {
@@ -358,7 +324,6 @@ object ThumbnailCacheManager {
                     segmentJobs[key]?.cancel()
                     segmentJobs.remove(key)
                 }
-                Timber.d("Cancelled ${segmentsToCancel.size + 1} jobs for $uri")
             }
         }
     }
@@ -374,7 +339,6 @@ object ThumbnailCacheManager {
      * @param threshold Distância máxima de segmentos para não cancelar
      */
     fun cancelFarJobs(uri: Uri, currentSegment: Int, threshold: Int = 5) {
-        Timber.d("Checking for far jobs from segment $currentSegment (threshold: $threshold)")
         
         scope.launch {
             jobsLock.withLock {
@@ -386,7 +350,6 @@ object ThumbnailCacheManager {
                     }
                     .filter { (_, segIdx) -> abs(segIdx - currentSegment) > threshold }
                 if (jobsToCancel.isNotEmpty()) {
-                    Timber.d("Cancelling ${jobsToCancel.size} far jobs (distance > $threshold)")
                 }
                 jobsToCancel.forEach { (key, _) ->
                     segmentJobs[key]?.cancel()
@@ -426,13 +389,11 @@ object ThumbnailCacheManager {
                 segmentJobs[key]?.cancel()
                 segmentJobs.remove(key)
             }
-            Timber.d("Cancelled ${segmentsToCancel.size} segment jobs for $uri")
         }
         
         val strips = mutableMapOf<Int, Bitmap>()
 
         // Carregar segmentos iniciais prioritários de forma PARALELA
-        Timber.d("Starting PARALLEL preload for $uri: $initialSegments initial segments out of $segmentCount total")
         val preloadStartTime = System.currentTimeMillis()
 
         // Usar coroutineScope para criar escopo estruturado para async
@@ -445,11 +406,9 @@ object ThumbnailCacheManager {
                         if (strip != null) {
                             segIdx to strip
                         } else {
-                            Timber.w("Failed to preload segment $segIdx/$segmentCount")
                             null
                         }
                     } catch (e: Exception) {
-                        Timber.e(e, "Error preloading segment $segIdx")
                         null
                     }
                 }
@@ -458,13 +417,11 @@ object ThumbnailCacheManager {
             // Aguardar conclusão de todas as extrações e adicionar ao mapa
             jobs.awaitAll().filterNotNull().forEach { (idx, bitmap) ->
                 strips[idx] = bitmap
-                Timber.d("Preloaded segment $idx/$segmentCount")
             }
         }
 
         val preloadElapsedMs = System.currentTimeMillis() - preloadStartTime
         val avgTimePerStrip = if (strips.isNotEmpty()) preloadElapsedMs / strips.size else 0
-        Timber.i("⚡ PARALLEL PRELOAD completed: ${strips.size}/${initialSegments} segments in ${preloadElapsedMs}ms (avg: ${avgTimePerStrip}ms/strip)")
         
         return strips
     }
@@ -495,23 +452,6 @@ object ThumbnailCacheManager {
         val stats = getStats()
         val memStats = memoryCache.getStats()
         
-        Timber.i(memStats.toLogString())
-        
-        Timber.i("""
-            ╔═════════════════════════════════════════════════════════╗
-            ║          THUMBNAIL CACHE MANAGER - JOBS ATIVOS          ║
-            ╚═════════════════════════════════════════════════════════╝
-            
-            🔨 JOBS DE VÍDEO:
-               • Ativos: ${stats.activeVideoJobsCount}
-               • Uso por vídeo: 0 ou 1 (singleton)
-            
-            🎞️  JOBS DE SEGMENTO:
-               • Ativos: ${stats.activeSegmentJobsCount}
-               • Cancelamento inteligente: habilitado
-               • Distância máxima: 5 segmentos
-            ╚═════════════════════════════════════════════════════════╝
-        """.trimIndent())
     }
     
     /**
@@ -519,7 +459,6 @@ object ThumbnailCacheManager {
      */
     fun clearMemoryCache() {
         memoryCache.clear()
-        Timber.d("ThumbnailCacheManager: Memory cache cleared")
     }
     
     /**
@@ -528,7 +467,6 @@ object ThumbnailCacheManager {
     fun clearAll() {
         appContext?.let { ThumbnailStripManager.clearCache(it) }
         clearMemoryCache()
-        Timber.i("ThumbnailCacheManager: All caches cleared")
     }
 
     /**
@@ -538,7 +476,6 @@ object ThumbnailCacheManager {
     fun clearAll(context: Context) {
         ThumbnailStripManager.clearCache(context)
         clearMemoryCache()
-        Timber.i("ThumbnailCacheManager: All caches cleared (with provided context)")
     }
 
     /**
@@ -567,7 +504,6 @@ object ThumbnailCacheManager {
      * Usa logcat tag "CacheMetrics" para fácil filtragem.
      */
     fun logCacheHealth() {
-        Timber.tag("CacheMetrics").i(metrics.getSummary())
     }
 
     /**
@@ -616,7 +552,6 @@ object ThumbnailCacheManager {
      */
     fun resetMetrics() {
         metrics.reset()
-        Timber.tag("CacheMetrics").i("📊 Métricas resetadas")
     }
 
     /**
@@ -663,7 +598,6 @@ object ThumbnailCacheManager {
      */
     fun recordCorruption() {
         metrics.recordCorruption()
-        Timber.tag("CacheMetrics").w("🔴 Corrupção de cache detectada — total=${metrics.cacheCorruptionsDetected}")
     }
 
     /**

@@ -1,7 +1,5 @@
 package com.chopcut.util.logging
 
-import android.util.Log
-import timber.log.Timber
 import java.io.File
 import java.io.FileWriter
 import java.io.IOException
@@ -9,7 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class LocalFileLoggingTree : Timber.Tree() {
+class LocalFileLoggingTree {
 
     private val projectDir = File(System.getProperty("user.dir") ?: ".")
     private val logsDir = File(projectDir, "logs")
@@ -28,69 +26,16 @@ class LocalFileLoggingTree : Timber.Tree() {
         return File(logsDir, "app_errors_$today.txt")
     }
 
-    override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
-        if (priority < Log.ERROR) return
-
-        try {
-            val timestamp = dateFormat.format(Date())
-            val priorityStr = when (priority) {
-                Log.ERROR -> "ERROR"
-                Log.ASSERT -> "ASSERT"
-                else -> return
-            }
-
-            val isOurPackage = t?.stackTrace?.any { it.className.contains("com.chopcut") } ?: true
-            val tagIsOurPackage = tag?.contains("com.chopcut") ?: true
-            
-            if (!isOurPackage && !tagIsOurPackage) return
-
-            val logMessage = buildString {
-                append("[$timestamp] $priorityStr/$tag: $message\n")
-                t?.let {
-                    append(Log.getStackTraceString(it))
-                    append("\n")
-                }
-            }
-
-            synchronized(this) {
-                try {
-                    FileWriter(getCurrentLogFile(), true).use { writer ->
-                        writer.append(logMessage)
-                    }
-                    cleanOldLogs()
-                } catch (e: IOException) {
-                    System.err.println("LocalFileLoggingTree: Failed to write log to file")
-                    e.printStackTrace()
-                }
-            }
-
-        } catch (e: Exception) {
-            System.err.println("LocalFileLoggingTree: Error in logging mechanism")
-            e.printStackTrace()
-        }
+    fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+        // Logging removed
     }
 
     private fun cleanAllLogs() {
-        try {
-            logsDir.listFiles()?.filter { file ->
-                file.name.startsWith("app_errors_")
-            }?.forEach { it.delete() }
-        } catch (e: Exception) {
-            System.err.println("LocalFileLoggingTree: Failed to clean all logs")
-            e.printStackTrace()
-        }
+        // Logging removed
     }
 
     private fun cleanOldLogs() {
-        try {
-            val sevenDaysAgo = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000)
-            logsDir.listFiles()?.filter { file ->
-                file.name.startsWith("app_errors_") && file.lastModified() < sevenDaysAgo
-            }?.forEach { it.delete() }
-        } catch (e: Exception) {
-            System.err.println("LocalFileLoggingTree: Failed to clean old logs")
-            e.printStackTrace()
-        }
+        // Logging removed
     }
 
     fun getLogDir(): File = logsDir

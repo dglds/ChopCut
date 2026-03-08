@@ -8,7 +8,6 @@ import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
 import android.opengl.GLES20
 import android.view.Surface
-import timber.log.Timber
 
 /**
  * Bridge between MediaCodec and OpenGL using EGL context.
@@ -35,7 +34,6 @@ class SurfaceBridge {
      */
     fun initialize() {
         if (initialized) {
-            Timber.w("SurfaceBridge already initialized")
             return
         }
 
@@ -52,7 +50,6 @@ class SurfaceBridge {
                 throw RuntimeException("Unable to initialize EGL14")
             }
 
-            Timber.d("EGL version: ${version[0]}.${version[1]}")
 
             // Choose EGL config
             val configAttribs = intArrayOf(
@@ -96,10 +93,8 @@ class SurfaceBridge {
             }
 
             initialized = true
-            Timber.d("SurfaceBridge initialized successfully")
 
         } catch (e: Exception) {
-            Timber.e(e, "Failed to initialize SurfaceBridge")
             release()
             throw e
         }
@@ -112,7 +107,6 @@ class SurfaceBridge {
         check(initialized) { "SurfaceBridge not initialized" }
 
         if (decoderOutputSurface != null) {
-            Timber.w("Decoder surface already created")
             return decoderOutputSurface!!
         }
 
@@ -126,7 +120,6 @@ class SurfaceBridge {
         // Create output Surface for MediaCodec
         decoderOutputSurface = Surface(surfaceTexture)
 
-        Timber.d("Decoder surface created")
         return decoderOutputSurface!!
     }
 
@@ -137,7 +130,6 @@ class SurfaceBridge {
         check(initialized) { "SurfaceBridge not initialized" }
 
         if (encoderOutputSurface != null) {
-            Timber.w("Encoder surface already created")
             return encoderOutputSurface!!
         }
 
@@ -165,7 +157,6 @@ class SurfaceBridge {
         // Create output Surface for MediaCodec
         encoderOutputSurface = Surface(surfaceTexture)
 
-        Timber.d("Encoder surface created: ${width}x${height}")
         return encoderOutputSurface!!
     }
 
@@ -229,7 +220,6 @@ class SurfaceBridge {
      * Release all resources
      */
     fun release() {
-        Timber.d("Releasing SurfaceBridge")
 
         // Release output surfaces
         decoderOutputSurface?.release()
@@ -261,7 +251,6 @@ class SurfaceBridge {
         }
 
         initialized = false
-        Timber.d("SurfaceBridge released")
     }
 
     private fun createEGLSurfaceFromSurfaceTexture(surfaceTexture: SurfaceTexture): EGLSurface {

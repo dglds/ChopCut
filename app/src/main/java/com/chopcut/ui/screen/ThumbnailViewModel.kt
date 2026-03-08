@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
-import timber.log.Timber
 
 /**
  * ViewModel especializada para gerenciar thumbnail strips.
@@ -74,7 +73,6 @@ class ThumbnailViewModel(
      */
     fun loadAllStripsSequentially(uri: Uri, durationMs: Long) {
         if (activeLoadingUri == uri && loadingJob?.isActive == true) {
-            Timber.d("Sequencial loading já em andamento para $uri")
             return
         }
 
@@ -83,7 +81,6 @@ class ThumbnailViewModel(
         
         loadingJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                Timber.i("Iniciando CARREGAMENTO SEQUENCIAL PERSISTENTE para $uri")
                 
                 // Garantir stripManager configurado
                 if (stripManager == null) {
@@ -102,7 +99,6 @@ class ThumbnailViewModel(
                     )
                 }
 
-                Timber.i("ThumbnailViewModel: Iniciando CARREGAMENTO SEQUENCIAL (LOD Estágio 2) para $uri")
                 
                 val totalSegments = stripManager?.getSegmentCount(durationMs) ?: 0
                 _totalSegments.value = totalSegments
@@ -115,10 +111,8 @@ class ThumbnailViewModel(
                     onlyFirstFrame = false
                 )
                 
-                Timber.i("Finalizado CARREGAMENTO SEQUENCIAL para $uri")
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
-                    Timber.e(e, "Falha no carregamento sequencial")
                 }
             }
         }
@@ -131,10 +125,6 @@ class ThumbnailViewModel(
      * @param stripsToPreload Número de strips a carregar (padrão: 6)
      */
     fun preload(uri: Uri, stripsToPreload: Int = 6) {
-        Timber.d("=== ThumbnailViewModel.preload CALLED ===")
-        Timber.d("uri: $uri")
-        Timber.d("stripsToPreload: $stripsToPreload")
-        Timber.d("activeLoadingUri: $activeLoadingUri")
         
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -143,13 +133,10 @@ class ThumbnailViewModel(
                 _strips.value = emptyMap()
                 _totalSegments.value = 0
                 
-                Timber.d("=== ThumbnailViewModel.preload STARTED ===")
-                Timber.d("URI: $uri, strips to preload: $stripsToPreload")
                 
                 // 1. Obter metadados do vídeo
                 val videoInfo = videoRepository.getMetadata(uri)
                 if (videoInfo == null) {
-                    Timber.e("VideoInfo is null")
                     _uiState.value = ThumbnailUiState.Error("Metadados não disponíveis")
                     return@launch
                 }
@@ -172,19 +159,15 @@ class ThumbnailViewModel(
                 val hasCache = com.chopcut.data.thumbnail.ThumbnailCacheManager.hasInitialStripsCached(uri, totalSegments)
                 _isCached.value = hasCache
                 if (hasCache) {
-                    Timber.i("ThumbnailViewModel: Cache Hit inicial detectado para $uri")
                 }
 
-                Timber.d("Total segments: $totalSegments")
 
                 // Carregar TODOS os segmentos do vídeo
                 val effectiveStripsToPreload = totalSegments
 
-                Timber.d("Carregando $effectiveStripsToPreload segmentos (total)")
                 
                 // 3. Carregar em Dois Estágios (LOD)
                 // Estágio 1: Apenas o primeiro frame de cada strip (Rápido!)
-                Timber.i("ThumbnailViewModel: Iniciando ESTÁGIO 1 (Overview)")
                 val overviewStrips = extractThumbnailsLOD(
                     uri = uri,
                     totalSegments = totalSegments,
@@ -197,12 +180,10 @@ class ThumbnailViewModel(
                 
                 // Notificar que a visualização básica está pronta
                 _uiState.value = ThumbnailUiState.Ready(overviewStrips.size, totalSegments)
-                Timber.i("ThumbnailViewModel: ESTÁGIO 1 COMPLETO. Editor liberado.")
 
                 // Estágio 2: Preencher o resto em background (Sem bloquear a UI)
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
-                        Timber.i("ThumbnailViewModel: Iniciando ESTÁGIO 2 (Detailing)")
                         extractThumbnailsLOD(
                             uri = uri,
                             totalSegments = totalSegments,
@@ -210,20 +191,14 @@ class ThumbnailViewModel(
                             onlyFirstFrame = false // Carrega o resto
                         )
                         _thumbnailProgress.value = 1f
-                        Timber.i("ThumbnailViewModel: ESTÁGIO 2 COMPLETO. Todos os frames carregados.")
                     } catch (e: Exception) {
-                        Timber.e(e, "ThumbnailViewModel: Erro no Estágio 2")
                     }
                 }
                 
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
-                    Timber.e(e, "Preload FAILED")
-                    Timber.e("Error message: ${e.message}")
-                    Timber.e("Stack trace: ${e.stackTraceToString()}")
                     _uiState.value = ThumbnailUiState.Error(e.message ?: "Erro desconhecido")
                 } else {
-                    Timber.w("Preload CANCELLED")
                 }
             }
         }
@@ -259,10 +234,8 @@ class ThumbnailViewModel(
                         }
                     }
                     trimMemory() // Evitar OOM durante scroll
-                    Timber.d("Strip $segmentIndex carregada")
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Failed to load strip $segmentIndex")
             }
         }
     }
@@ -290,8 +263,6 @@ class ThumbnailViewModel(
         val count = _strips.value.size
         val result = count >= requiredStrips
         
-        Timber.d("hasEnoughStrips check: required=$requiredStrips, " +
-                "available=$count, result=$result")
         
         return result
     }
@@ -306,8 +277,6 @@ class ThumbnailViewModel(
      * liberação de memória quando necessário.
      */
     fun clear() {
-        Timber.d("Clearing ThumbnailViewModel")
-        Timber.d("NOTA: Não recicla bitmaps para não quebrar cache do ThumbnailCacheManager")
 
         // NÃO recicla bitmaps - eles podem estar sendo usados pelo cache
         // _strips.value.values.forEach { bitmap ->
@@ -330,7 +299,6 @@ class ThumbnailViewModel(
     private fun trimMemory() {
         val currentStrips = _strips.value
         if (currentStrips.size > 500) {
-            Timber.d("ThumbnailViewModel: Trimming memory (size=${currentStrips.size})")
             // Manter os últimos 500 adicionados (FIFO)
             val keysToRemove = currentStrips.keys.toList().take(currentStrips.size - 500)
             _strips.update { current ->
@@ -354,7 +322,6 @@ class ThumbnailViewModel(
         val defaultThumbWidth = (60 * density).toInt().coerceAtLeast(1)
         val defaultThumbHeight = (defaultThumbWidth / 1.77f).toInt().coerceAtLeast(1)
         
-        Timber.d("extractThumbnailsLOD: total=$totalSegments, onlyFirstFrame=$onlyFirstFrame, density=$density")
         
         val batchSize = 5 
         

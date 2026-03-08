@@ -17,7 +17,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.File
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.yield
@@ -102,16 +101,13 @@ class ThumbnailExtractor(
             }
 
             frame?.also {
-                Timber.d("Extracted thumbnail ($quality) at ${positionMs}ms: ${width}x${height}")
             }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to extract thumbnail ($quality) at ${positionMs}ms")
             null
         } finally {
             try {
                 retriever.release()
             } catch (e: Exception) {
-                Timber.e(e, "Error releasing MediaMetadataRetriever")
             }
         }
     }
@@ -153,10 +149,8 @@ class ThumbnailExtractor(
                     taskId = destFile.name,
                     durationMs = saveDuration
                 ))
-                Timber.d("Thumbnail saved to ${destFile.absolutePath} (rot: $rotation)")
                 true
             } catch (e: Exception) {
-                Timber.e(e, "Failed to save thumbnail to file")
                 false
             } finally {
                 bitmap?.recycle()
@@ -192,7 +186,6 @@ class ThumbnailExtractor(
                 val intervalMs = 1000L / settings.thumbsPerSecond
                 val totalThumbnails = (durationMs / intervalMs).toInt()
 
-                Timber.d("Extracting $totalThumbnails thumbnails from ${durationMs}ms video")
 
                 // Emit initial progress
                 trySend(
@@ -243,7 +236,6 @@ class ThumbnailExtractor(
                             )
                         }
                     } catch (e: Exception) {
-                        Timber.w(e, "Failed to extract thumbnail at index $i (${positionMs}ms)")
                     }
 
                     // Recycle bitmap after use to free memory
@@ -261,15 +253,12 @@ class ThumbnailExtractor(
                     )
                 )
 
-                Timber.d("Extracted $totalThumbnails thumbnails")
 
             } catch (e: Exception) {
-                Timber.e(e, "Failed to extract thumbnails with progress")
             } finally {
                 try {
                     retriever.release()
                 } catch (e: Exception) {
-                    Timber.e(e, "Error releasing MediaMetadataRetriever")
                 }
             }
 
@@ -310,7 +299,6 @@ class ThumbnailExtractor(
                 val intervalMs = 1000L / settings.thumbsPerSecond
                 val totalThumbnails = (durationMs / intervalMs).toInt()
 
-                Timber.d("Extracting $totalThumbnails thumbnails to ${outputDir.absolutePath}")
 
                 // Emit initial progress
                 trySend(
@@ -369,7 +357,6 @@ class ThumbnailExtractor(
                                 queueSize = totalThumbnails - (i + 1)
                             ))
 
-                            Timber.d("Saved thumbnail ${i + 1}/$totalThumbnails to ${outputFile.name}")
 
                             // Yield to avoid blocking
                             yield()
@@ -383,7 +370,6 @@ class ThumbnailExtractor(
                             )
                         }
                     } catch (e: Exception) {
-                        Timber.w(e, "Failed to extract/save thumbnail at index $i (${positionMs}ms)")
                     }
 
                     // Recycle bitmap after use to free memory
@@ -401,15 +387,12 @@ class ThumbnailExtractor(
                     )
                 )
 
-                Timber.d("Extracted $totalThumbnails thumbnails to ${outputDir.absolutePath}")
 
             } catch (e: Exception) {
-                Timber.e(e, "Failed to extract thumbnails to directory")
             } finally {
                 try {
                     retriever.release()
                 } catch (e: Exception) {
-                    Timber.e(e, "Error releasing MediaMetadataRetriever")
                 }
             }
 
@@ -447,14 +430,12 @@ class ThumbnailExtractor(
                 ?.toLongOrNull() ?: 0L
 
             if (durationMs <= 0) {
-                Timber.w("Invalid video duration: $durationMs")
                 return@withContext emptyList()
             }
 
             // Calculate interval between thumbnails
             val intervalMs = durationMs / (count + 1)
 
-            Timber.d("Extracting $count thumbnails from ${durationMs}ms video (interval: ${intervalMs}ms)")
 
             // Extract thumbnails at regular intervals
             for (i in 1..count) {
@@ -480,19 +461,15 @@ class ThumbnailExtractor(
                 frame?.let { thumbnails.add(it) }
 
                 if (frame == null) {
-                    Timber.w("Failed to extract thumbnail at index $i (${positionMs}ms)")
                 }
             }
 
-            Timber.d("Extracted ${thumbnails.size}/${count} thumbnails")
 
         } catch (e: Exception) {
-            Timber.e(e, "Failed to extract thumbnail strip")
         } finally {
             try {
                 retriever.release()
             } catch (e: Exception) {
-                Timber.e(e, "Error releasing MediaMetadataRetriever")
             }
         }
 
@@ -569,9 +546,7 @@ class ThumbnailExtractor(
                 }
 
                 if (croppedBitmap != null) {
-                    Timber.d("Extracted and cropped thumbnail at ${positionMs}ms: ${width}x${height}")
                 } else {
-                    Timber.w("Failed to extract thumbnail at ${positionMs}ms")
                 }
 
                 croppedBitmap
@@ -580,13 +555,11 @@ class ThumbnailExtractor(
             thumbnails
 
         } catch (e: Exception) {
-            Timber.e(e, "Failed to extract thumbnails")
             emptyList()
         } finally {
             try {
                 retriever.release()
             } catch (e: Exception) {
-                Timber.e(e, "Error releasing MediaMetadataRetriever")
             }
         }
     }
@@ -627,7 +600,6 @@ class ThumbnailExtractor(
 
             val intervalMs = durationMs / (columns * rows + 1)
 
-            Timber.d("Extracting ${columns}x${rows} thumbnail grid")
 
             val grid = mutableListOf<List<Bitmap?>>()
 
@@ -658,13 +630,11 @@ class ThumbnailExtractor(
             grid
 
         } catch (e: Exception) {
-            Timber.e(e, "Failed to extract thumbnail grid")
             emptyList()
         } finally {
             try {
                 retriever.release()
             } catch (e: Exception) {
-                Timber.e(e, "Error releasing MediaMetadataRetriever")
             }
         }
     }
@@ -701,7 +671,6 @@ class ThumbnailExtractor(
                 val intervalMs = ThumbnailConstants.Timing.INTERVAL_CALCULATION_DIVISOR / settings.thumbsPerSecond
                 val totalThumbnails = (durationMs / intervalMs).toInt()
 
-                Timber.d("Extracting filmstrip: $totalThumbnails thumbs from ${durationMs}ms video")
 
                 // Emit initial progress
                 trySend(
@@ -765,7 +734,6 @@ class ThumbnailExtractor(
                             yield()
                         }
                     } catch (e: Exception) {
-                        Timber.w(e, "Failed to extract thumbnail at index $i")
                     }
                 }
 
@@ -794,7 +762,6 @@ class ThumbnailExtractor(
                         thumb.recycle()
                     }
 
-                    Timber.d("Created filmstrip: ${finalWidth}x$thumbHeight from ${bitmaps.size} thumbs")
 
                     // Emit final result
                     trySend(
@@ -808,12 +775,10 @@ class ThumbnailExtractor(
                 }
 
             } catch (e: Exception) {
-                Timber.e(e, "Failed to extract filmstrip")
             } finally {
                 try {
                     retriever.release()
                 } catch (e: Exception) {
-                    Timber.e(e, "Error releasing MediaMetadataRetriever")
                 }
             }
 
@@ -863,9 +828,7 @@ class ThumbnailExtractor(
                             filmstrip.compress(compressFormat, settings.quality, out)
                         }
 
-                        Timber.d("Saved filmstrip to ${finalFile.absolutePath}")
                     } catch (e: Exception) {
-                        Timber.e(e, "Failed to save filmstrip to file")
                     } finally {
                         filmstrip.recycle()
                     }

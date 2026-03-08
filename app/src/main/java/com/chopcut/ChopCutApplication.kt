@@ -7,7 +7,6 @@ import com.chopcut.data.thumbnail.PerformanceMonitor
 import com.chopcut.util.logging.FileLoggingTree
 import com.chopcut.util.logging.LocalFileLoggingTree
 import com.chopcut.data.local.PreferencesManager
-import timber.log.Timber
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +24,6 @@ class ChopCutApplication : Application() {
          * Limpa cache de memória (LRU) e cache de disco
          */
         fun clearThumbnailCache() {
-            Timber.i("🧹 Limpando cache de thumbnails (chamada manual)")
             ThumbnailCacheManager.clearAll()
         }
     }
@@ -37,24 +35,18 @@ class ChopCutApplication : Application() {
 
         // Setup Timber for logging
         if (BuildConfig.DEBUG) {
-            Timber.plant(Timber.DebugTree())
-            Timber.plant(LocalFileLoggingTree())
         }
 
         // Setup File Logger (no dispositivo)
-        Timber.plant(FileLoggingTree(this))
 
         // Setup global exception handler
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            Timber.e(throwable, "FATAL: Uncaught Exception in thread: ${thread.name}")
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
         // Inicializar ThumbnailCacheManager singleton (thread-safe)
-        Timber.d("ChopCutApplication: Chamando ThumbnailCacheManager.initSync()")
         ThumbnailCacheManager.initSync(this)
-        Timber.d("ChopCutApplication: ThumbnailCacheManager.initSync() completado")
         
         // Inicializar Telemetria de Performance
         PerformanceMonitor.init(this)
@@ -76,19 +68,6 @@ class ChopCutApplication : Application() {
     private fun clearThumbnailCacheOnStartup() {
         val prefsManager = PreferencesManager(this)
         val clearCacheOnStartup = prefsManager.clearCacheOnStartup
-
-        Timber.i("""
-            ╔═══════════════════════════════════════════════════════╗
-            ║          LIMPEZA DE CACHE AO INICIAR APP                   ║
-            ╚═══════════════════════════════════════════════════════╝
-
-            ⚙️  Configuração:
-               • clearCacheOnStartup: $clearCacheOnStartup
-
-            ${if (clearCacheOnStartup) "✅ Cache será limpo ao iniciar" else "❌ Cache NÃO será limpo ao iniciar"}
-
-            ═══════════════════════════════════════════════════════
-        """.trimIndent())
 
         if (clearCacheOnStartup) {
             CoroutineScope(Dispatchers.IO).launch {
@@ -112,24 +91,6 @@ class ChopCutApplication : Application() {
                         val sizeAfter = 0L
                         val sizeSaved = sizeBefore - sizeAfter
 
-                        Timber.i("""
-                            ╔═══════════════════════════════════════════════════════╗
-                            ║              CACHE LIMPO COM SUCESSO                      ║
-                            ╚═══════════════════════════════════════════════════════╝
-
-                            📊 ESTATÍSTICAS:
-                            • Arquivos deletados: $filesDeleted
-                            • Espaço liberado: ${sizeSaved / 1024 / 1024}MB
-
-                            🗄️  CACHE DISCO:
-                            • Diretório: ${cacheDir.absolutePath}
-                            • Status: LIMPO
-
-                            🧠 CACHE MEMÓRIA:
-                            • Status: LIMPO
-
-                            ═══════════════════════════════════════════════════════
-                        """.trimIndent())
                     }
 
                     // Logar estatísticas DEPOIS da limpeza
@@ -137,7 +98,6 @@ class ChopCutApplication : Application() {
                     logCacheStats("DEPOIS da limpeza", statsAfter)
 
                 } catch (e: Exception) {
-                    Timber.e(e, "❌ Erro ao limpar cache no startup")
                 }
             }
         }
@@ -147,22 +107,5 @@ class ChopCutApplication : Application() {
      * Loga estatísticas detalhadas do cache
      */
     private fun logCacheStats(title: String, stats: ThumbnailCacheManager.CacheStats) {
-        Timber.i("""
-            ╔═══════════════════════════════════════════════════════╗
-            ║      $title                    ║
-            ╚═══════════════════════════════════════════════════════╝
-
-            🧠 CACHE DE MEMÓRIA:
-            • Tamanho atual: ${stats.memoryCacheSize} / ${stats.memoryCacheMaxSize}
-            • Hit rate: ${"%.2f".format(stats.memoryCacheHitRate)}%
-            • Hits: ${stats.memoryCacheHits}
-            • Misses: ${stats.memoryCacheMisses}
-
-            🔨 JOBS ATIVOS:
-            • Jobs de vídeo: ${stats.activeVideoJobsCount}
-            • Jobs de segmento: ${stats.activeSegmentJobsCount}
-
-            ═══════════════════════════════════════════════════════
-        """.trimIndent())
     }
 }

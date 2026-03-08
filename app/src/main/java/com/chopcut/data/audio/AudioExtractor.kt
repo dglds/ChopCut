@@ -15,7 +15,6 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import timber.log.Timber
 import java.io.File
 
 /**
@@ -42,7 +41,6 @@ class AudioExtractor(
         outputFormat: AudioFormat = AudioFormat.AAC
     ): Flow<Result<File>> = flow {
         val timer = TimeTracker.start("audio_extract")
-        Timber.d("Starting audio extraction for $uri")
 
         val outputFile = videoRepository.createTempFile(outputFormat.extension)
 
@@ -53,12 +51,7 @@ class AudioExtractor(
                 throw IllegalArgumentException("No audio track found in video")
             }
 
-            Timber.d("Audio metadata: codec=${metadata.codec}, " +
-                     "sampleRate=${metadata.sampleRate}, " +
-                     "channels=${metadata.channelCount}, " +
-                     "bitrate=${metadata.bitrateKbps}kbps, " +
-                     "duration=${metadata.durationMs}ms")
-
+            
             var extractor: MediaExtractor? = null
             var muxer: MediaMuxer? = null
 
@@ -85,7 +78,6 @@ class AudioExtractor(
                 muxer.start()
 
                 setupTimer.end()
-                Timber.d("Muxer setup completed, output track: $outputTrackIndex")
 
                 // Copy audio samples
                 val copyTimer = TimeTracker.start("audio_extract_copy")
@@ -99,10 +91,7 @@ class AudioExtractor(
 
                 muxer.stop()
 
-                Timber.d("TIME: audio_extract completed: ${outputFile.absolutePath}")
-                Timber.d("TIME: samples_copied: $samplesCopied")
-                Timber.d("TIME: output_size: ${outputFile.length()} bytes")
-
+                
                 emit(Result.success(outputFile))
 
             } finally {
@@ -110,7 +99,6 @@ class AudioExtractor(
                 muxer?.release()
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error during audio extraction")
             emit(Result.failure(e))
             if (outputFile.exists()) {
                 outputFile.delete()
@@ -174,7 +162,6 @@ class AudioExtractor(
             extractor.advance()
         }
 
-        Timber.d("TIME: copied $sampleCount samples, ${totalBytes / 1024}KB")
         return sampleCount
     }
 }

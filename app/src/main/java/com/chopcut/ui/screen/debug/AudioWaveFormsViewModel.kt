@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * ViewModel para o componente AudioWaveForms
@@ -40,7 +39,6 @@ class AudioWaveFormsViewModel(application: Application) : AndroidViewModel(appli
             _uiState.value = AudioWaveFormsUiState.Loading
 
             try {
-                Timber.d("Loading waveform with targetBarCount=$targetBarCount")
 
                 val rawData = audioDataExtractor.extractRawPcmData(
                     uri = uri,
@@ -48,10 +46,8 @@ class AudioWaveFormsViewModel(application: Application) : AndroidViewModel(appli
                 )
 
                 if (rawData.pcmSamples.isEmpty()) {
-                    Timber.w("No audio data found")
                     _uiState.value = AudioWaveFormsUiState.Error("Nenhum dado de áudio encontrado")
                 } else {
-                    Timber.d("Waveform loaded: ${rawData.pcmSamples.size} bars, duration=${rawData.durationMs}ms")
                     _uiState.value = AudioWaveFormsUiState.Ready(
                         amplitudes = rawData.pcmSamples.toList(),
                         durationMs = rawData.durationMs,
@@ -60,7 +56,6 @@ class AudioWaveFormsViewModel(application: Application) : AndroidViewModel(appli
                     )
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Error loading waveform")
                 _uiState.value = AudioWaveFormsUiState.Error(e.message ?: "Erro ao carregar áudio")
             }
         }

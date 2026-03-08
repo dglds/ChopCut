@@ -43,7 +43,6 @@ import com.chopcut.ui.components.buttons.ChopCutSecondaryButton
 import com.chopcut.ui.components.feedback.ErrorState
 import com.chopcut.ui.components.feedback.LoadingState
 import com.chopcut.ui.theme.ChopCutSpacing
-import timber.log.Timber
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)

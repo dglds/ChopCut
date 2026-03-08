@@ -4,7 +4,6 @@ import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.util.Range
 import com.chopcut.data.model.VideoCodec
-import timber.log.Timber
 
 class CodecCapabilities {
 
@@ -20,7 +19,6 @@ class CodecCapabilities {
                 info.supportedTypes.any { it.equals(codec.mimeType, ignoreCase = true) }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error checking encoder for ${codec.displayName}")
             false
         }
     }
@@ -35,7 +33,6 @@ class CodecCapabilities {
                 info.supportedTypes.any { it.equals(codec.mimeType, ignoreCase = true) }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error checking decoder for ${codec.displayName}")
             false
         }
     }
@@ -56,12 +53,10 @@ class CodecCapabilities {
 
         for (codec in priority) {
             if (hasEncoder(codec)) {
-                Timber.d("Selected encoder: ${codec.displayName}")
                 return codec
             }
         }
 
-        Timber.w("No suitable encoder found")
         return null
     }
 
@@ -76,7 +71,6 @@ class CodecCapabilities {
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error getting encoder info for ${codec.displayName}")
             null
         }
     }
@@ -99,7 +93,6 @@ class CodecCapabilities {
             videoCapabilities.isSizeSupported(width, height) &&
             videoCapabilities.areSizeAndRateSupported(width, height, frameRate.toDouble())
         } catch (e: Exception) {
-            Timber.e(e, "Error checking capabilities for ${codec.displayName}")
             false
         }
     }
@@ -114,7 +107,6 @@ class CodecCapabilities {
             val capabilities = info.getCapabilitiesForType(codec.mimeType)
             capabilities.videoCapabilities?.supportedWidths
         } catch (e: Exception) {
-            Timber.e(e, "Error getting resolution range for ${codec.displayName}")
             null
         }
     }
@@ -129,7 +121,6 @@ class CodecCapabilities {
             val capabilities = info.getCapabilitiesForType(codec.mimeType)
             capabilities.videoCapabilities?.bitrateRange
         } catch (e: Exception) {
-            Timber.e(e, "Error getting bitrate range for ${codec.displayName}")
             null
         }
     }
@@ -138,14 +129,10 @@ class CodecCapabilities {
      * Log all available codecs on the device (for debugging)
      */
     fun logAvailableCodecs() {
-        Timber.d("=== Available Codecs ===")
         codecList.codecInfos.forEach { info ->
             val type = if (info.isEncoder) "ENCODER" else "DECODER"
-            Timber.d("$type: ${info.name}")
             info.supportedTypes.forEach { mimeType ->
-                Timber.d("  - $mimeType")
             }
         }
-        Timber.d("========================")
     }
 }

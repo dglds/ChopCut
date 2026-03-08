@@ -49,7 +49,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,7 +105,6 @@ import com.chopcut.ui.theme.SurfaceVariant
 import com.chopcut.ui.theme.TextSecondary
 import com.chopcut.ui.theme.Warning
 import com.chopcut.ui.theme.Waveform
-import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -124,17 +128,10 @@ fun HomeScreen(
 
     // Iniciar preload ao selecionar vídeo
     LaunchedEffect(selectedUri, uiState) {
-        Timber.tag("HomeScreen").d("=== LaunchedEffect TRIGGERED ===")
-        Timber.tag("HomeScreen").d("selectedUri: $selectedUri")
-        Timber.tag("HomeScreen").d("uiState: $uiState")
-        Timber.tag("HomeScreen").d("isPreloadReady: $isPreloadReady")
-
         val uri = selectedUri
         if (uri != null && uiState is HomeUiState.VideoLoaded) {
-            Timber.tag("HomeScreen").d("Conditions met, starting preload")
             preloadViewModel.startPreload(uri)
         } else {
-            Timber.tag("HomeScreen").d("Conditions NOT met for preload — uri!=null:${uri != null}, VideoLoaded:${uiState is HomeUiState.VideoLoaded}")
         }
     }
 
@@ -148,7 +145,6 @@ fun HomeScreen(
         if (isGranted) {
             showGallery = true
         } else {
-            Timber.w("Permission denied for gallery access")
         }
     }
 
@@ -604,6 +600,10 @@ private fun FeatureGrid(onClearCache: () -> Unit) {
                         CacheFeatureCard(
                             diskCacheSize = diskCacheSize.value,
                             onClearCache = onClearCache,
+                            onCacheCleared = {
+                                diskCacheSize.value = 0L
+                                diskCacheFiles.value = 0
+                            },
                             modifier = Modifier.weight(1f)
                         )
                     } else {
@@ -693,6 +693,8 @@ private fun BadgeText(text: String) {
     )
 }
 
+private enum class ClearCacheState { Idle, Clearing, Done }
+
 /**
  * Card de Cache de Thumbnails nos recursos
  * Mostra os bytes de cache e botão para limpar
@@ -701,8 +703,12 @@ private fun BadgeText(text: String) {
 private fun CacheFeatureCard(
     diskCacheSize: Long,
     onClearCache: () -> Unit,
+    onCacheCleared: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var clearState by remember { mutableStateOf(ClearCacheState.Idle) }
+    val scope = rememberCoroutineScope()
+
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
@@ -721,18 +727,36 @@ private fun CacheFeatureCard(
                 color = OnSurface
             )
             Text(
-                text = formatBytes(diskCacheSize),
+                text = when (clearState) {
+                    ClearCacheState.Idle -> formatBytes(diskCacheSize)
+                    ClearCacheState.Clearing -> "Limpando..."
+                    ClearCacheState.Done -> "Cache limpo!"
+                },
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
+                color = if (clearState == ClearCacheState.Done) Success else TextSecondary
             )
         }
 
         ChopCutSecondaryButton(
-            onClick = onClearCache,
-            text = "Limpar"
+            onClick = {
+                scope.launch {
+                    clearState = ClearCacheState.Clearing
+                    withContext(Dispatchers.IO) { onClearCache() }
+                    onCacheCleared()
+                    clearState = ClearCacheState.Done
+                    delay(2000)
+                    clearState = ClearCacheState.Idle
+                }
+            },
+            text = when (clearState) {
+                ClearCacheState.Idle -> "Limpar"
+                ClearCacheState.Clearing -> "Limpando..."
+                ClearCacheState.Done -> "Limpo!"
+            },
+            enabled = clearState == ClearCacheState.Idle
         )
     }
-    }
+}
 
 private fun formatAspectRatio(ratio: Float): String {
     return when {

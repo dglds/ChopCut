@@ -5,7 +5,6 @@ import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.Matrix
 import com.chopcut.data.model.Transform
-import timber.log.Timber
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
@@ -108,7 +107,6 @@ class GLRenderer {
      */
     fun initialize() {
         if (initialized) {
-            Timber.w("GLRenderer already initialized")
             return
         }
 
@@ -155,12 +153,8 @@ class GLRenderer {
             GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
 
             initialized = true
-            Timber.d("GLRenderer initialized successfully")
-            Timber.d("Handles: pos=$positionHandle, texCoord=$textureCoordHandle, mvp=$mvpMatrixHandle, texMat=$textureMatrixHandle, sampler=$textureSamplerHandle")
-            Timber.d("External texture ID: $externalTextureId")
 
         } catch (e: Exception) {
-            Timber.e(e, "Failed to initialize GLRenderer")
             release()
             throw e
         }
@@ -224,7 +218,6 @@ class GLRenderer {
      */
     fun attachSurfaceTexture(surfaceTexture: SurfaceTexture) {
         if (!initialized) {
-            Timber.w("GLRenderer not initialized, cannot attach SurfaceTexture")
             return
         }
         // Detach from any old texture and attach to our external texture
@@ -238,7 +231,6 @@ class GLRenderer {
      */
     fun renderFrame(surfaceTexture: SurfaceTexture): Boolean {
         if (!initialized) {
-            Timber.e("GLRenderer not initialized")
             return false
         }
 
@@ -291,14 +283,12 @@ class GLRenderer {
             // Check for errors
             val error = GLES20.glGetError()
             if (error != GLES20.GL_NO_ERROR) {
-                Timber.e("OpenGL error: $error")
                 return false
             }
 
             return true
 
         } catch (e: Exception) {
-            Timber.e(e, "Error rendering frame")
             return false
         }
     }
@@ -307,7 +297,6 @@ class GLRenderer {
      * Release all resources
      */
     fun release() {
-        Timber.d("Releasing GLRenderer")
 
         if (externalTextureId != 0) {
             GLES20.glDeleteTextures(1, intArrayOf(externalTextureId), 0)
@@ -320,7 +309,6 @@ class GLRenderer {
         }
 
         initialized = false
-        Timber.d("GLRenderer released")
     }
 
     private fun loadShader(type: Int, shaderCode: String): Int {

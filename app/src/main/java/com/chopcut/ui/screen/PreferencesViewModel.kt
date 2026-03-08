@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.File
 
 sealed class PreferencesUiState {
@@ -43,13 +42,11 @@ class PreferencesViewModel(
     fun setCacheEnabled(enabled: Boolean) {
         prefsManager.thumbnailCacheEnabled = enabled
         _isCacheEnabled.value = enabled
-        Timber.i("Thumbnail cache ${if (enabled) "enabled" else "disabled"}")
     }
 
     fun setDebugEnabled(enabled: Boolean) {
         prefsManager.debugEnabled = enabled
         _isDebugEnabled.value = enabled
-        Timber.i("Debug toast ${if (enabled) "enabled" else "disabled"}")
     }
 
     fun deleteSavedVideos() {
@@ -67,7 +64,6 @@ class PreferencesViewModel(
                     )
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Error deleting saved videos")
                 _uiState.value = PreferencesUiState.Error(
                     message = "Erro ao remover vídeos: ${e.message}"
                 )
@@ -91,10 +87,8 @@ class PreferencesViewModel(
                 .forEach { totalBytes += it.length() }
 
             val totalMB = totalBytes / (1024.0 * 1024.0)
-            Timber.d("Thumbnail cache size: ${String.format("%.2f", totalMB)}MB ($totalBytes bytes)")
             totalMB
         } catch (e: Exception) {
-            Timber.e(e, "Error calculating thumbnail cache size")
             0.0
         }
     }
@@ -123,10 +117,8 @@ class PreferencesViewModel(
                 }
             }
 
-            Timber.d("Found ${videoIds.size} videos with cache")
             videoIds.size
         } catch (e: Exception) {
-            Timber.e(e, "Error counting cached videos")
             0
         }
     }
@@ -142,18 +134,14 @@ class PreferencesViewModel(
 
                 // Limpar cache de memória (LRU)
                 ThumbnailCacheManager.clearMemoryCache()
-                Timber.d("Memory cache cleared")
 
                 // Limpar cache de disco
                 ThumbnailStripManager.clearCache(context)
-                Timber.d("Disk cache cleared")
 
                 _uiState.value = PreferencesUiState.Success(
                     message = "Cache de thumbnails limpo com sucesso (memória e disco)."
                 )
-                Timber.i("Thumbnail cache cleared by user (memory + disk)")
             } catch (e: Exception) {
-                Timber.e(e, "Error clearing thumbnail cache")
                 _uiState.value = PreferencesUiState.Error(
                     message = "Erro ao limpar cache: ${e.message}"
                 )

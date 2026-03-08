@@ -8,7 +8,6 @@ import com.chopcut.config.constants.AudioConstants
 import com.chopcut.util.TimeTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -30,7 +29,6 @@ class AudioDataExtractor(
         uri: Uri,
         targetBarCount: Int = 200
     ): AudioRawData = withContext(Dispatchers.IO) {
-        Timber.d("AudioDataExtractor: START - uri=$uri, targetBarCount=$targetBarCount")
         val timer = TimeTracker.start("audio_pcm_extract")
 
         val extractor = MediaExtractor()
@@ -50,7 +48,6 @@ class AudioDataExtractor(
             }
 
             if (audioTrackIndex < 0) {
-                Timber.w("No audio track found")
                 return@withContext AudioRawData.empty()
             }
 
@@ -63,7 +60,6 @@ class AudioDataExtractor(
             val durationUs = format.getLong(MediaFormat.KEY_DURATION)
             val expectedDurationMs = durationUs / 1000
 
-            Timber.d("Audio info: sampleRate=$sampleRate, channelCount=$channelCount, duration=${expectedDurationMs}ms")
 
             // Calcular samplesPerBar baseado no targetBarCount
             val samplesPerBar = if (expectedDurationMs > 0 && targetBarCount > 0) {
@@ -74,7 +70,6 @@ class AudioDataExtractor(
             }
             val estimatedPoints = targetBarCount
 
-            Timber.d("Calculated: samplesPerBar=$samplesPerBar, estimatedPoints=$estimatedPoints")
 
             // FASE 1: Coletar amostras para análise de ruído (primeiros segundos)
             val noiseSamples = mutableListOf<Float>()
@@ -177,7 +172,6 @@ class AudioDataExtractor(
                                         // Parar de coletar ruído depois de ter amostras suficientes
                                         if (!noiseCollected && noiseSamples.size >= NOISE_SAMPLE_SIZE) {
                                             noiseCollected = true
-                                            Timber.d("Noise collection complete: ${noiseSamples.size} samples")
                                         }
                                     }
                                 }
@@ -194,14 +188,12 @@ class AudioDataExtractor(
                         if (inputDone) {
                             tryAgainCount++
                             if (tryAgainCount > maxTryAgain) {
-                                Timber.w("Safety timeout reached")
                                 outputDone = true
                             }
                         }
                     }
                     outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         val newFormat = decoder.outputFormat
-                        Timber.d("Decoder output format changed: $newFormat")
                     }
                 }
             }
@@ -215,7 +207,6 @@ class AudioDataExtractor(
             decoder.release()
 
             val finalDurationMs = (totalSamplesProcessed.toFloat() / (sampleRate * channelCount) * 1000).toLong()
-            Timber.d("Extraction complete: ${pcmData.size} bars, ${totalSamplesProcessed} samples processed, ${finalDurationMs}ms duration")
 
             // FASE 2: Calcular threshold e aplicar processamento de voz
             if (noiseSamples.isNotEmpty()) {
@@ -225,7 +216,6 @@ class AudioDataExtractor(
                 val noiseFloor = sortedNoise.take(noiseSampleSize).average().toFloat()
                 val dynamicThreshold = (noiseFloor * AudioConstants.Quality.DYNAMIC_THRESHOLD_MULTIPLIER).coerceAtLeast(SILENCE_THRESHOLD)
 
-                Timber.d("Noise floor: $noiseFloor, Dynamic threshold: $dynamicThreshold")
 
                 // Aplicar threshold e boost de voz
                 for (i in pcmData.indices) {
@@ -244,7 +234,6 @@ class AudioDataExtractor(
                 }
 
                 val voiceSegments = pcmData.count { it > SILENCE_THRESHOLD * 2 }
-                Timber.d("Voice segments: $voiceSegments/${pcmData.size}")
             }
 
             val extractedDurationMs = expectedDurationMs
@@ -252,7 +241,6 @@ class AudioDataExtractor(
                 (pcmData.size / (extractedDurationMs / 1000.0)).toInt()
             else targetBarCount
 
-            Timber.d("Generated ${pcmData.size} bars. Duration: ${extractedDurationMs}ms")
             timer.end()
 
             val result = AudioRawData(
@@ -264,11 +252,9 @@ class AudioDataExtractor(
             result
 
         } catch (e: OutOfMemoryError) {
-            Timber.e(e, "OutOfMemoryError during PCM extraction - video too large")
             // Retornar waveform vazio em caso de OOM
             AudioRawData.empty()
         } catch (e: Exception) {
-            Timber.e(e, "Error extracting PCM data")
             AudioRawData.empty()
         } finally {
             try {

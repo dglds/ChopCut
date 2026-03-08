@@ -7,7 +7,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * Error state container for ViewModels
@@ -45,12 +44,10 @@ fun ViewModel.launchWithErrorHandling(
         try {
             block()
         } catch (e: ChopCutException) {
-            Timber.e(e, "ChopCutException in ViewModel")
             val errorState = ErrorHandler.handleChopCutException(e)
             errorFlow.value = UiError.from(errorState)
             onError?.invoke(errorState)
         } catch (e: Exception) {
-            Timber.e(e, "Exception in ViewModel")
             val errorState = ErrorHandler.handle(e, context)
             errorFlow.value = UiError.from(errorState)
             onError?.invoke(errorState)
@@ -108,10 +105,8 @@ abstract class ErrorAwareViewModel(
             try {
                 block()
             } catch (e: ChopCutException) {
-                Timber.e(e, "ChopCutException in ViewModel")
                 _error.value = UiError.from(ErrorHandler.handleChopCutException(e))
             } catch (e: Exception) {
-                Timber.e(e, "Exception in ViewModel")
                 _error.value = UiError.from(ErrorHandler.handle(e, context))
             } finally {
                 _isLoading.value = false
@@ -128,10 +123,8 @@ abstract class ErrorAwareViewModel(
         val result = operation()
         ErrorResult.success(result)
     } catch (e: ChopCutException) {
-        Timber.e(e, "ChopCutException in operation")
         ErrorResult.Error(ErrorHandler.handleChopCutException(e))
     } catch (e: Exception) {
-        Timber.e(e, "Exception in operation")
         ErrorResult.Error(ErrorHandler.handle(e, context))
     }
 

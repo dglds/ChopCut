@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * ViewModel para TrimScreen.
@@ -78,33 +77,24 @@ class TrimViewModel(
     private val videoRepository = VideoRepository(application)
 
     init {
-        Timber.d("=== TrimViewModel INIT ===")
-        Timber.d("initialAudioAmplitudes = ${initialAudioAmplitudes?.size ?: "null"}")
-        Timber.d("initialPreloadedStrips = ${initialPreloadedStrips?.size ?: "null"}")
-        Timber.d("videoUri = $videoUri")
-        
         // NOTA: PreloadViewModel (Activity-scoped) gerencia o preload
         // Esta ViewModel não inicia preload próprio
     }
 
     fun setWaveformQuality(quality: WaveformQuality) {
         waveformQuality = quality
-        Timber.d("Waveform quality set to: ${quality.displayName}")
     }
 
     fun loadWaveform(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
-            Timber.d("TrimViewModel: loadWaveform START - uri=$uri")
             _state.update { it.copy(isWaveformLoading = true, waveformError = null) }
             try {
                 val barCount = waveformQuality.calculateBarCount(
                     durationMs = 0,
                     screenWidthDp = 400f
                 )
-                Timber.d("TrimViewModel: calculated barCount=$barCount for quality=${waveformQuality.displayName}")
 
                 val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = barCount)
-                Timber.d("TrimViewModel: rawData received - samples=${rawData.pcmSamples.size}, duration=${rawData.durationMs}ms")
 
                 val threshold = 0.05f
                 val silenceHeight: Float? = null
@@ -124,7 +114,6 @@ class TrimViewModel(
                 )
                 _state.update { it.copy(waveformData = waveformData, isWaveformLoading = false) }
             } catch (e: Exception) {
-                Timber.e(e, "Failed to extract waveform")
                 _state.update { it.copy(waveformData = WaveformData.empty(), isWaveformLoading = false, waveformError = e.message) }
             }
         }
@@ -132,31 +121,25 @@ class TrimViewModel(
 
     fun loadAudioWaveforms(uri: Uri, targetBarCount: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            Timber.d("TrimViewModel: loadAudioWaveforms START - uri=$uri, targetBarCount=$targetBarCount")
             
             if (initialAudioAmplitudes != null) {
                 _state.update { it.copy(
                     audioWaveformsAmplitudes = initialAudioAmplitudes,
                     isAudioWaveformsLoading = false
                 ) }
-                Timber.d("TrimViewModel: Using preloaded audio - ${initialAudioAmplitudes.size} amplitudes")
                 return@launch
             }
             
             _state.update { it.copy(isAudioWaveformsLoading = true, audioWaveformsAmplitudes = emptyList()) }
             try {
                 val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = targetBarCount)
-                Timber.d("TrimViewModel: AudioWaveforms rawData received - samples=${rawData.pcmSamples.size}, duration=${rawData.durationMs}ms")
 
                 val amplitudesList = rawData.pcmSamples.toList()
-                Timber.d("TrimViewModel: Converted to List - ${amplitudesList.size} amplitudes")
                 _state.update { it.copy(
                     audioWaveformsAmplitudes = amplitudesList,
                     isAudioWaveformsLoading = false
                 ) }
-                Timber.d("TrimViewModel: AudioWaveforms loaded - state updated with ${amplitudesList.size} bars")
             } catch (e: Exception) {
-                Timber.e(e, "Failed to extract audio waveforms")
                 _state.update { it.copy(audioWaveformsAmplitudes = emptyList(), isAudioWaveformsLoading = false) }
             }
         }
@@ -167,7 +150,6 @@ class TrimViewModel(
      * Usado para sincronizar dados do AudioViewModel.
      */
     fun updateAudioAmplitudes(amplitudes: List<Float>) {
-        Timber.d("TrimViewModel: Updating audio amplitudes - ${amplitudes.size} samples")
         
         _state.update { it.copy(
             audioWaveformsAmplitudes = amplitudes

@@ -23,7 +23,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.io.FileInputStream
@@ -83,34 +82,6 @@ class ThumbnailStripManager(
         /** Qualidade para compressão das strips */
         private const val COMPRESSION_QUALITY = ThumbnailConstants.Quality.STRIP_COMPRESSION_QUALITY
 
-        init {
-            val optimalThreads = PerformanceConstants.ThreadCounts.calculateOptimalThreads(Runtime.getRuntime().availableProcessors())
-            Timber.tag("ThumbnailStrip").i("""
-                ╔═════════════════════════════════════════════════════════╗
-                ║     THUMBNAIL STRIP MANAGER - CONFIGURAÇÃO             ║
-                ╚═════════════════════════════════════════════════════════╝
-                
-                📊 HARDWARE DETECTADO:
-                   • CPU Cores: ${Runtime.getRuntime().availableProcessors()}
-                   • Threads de extração: $optimalThreads (máximo)
-                   • Threads de I/O: ${ThumbnailConstants.Concurrency.IO_SEMAPHORE_PERMITS} (escrita paralela)
-                 
-                 💡 ESTRATÉGIA ADOTADA:
-                    ${when {
-                        Runtime.getRuntime().availableProcessors() <= 2 -> "→ Baixo custo: ${PerformanceConstants.ThreadCounts.LOW_END} threads (mínimo para overhead)"
-                        Runtime.getRuntime().availableProcessors() <= 4 -> "→ Médio: ${PerformanceConstants.ThreadCounts.MID_RANGE} threads (equilíbrio)"
-                        Runtime.getRuntime().availableProcessors() <= 6 -> "→ High-end: ${PerformanceConstants.ThreadCounts.HIGH_END} threads (alto throughput)"
-                        else -> "→ Muito potente: ${PerformanceConstants.ThreadCounts.MAX} threads (máximo throughput)"
-                    }}
-                 
-                 🚀 OTIMIZAÇÕES HABILITADAS:
-                    ✓ Threads dinâmicas baseadas no hardware
-                    ✓ Escrita paralela (até ${ThumbnailConstants.Concurrency.IO_SEMAPHORE_PERMITS} strips simultâneas)
-                    ✓ Cache LRU em disco (${ThumbnailConstants.Cache.MAX_CACHE_SIZE / 1024 / 1024}MB)
-                    ✓ Compressão WEBP (${ThumbnailConstants.Quality.STRIP_COMPRESSION_QUALITY}% qualidade)
-                 ╚═════════════════════════════════════════════════════════╝
-            """.trimIndent())
-        }
         
         /**
          * Calcula thumbsPerStrip para um segmento específico usando estratégia adaptativa.
@@ -164,10 +135,8 @@ class ThumbnailStripManager(
                 if (cacheDir.exists()) {
                     cacheDir.deleteRecursively()
                     cacheDir.mkdirs() // Recriar pasta vazia
-                    Timber.d("ThumbnailStrip: Cache cleared successfully")
                 }
             } catch (e: Exception) {
-                Timber.e(e, "ThumbnailStrip: Failed to clear cache")
             }
         }
     }
@@ -201,10 +170,6 @@ class ThumbnailStripManager(
             thumbsPerStrip
         }
         
-        if (adaptiveStrips && (segmentIndex == 0 || segmentIndex == totalSegments / 2 || segmentIndex == totalSegments - 1)) {
-            Timber.d("AdaptiveStrip: Segment $segmentIndex/$totalSegments -> $result thumbs")
-        }
-        
         return result
     }
     
@@ -213,19 +178,13 @@ class ThumbnailStripManager(
      */
     fun logAdaptiveStrategy(totalSegments: Int) {
         if (!adaptiveStrips) {
-            Timber.i("AdaptiveStrip: DISABLED - using fixed $thumbsPerStrip thumbs per strip")
             return
         }
-        
-        Timber.i("╔═════════════════════════════════════════════════════════╗")
-        Timber.i("║      ADAPTIVE STRIP STRATEGY - $totalSegments segments    ║")
-        Timber.i("╚═════════════════════════════════════════════════════════╝")
         
         val sampleSegments = listOf(0, 1, 2, 5, 10, 15, 20, 30, 40, totalSegments - 1)
         sampleSegments.filter { it in 0 until totalSegments }.forEach { segIdx ->
             val thumbs = getThumbsPerStripForSegment(segIdx, totalSegments)
             val progress = (segIdx.toFloat() / (totalSegments - 1) * 100).toInt()
-            Timber.i("   Segment $segIdx (progress: $progress%) → $thumbs thumbs/strip")
         }
     }
     
@@ -264,7 +223,6 @@ class ThumbnailStripManager(
                 }
             } ?: uri.toString()
         } catch (e: Exception) {
-            Timber.w(e, "Failed to get file identifier, using URI as fallback")
             uri.toString()
         }
     }
@@ -297,12 +255,9 @@ class ThumbnailStripManager(
 
                 // MÉTRICAS DE PERFORMANCE: Alertar se cache I/O está lento
                 if (elapsed > ThumbnailConstants.Timing.CACHE_READ_THRESHOLD_MS) {
-                    Timber.w("⚠️ Slow disk cache read: ${elapsed}ms for segment $segmentIndex (threshold: ${ThumbnailConstants.Timing.CACHE_READ_THRESHOLD_MS}ms)")
                 } else {
-                    Timber.d("✓ Cache HIT for segment $segmentIndex (${elapsed}ms)")
                 }
             } else {
-                Timber.tag("StripPerf").w("🔴 Cache file corrupted for segment $segmentIndex")
                 // Delete sem lock, filesystem cuida da atomicidade
                 cacheFile.delete()
                 // Record corruption in metrics
@@ -311,7 +266,6 @@ class ThumbnailStripManager(
             
             return bitmap
         } catch (e: Exception) {
-            Timber.e(e, "ThumbnailStrip: Failed to load from cache for segment $segmentIndex")
             return null
         }
     }
@@ -357,18 +311,15 @@ class ThumbnailStripManager(
                 if (tempFile.renameTo(finalFile)) {
                     val elapsed = System.currentTimeMillis() - startTime
                     val sizeKB = finalFile.length() / 1024
-                    Timber.tag("StripPerf").d("💾 Cached segment $segmentIndex (compress=${compressTime}ms, total=${elapsed}ms, ${sizeKB}KB)")
 
                     trimCacheIfNeeded()
                     return true
                 } else {
                     tempFile.delete()
-                    Timber.tag("StripPerf").w("⚠️ Failed to rename temp file for segment $segmentIndex")
                     return false
                 }
             }
         } catch (e: Exception) {
-            Timber.tag("StripPerf").e(e, "🔴 Failed to save cache for segment $segmentIndex")
             return false
         }
     }
@@ -390,7 +341,6 @@ class ThumbnailStripManager(
 
                 val currentSizeMB = currentSize / 1024 / 1024
                 val maxSizeMB = MAX_CACHE_SIZE / 1024 / 1024
-                Timber.tag("StripPerf").w("🟠 Cache size ${currentSizeMB}MB exceeds limit ${maxSizeMB}MB, trimming...")
 
                 // Ordenar por lastModified (mais antigos primeiro)
                 val sortedFiles: List<File> = cacheFiles.sortedBy { file -> file.lastModified() }
@@ -402,16 +352,13 @@ class ThumbnailStripManager(
                         deletedSize += file.length()
                         file.delete()
                     } catch (e: Exception) {
-                        Timber.tag("StripPerf").w(e, "Failed to delete cache file: ${file.name}")
                     }
                 }
 
-                Timber.tag("StripPerf").i("🟢 Trimmed cache: deleted ${filesToDelete.size} files, ${deletedSize / 1024}KB")
 
                 // Record eviction in metrics
                 ThumbnailCacheManager.recordEviction()
             } catch (e: Exception) {
-                Timber.tag("StripPerf").e(e, "🔴 Failed to trim cache")
             }
         }
     }
@@ -476,26 +423,20 @@ class ThumbnailStripManager(
 
         ActivityLogger.started(AppActivity.StripAssembly, "segmento" to segmentIndex, "total" to totalSegments)
 
-        Timber.tag("StripPerf").d("=== extractSegment STARTED ===")
-        Timber.tag("StripPerf").d("segmentIndex: $segmentIndex, totalSegments: $totalSegments, durationMs: $durationMs")
 
         // Fail-fast se o job já foi cancelado
         coroutineContext.ensureActive()
 
                 // MELHORIA: Tentar carregar do cache primeiro (se habilitado)
-                Timber.tag("StripPerf").d("Cache enabled: ${prefsManager.thumbnailCacheEnabled}")
                 if (prefsManager.thumbnailCacheEnabled) {
                     val cacheKey = getCacheKey(uri, segmentIndex, onlyFirstFrame)
                     val cachedStrip = loadFromCache(uri, segmentIndex, onlyFirstFrame)
                     if (cachedStrip != null) {
                         val cacheHitTime = System.currentTimeMillis() - startTime
-                        Timber.tag("StripPerf").i("🔵 CACHE HIT - Segment $segmentIndex ${if (onlyFirstFrame) "(overview)" else ""} loaded from disk, time=${cacheHitTime}ms, size=${cachedStrip.width}x${cachedStrip.height}")
                         return@withContext cachedStrip
                     }
     
-                    Timber.tag("StripPerf").i("🟠 CACHE MISS - Segment $segmentIndex ${if (onlyFirstFrame) "(overview)" else ""} will be extracted")
                 } else {
-                    Timber.tag("StripPerf").d("Cache disabled - Segment $segmentIndex will be extracted")
                 }
     
         extractSemaphore.withPermit {
@@ -516,7 +457,6 @@ class ThumbnailStripManager(
             val framesInSegment = if (onlyFirstFrame) 1 else minOf(currentThumbsPerStrip, totalSeconds - startSec)
 
               try {
-                Timber.d("Extracting segment $segmentIndex: $framesInSegment frames, strip size=${thumbWidth * framesInSegment}x$thumbHeight")
                 coroutineContext.ensureActive()
 
                 // Strip RGB_565: metade da memória de ARGB_8888
@@ -548,20 +488,15 @@ class ThumbnailStripManager(
                                 onFrameExtracted?.invoke(pos, copy)
                             }
                         } catch (e: Exception) {
-                            Timber.e(e, "ThumbnailStrip: Error streaming frame copy")
                         }
                     }
                 )
 
-                Timber.d("Batch extraction returned ${extractedFrames.size} frames for segment $segmentIndex")
 
                 if (extractedFrames.isEmpty()) {
-                    Timber.tag("ThumbnailAspectMonitor").w("❌ ERRO: Nenhum frame extraído para segmento $segmentIndex")
-                    Timber.e("ThumbnailStrip: No frames extracted for segment $segmentIndex")
                     return@withPermit null
                 }
 
-                Timber.tag("ThumbnailAspectMonitor").i("   ✅ Extraídos ${extractedFrames.size}/$framesInSegment frames com sucesso")
 
                 // Stitch frames na strip
                 for (frameIdx in 0 until framesInSegment) {
@@ -580,20 +515,15 @@ class ThumbnailStripManager(
                         canvas.drawBitmap(source, null, dstRect, cropPaint)
                         source.recycle()
                     } else {
-                        Timber.w("ThumbnailStrip: Failed to extract frame at sec=$sec")
                     }
                 }
 
-                Timber.d("ThumbnailStrip: Segment $segmentIndex ($framesInSegment frames, ${stripWidth}x$thumbHeight, RGB_565) - BATCH MODE")
 
                 val totalTime = System.currentTimeMillis() - startTime
-                Timber.tag("StripPerf").i("⚪ extractSegment COMPLETED for segment $segmentIndex, time=${totalTime}ms")
-                Timber.tag("StripPerf").d("=== ThumbnailStripManager.extractSegment COMPLETED for segment $segmentIndex ===")
                 ActivityLogger.finished(AppActivity.StripAssembly, "segmento" to segmentIndex, "ms" to totalTime)
 
                 // MELHORIA: Salvar no cache após extração bem-sucedida (se habilitado)
                 if (prefsManager.thumbnailCacheEnabled) {
-                    Timber.tag("StripPerf").d("Saving segment $segmentIndex ${if (onlyFirstFrame) "(overview)" else ""} to cache...")
                     saveToCache(uri, segmentIndex, strip, onlyFirstFrame)
                 }
 
@@ -601,8 +531,6 @@ class ThumbnailStripManager(
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 ActivityLogger.failed(AppActivity.StripAssembly, "segmento" to segmentIndex, "motivo" to e.message)
-                Timber.tag("ThumbnailAspectMonitor").e(e, "❌ EXCEÇÃO FATAL ao extrair segmento $segmentIndex: ${e.message}")
-                Timber.e(e, "ThumbnailStrip: Fatal error extracting segment $segmentIndex")
                 null
             }
         }

@@ -51,7 +51,6 @@ object ThumbnailUtils {
                     scaled
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
                 null
             } finally {
                 retriever.release()

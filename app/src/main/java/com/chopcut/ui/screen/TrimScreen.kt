@@ -40,7 +40,6 @@ import com.chopcut.utils.FileNameUtils
 import com.chopcut.utils.RangeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,7 +88,6 @@ fun TrimScreen(
     val isDataAlreadyCached = remember(thumbnailStrips) {
         val requiredStrips = 6
         val hasThumbnails = thumbnailStrips.size >= requiredStrips
-        Timber.d("Cache check: thumbnails=${thumbnailStrips.size}/$requiredStrips, ready=$hasThumbnails")
         hasThumbnails
     }
 
@@ -98,8 +96,6 @@ fun TrimScreen(
         if (state.videoDurationMs > 0) {
             val calculatedMin = (state.videoDurationMs * LoadingConstants.MIN_LOADING_PERCENTAGE).toLong()
             val clampedMin = calculatedMin.coerceIn(500L, LoadingConstants.MAX_LOADING_DURATION_MS)
-            Timber.d("Min loading duration calculado: ${clampedMin}ms (${calculatedMin}ms base, " +
-                    "video=${state.videoDurationMs}ms)")
             clampedMin
         } else {
             2_000L
@@ -108,9 +104,7 @@ fun TrimScreen(
 
     // Se já estiver no cache, esconder o overlay imediatamente
     LaunchedEffect(isDataAlreadyCached) {
-        Timber.d("LaunchedEffect isDataAlreadyCached: $isDataAlreadyCached, showLoadingOverlay=$showLoadingOverlay")
         if (isDataAlreadyCached) {
-            Timber.i("Dados já em cache, escondendo overlay de loading")
             showLoadingOverlay = false
         }
     }
@@ -118,9 +112,7 @@ fun TrimScreen(
     // Monitoramento REATIVO para esconder overlay (substitui while loop)
     // OTIMIZAÇÃO: Usa snapshotFlow para reagir apenas a mudanças reais, eliminando polling
     LaunchedEffect(showLoadingOverlay, isDataAlreadyCached) {
-        Timber.d("LaunchedEffect monitoring: showLoadingOverlay=$showLoadingOverlay, isDataAlreadyCached=$isDataAlreadyCached")
         if (!showLoadingOverlay || isDataAlreadyCached) {
-            Timber.d("Skipping monitoring: overlay hidden or data cached")
             return@LaunchedEffect
         }
 
@@ -167,12 +159,10 @@ fun TrimScreen(
                         elapsedTimeMs = currentElapsed,
                         thumbnailProgress = thumbnailProgress
                     )
-                    Timber.i("🎯 LoadingOverlay pronto para esconder: $reason (thumbnails=${thumbnailStrips.size}, audio=$hasAudio)")
 
                     isReadyToHide = true
                     delay(LoadingConstants.CROSS_FADE_START_DELAY_MS)
                     showLoadingOverlay = false
-                    Timber.i("✅ LoadingOverlay escondido: $reason")
                 }
             }
     }
@@ -357,12 +347,9 @@ fun TrimScreen(
                     try {
                         val trimRanges = state.trimPosition.completeRanges.sortedBy { it.first }
 
-                        Timber.d("Trim ranges: $trimRanges")
-                        Timber.d("Video duration: ${state.videoDurationMs}")
 
                         val rangesToSave = RangeUtils.calculateKeepRanges(trimRanges, state.videoDurationMs)
 
-                        Timber.d("Keep ranges to save: $rangesToSave")
 
                         if (rangesToSave.isEmpty()) {
                             throw Exception("No ranges to save - video is empty")
@@ -376,7 +363,6 @@ fun TrimScreen(
                                     }
                                     is TrimProgress.Completed -> {
                                         val trimmedFile = progress.file
-                                        Timber.d("Trimmed file exists: ${trimmedFile.exists()}, size: ${trimmedFile.length()}")
 
                                         val originalFileName = FileNameUtils.extractBaseNameFromUri(videoUri)
                                         val fileName = FileNameUtils.generateTimestampedFileName(originalFileName)
@@ -387,7 +373,6 @@ fun TrimScreen(
                                         saveDialogState = saveDialogState.copy(isCompleted = true, isSaving = false)
                                     }
                                     is TrimProgress.Failed -> {
-                                        Timber.e(progress.error, "TransformerPipeline trim error")
                                         saveDialogState = saveDialogState.copy(
                                             error = progress.error.message ?: "Erro desconhecido",
                                             isSaving = false
@@ -396,7 +381,6 @@ fun TrimScreen(
                                 }
                             }
                     } catch (e: Exception) {
-                        Timber.e(e, "Failed to save video")
                         saveDialogState = saveDialogState.copy(
                             error = e.message ?: "Erro desconhecido",
                             isSaving = false
@@ -427,12 +411,10 @@ private fun shouldHideLoadingOverlay(
             maxTimeReached || (minTimeReached && hasSufficientThumbnails && hasAudio)
         }
         is PreloadUiState.Error, is PreloadUiState.Cancelled -> {
-            Timber.w("Error/Cancelled state: hiding overlay")
             true
         }
         is PreloadUiState.Idle -> {
             // Fallback: se está em Idle por mais de 2 segundos, esconder para não ficar preso
-            Timber.w("Idle state: hiding overlay (fallback)")
             true
         }
     }

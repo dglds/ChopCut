@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.webkit.MimeTypeMap
-import timber.log.Timber
 import java.io.File
 import java.io.IOException
 
@@ -29,8 +28,6 @@ object ErrorHandler {
      * Handle any throwable and convert to an ErrorState
      */
     fun handle(throwable: Throwable, context: Context? = null): ErrorState {
-        Timber.e(throwable, "Error occurred: ${throwable.javaClass.simpleName}")
-
         return when (throwable) {
             is ChopCutException -> handleChopCutException(throwable)
             is SecurityException -> handleSecurityException(throwable)
