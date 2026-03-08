@@ -22,3 +22,4 @@
 
 ## Phase: Review Fixes
 - [x] Task: Apply review suggestions [daa20c7]
+- [x] Task: Unified header with all actions and dynamic height [a4d89e9]
