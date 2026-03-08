@@ -52,6 +52,9 @@ class ConsoleLineViewModel : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _selectedLevel = MutableStateFlow<LogLevel?>(null)
+    val selectedLevel: StateFlow<LogLevel?> = _selectedLevel.asStateFlow()
+
     enum class ConsolePosition {
         HEADER, FOOTER
     }
@@ -108,10 +111,21 @@ class ConsoleLineViewModel : ViewModel() {
     
     private fun observeLogs() {
         viewModelScope.launch {
-            DebugLogger.logs.collect { newLogs ->
-                // Apenas mapeia as últimas linhas necessárias para a UI, evitando processar 1000 logs todas as vezes
-                val recentLogsToMap = newLogs.takeLast(_maxDisplayLines.value)
-                val mappedLogs = recentLogsToMap.map { entry ->
+            kotlinx.coroutines.flow.combine(
+                DebugLogger.logs,
+                _searchQuery,
+                _selectedLevel,
+                _maxDisplayLines
+            ) { logs, query, level, maxLines ->
+                logs.filter { entry ->
+                    val matchesQuery = query.isEmpty() || 
+                        entry.tag.contains(query, ignoreCase = true) || 
+                        entry.message.contains(query, ignoreCase = true)
+                    
+                    val matchesLevel = level == null || entry.level == level
+                    
+                    matchesQuery && matchesLevel
+                }.takeLast(maxLines).map { entry ->
                     LogEntry(
                         tag = entry.tag,
                         message = entry.message,
@@ -119,7 +133,7 @@ class ConsoleLineViewModel : ViewModel() {
                         fullText = "[${entry.level}] ${entry.tag}: ${entry.message}"
                     )
                 }
-                
+            }.collect { mappedLogs ->
                 _logHistory.value = mappedLogs
                 _logs.value = mappedLogs.lastOrNull()
                 _hasPendingLogs.value = false
@@ -139,7 +153,17 @@ class ConsoleLineViewModel : ViewModel() {
     
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
-        // Filtro será aplicado na UI na Fase 2/3 ou via Logger
+    }
+
+    fun setSelectedLevel(level: LogLevel?) {
+        _selectedLevel.value = level
+    }
+
+    fun copyToClipboard(context: android.content.Context) {
+        val text = _logHistory.value.joinToString("\n") { it.fullText }
+        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = android.content.ClipData.newPlainText("ChopCut Debug Logs", text)
+        clipboard.setPrimaryClip(clip)
     }
 
     fun setTheme(theme: ConsoleTheme) {
