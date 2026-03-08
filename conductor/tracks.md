@@ -34,7 +34,3 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [~] **Track: Otimização de thumbnails da timeline com aspect ratio dinâmico, extração progressiva e compressão WEBP.**
 *Link: [./tracks/thumb_optimization_20260226/](./tracks/thumb_optimization_20260226/)*
 
----
-
-- [x] **Track: Refatore o console view de debug com Material 3, LazyColumn e gestos.**
-*Link: [./tracks/debug_console_refactor_20260308/](./tracks/debug_console_refactor_20260308/)*
