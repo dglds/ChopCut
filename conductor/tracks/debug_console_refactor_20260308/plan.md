@@ -1,9 +1,9 @@
 # Implementation Plan: `debug_console_refactor_20260308`
 
 **Phase 1: Setup and Centralized Logger**
-- [ ] Task: Criar testes unitários para o Logger centralizado (verificando retenção máxima de 1000 logs e níveis de log).
-- [ ] Task: Implementar o Logger centralizado desacoplado da UI.
-- [ ] Task: Refatorar o `ConsoleLineViewModel` para utilizar o novo Logger.
+- [x] Task: Criar testes unitários para o Logger centralizado (verificando retenção máxima de 1000 logs e níveis de log). [39994f7]
+- [x] Task: Implementar o Logger centralizado desacoplado da UI. [39994f7]
+- [x] Task: Refatorar o `ConsoleLineViewModel` para utilizar o novo Logger. [39994f7]
 - [ ] Task: Conductor - User Manual Verification 'Setup and Centralized Logger' (Protocol in workflow.md)
 
 **Phase 2: UI Transformation & Performance (Material 3 + LazyColumn)**
