@@ -43,7 +43,7 @@ class ConsoleLineViewModel : ViewModel() {
     private val _isMultiLine = MutableStateFlow(true)
     val isMultiLine: StateFlow<Boolean> = _isMultiLine.asStateFlow()
     
-    private val _maxDisplayLines = MutableStateFlow(5) // Default to 5 lines as requested
+    private val _maxDisplayLines = MutableStateFlow(100) // Aumentado para manter histórico para scroll
     val maxDisplayLines: StateFlow<Int> = _maxDisplayLines.asStateFlow()
     
     private val _callStackMode = MutableStateFlow(false)
@@ -59,7 +59,7 @@ class ConsoleLineViewModel : ViewModel() {
         HEADER, FOOTER
     }
     
-    private val _position = MutableStateFlow(ConsolePosition.FOOTER)
+    private val _position = MutableStateFlow(ConsolePosition.HEADER)
     val position: StateFlow<ConsolePosition> = _position.asStateFlow()
 
     init {

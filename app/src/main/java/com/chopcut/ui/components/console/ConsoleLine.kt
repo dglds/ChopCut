@@ -101,17 +101,19 @@ fun ConsoleLine(
     }
     
     if (isVisible) {
-        // Altura dinâmica baseada no estado multi-line e quantidade de linhas configuradas
-        val dynamicContentHeight = if (isMultiLine) {
-            (maxLines * (theme.fontSize.toInt() + 4)).dp
+        val containerModifier = if (isMultiLine) {
+            modifier
+                .padding(8.dp)
+                .fillMaxWidth()
+                .fillMaxHeight(0.25f)
         } else {
-            (theme.fontSize.toInt() + 6).dp
+            modifier
+                .padding(8.dp)
+                .fillMaxWidth()
         }
 
         Column(
-            modifier = modifier
-                .padding(8.dp)
-                .fillMaxWidth()
+            modifier = containerModifier
                 .background(
                     color = theme.backgroundColor.copy(alpha = 0.9f),
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
@@ -178,11 +180,17 @@ fun ConsoleLine(
                 }
             }
 
-            Box(
-                modifier = Modifier
+            val boxModifier = if (isMultiLine) {
+                Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 300.dp) // Limite de altura máxima
-                    .height(dynamicContentHeight)
+                    .weight(1f) // Preenche o resto do espaço disponível na Column (os 25% da tela)
+            } else {
+                Modifier
+                    .fillMaxWidth()
+            }
+
+            Box(
+                modifier = boxModifier
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = { tapCount++ },
