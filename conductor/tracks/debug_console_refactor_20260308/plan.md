@@ -19,3 +19,6 @@
 - [x] Task: Adicionar botões de Ações Rápidas (Limpar logs, Copiar para área de transferência, Alternar visibilidade de níveis). [33d270e]
 - [x] Task: Implementar a lógica de Smart Auto-Scroll na `LazyColumn`. [33d270e]
 - [ ] Task: Conductor - User Manual Verification 'Debug Features & Polish' (Protocol in workflow.md)
+
+## Phase: Review Fixes
+- [x] Task: Apply review suggestions [daa20c7]
