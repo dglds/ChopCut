@@ -15,7 +15,7 @@
 - [ ] Task: Conductor - User Manual Verification 'UI Transformation & Performance' (Protocol in workflow.md)
 
 **Phase 3: Debug Features & Polish**
-- [ ] Task: Implementar campo de texto para busca e filtragem em tempo real na UI e no ViewModel.
-- [ ] Task: Adicionar botões de Ações Rápidas (Limpar logs, Copiar para área de transferência, Alternar visibilidade de níveis).
-- [ ] Task: Implementar a lógica de Smart Auto-Scroll na `LazyColumn`.
+- [x] Task: Implementar campo de texto para busca e filtragem em tempo real na UI e no ViewModel. [33d270e]
+- [x] Task: Adicionar botões de Ações Rápidas (Limpar logs, Copiar para área de transferência, Alternar visibilidade de níveis). [33d270e]
+- [x] Task: Implementar a lógica de Smart Auto-Scroll na `LazyColumn`. [33d270e]
 - [ ] Task: Conductor - User Manual Verification 'Debug Features & Polish' (Protocol in workflow.md)
