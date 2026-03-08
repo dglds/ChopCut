@@ -10,8 +10,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import com.chopcut.util.debug.DebugLogger
+import com.chopcut.util.debug.LogEntry as NewLogEntry
+import com.chopcut.util.debug.LogLevel
+import timber.log.Timber
+
 class ConsoleLineViewModel : ViewModel() {
     
+    // Mantendo a estrutura de dados antiga por compatibilidade temporária com a UI
     data class LogEntry(
         val tag: String,
         val message: String,
@@ -37,12 +43,15 @@ class ConsoleLineViewModel : ViewModel() {
     private val _isMultiLine = MutableStateFlow(true)
     val isMultiLine: StateFlow<Boolean> = _isMultiLine.asStateFlow()
     
-    private val _maxDisplayLines = MutableStateFlow(10)
+    private val _maxDisplayLines = MutableStateFlow(50) // Aumentado conforme spec
     val maxDisplayLines: StateFlow<Int> = _maxDisplayLines.asStateFlow()
     
     private val _callStackMode = MutableStateFlow(false)
     val callStackMode: StateFlow<Boolean> = _callStackMode.asStateFlow()
     
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
     enum class ConsolePosition {
         HEADER, FOOTER
     }
@@ -50,147 +59,92 @@ class ConsoleLineViewModel : ViewModel() {
     private val _position = MutableStateFlow(ConsolePosition.FOOTER)
     val position: StateFlow<ConsolePosition> = _position.asStateFlow()
     
-    private val logQueue = ArrayDeque<Pair<String, String?>>()
-    private val maxQueueSize = 100
-    private var isProcessing = false
     private val logCountMap = mutableMapOf<String, Int>()
-    private val callStackMap = mutableMapOf<String, MutableList<LogEntry>>()
-    
+
     init {
         setupTimberTree()
-        startLogProcessor()
+        observeLogs()
     }
     
     private fun setupTimberTree() {
         try {
-            val tree = object : timber.log.Timber.Tree() {
+            val tree = object : Timber.Tree() {
                 override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
-                    try {
-                        // Passar a mensagem completa, a tag será extraída pelo processor
-                        addLog(message, null)
-                    } catch (e: Exception) {
-                        // Ignorar erros de logging para evitar loop infinito
+                    val level = when (priority) {
+                        android.util.Log.VERBOSE -> LogLevel.VERBOSE
+                        android.util.Log.DEBUG -> LogLevel.DEBUG
+                        android.util.Log.INFO -> LogLevel.INFO
+                        android.util.Log.WARN -> LogLevel.WARN
+                        android.util.Log.ERROR -> LogLevel.ERROR
+                        else -> LogLevel.DEBUG
+                    }
+                    
+                    // Extrair tag se não fornecida (comportamento antigo mantido)
+                    val firstSpaceIndex = message.indexOf(" ")
+                    val effectiveTag = tag ?: if (firstSpaceIndex > 0) {
+                        message.substring(0, firstSpaceIndex)
+                    } else {
+                        "LOG"
+                    }
+                    
+                    val effectiveMessage = if (tag == null && firstSpaceIndex > 0) {
+                        message.substring(firstSpaceIndex + 1)
+                    } else {
+                        message
+                    }
+
+                    when (level) {
+                        LogLevel.VERBOSE -> DebugLogger.v(effectiveTag, effectiveMessage)
+                        LogLevel.DEBUG -> DebugLogger.d(effectiveTag, effectiveMessage)
+                        LogLevel.INFO -> DebugLogger.i(effectiveTag, effectiveMessage)
+                        LogLevel.WARN -> DebugLogger.w(effectiveTag, effectiveMessage)
+                        LogLevel.ERROR -> DebugLogger.e(effectiveTag, effectiveMessage)
                     }
                 }
             }
-            timber.log.Timber.plant(tree)
+            Timber.plant(tree)
         } catch (e: Exception) {
-            // Ignorar erros ao plantar tree de logging
+            // Ignorar
         }
     }
     
-    private fun startLogProcessor() {
+    private fun observeLogs() {
         viewModelScope.launch {
-            while (true) {
-                try {
-                    ensureActive()
-                    if (logQueue.isNotEmpty() && !isProcessing) {
-                        isProcessing = true
-                        
-                        try {
-                            // Processar TODOS os logs concorrentemente (não um por um)
-                            val allLogs = logQueue.toList()
-                            logQueue.clear()
-                            
-                            val logEntries = allLogs.mapNotNull { (log, timberTag) ->
-                                try {
-                                    // Extrair a primeira palavra (com caracteres especiais) como tag
-                                    val firstSpaceIndex = log.indexOf(" ")
-                                    val tagKey = if (firstSpaceIndex > 0) {
-                                        log.substring(0, firstSpaceIndex)
-                                    } else {
-                                        log
-                                    }
-                                    
-                                    // O resto da mensagem (sem a primeira palavra)
-                                    val messageContent = if (firstSpaceIndex > 0) {
-                                        log.substring(firstSpaceIndex + 1)
-                                    } else {
-                                        ""
-                                    }
-                                    
-                                    val count = (logCountMap[tagKey] ?: 0) + 1
-                                    logCountMap[tagKey] = count
-                                    
-                                    val logEntry = LogEntry(
-                                        tag = tagKey,
-                                        message = messageContent,
-                                        count = count,
-                                        fullText = "[$count]$tagKey $messageContent"
-                                    )
-                                    
-                                    // Manter call stack por tag
-                                    if (_callStackMode.value) {
-                                        val stack = callStackMap.getOrPut(tagKey) { mutableListOf() }
-                                        stack.add(logEntry)
-                                        // Manter apenas os últimos 50 logs por tag
-                                        if (stack.size > 50) {
-                                            stack.removeAt(0)
-                                        }
-                                    }
-                                    
-                                    logEntry
-                                } catch (e: Exception) {
-                                    null
-                                }
-                            }
-                            
-                            // Atualizar histórico com todos os logs processados
-                            if (logEntries.isNotEmpty()) {
-                                if (_isMultiLine.value) {
-                                    _logHistory.update { current ->
-                                        val updated = current + logEntries
-                                        if (updated.size > _maxDisplayLines.value) {
-                                            updated.takeLast(_maxDisplayLines.value)
-                                        } else {
-                                            updated
-                                        }
-                                    }
-                                } else {
-                                    // Modo single-line: mostrar apenas o último
-                                    _logs.value = logEntries.lastOrNull()
-                                }
-                            }
-                        } catch (e: Exception) {
-                            // Ignorar erros de processamento de lote
-                        }
-                        
-                        _hasPendingLogs.value = logQueue.isNotEmpty()
-                        delay(50)
-                        isProcessing = false
-                    } else {
-                        delay(20)
-                    }
-                } catch (e: Exception) {
-                    // Ignorar erros do loop principal
-                    isProcessing = false
+            DebugLogger.logs.collect { newLogs ->
+                val mappedLogs = newLogs.map { entry ->
+                    val count = (logCountMap[entry.tag] ?: 0) + 1
+                    logCountMap[entry.tag] = count
+                    LogEntry(
+                        tag = entry.tag,
+                        message = entry.message,
+                        count = count,
+                        fullText = "[${entry.level}] ${entry.tag}: ${entry.message}"
+                    )
                 }
+                
+                _logHistory.value = mappedLogs.takeLast(_maxDisplayLines.value)
+                _logs.value = mappedLogs.lastOrNull()
+                _hasPendingLogs.value = false
             }
         }
     }
     
     fun addLog(message: String, tag: String? = null) {
-        viewModelScope.launch {
-            try {
-                if (logQueue.size >= maxQueueSize) {
-                    logQueue.removeFirst()
-                }
-                logQueue.addLast(message to tag)
-                _hasPendingLogs.value = true
-            } catch (e: Exception) {
-                // Ignorar erros ao adicionar log
-            }
-        }
+        DebugLogger.d(tag ?: "UI", message)
     }
     
     fun clear() {
-        logQueue.clear()
+        DebugLogger.clear()
+        logCountMap.clear()
         _logs.value = null
         _logHistory.value = emptyList()
-        _hasPendingLogs.value = false
-        logCountMap.clear()
     }
     
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+        // Filtro será aplicado na UI na Fase 2/3 ou via Logger
+    }
+
     fun setTheme(theme: ConsoleTheme) {
         _currentTheme.value = theme
     }
@@ -217,55 +171,6 @@ class ConsoleLineViewModel : ViewModel() {
     
     fun toggleMultiLine() {
         _isMultiLine.value = !_isMultiLine.value
-        if (_isMultiLine.value) {
-            _logs.value = null
-        } else {
-            _logHistory.value = emptyList()
-        }
-    }
-    
-    fun setMultiLine(enabled: Boolean) {
-        _isMultiLine.value = enabled
-        if (enabled) {
-            _logs.value = null
-        } else {
-            _logHistory.value = emptyList()
-        }
-    }
-    
-    fun setMaxDisplayLines(lines: Int) {
-        _maxDisplayLines.value = lines.coerceAtLeast(1).coerceAtMost(10)
-        if (_isMultiLine.value) {
-            _logHistory.update { current ->
-                if (current.size > lines) {
-                    current.takeLast(lines)
-                } else {
-                    current
-                }
-            }
-        }
-    }
-    
-    fun increaseDisplayLines() {
-        setMaxDisplayLines(_maxDisplayLines.value + 1)
-    }
-    
-    fun decreaseDisplayLines() {
-        setMaxDisplayLines(_maxDisplayLines.value - 1)
-    }
-    
-    fun toggleCallStackMode() {
-        _callStackMode.value = !_callStackMode.value
-        if (!_callStackMode.value) {
-            callStackMap.clear()
-        }
-    }
-    
-    fun setCallStackMode(enabled: Boolean) {
-        _callStackMode.value = enabled
-        if (!enabled) {
-            callStackMap.clear()
-        }
     }
     
     fun setPosition(position: ConsolePosition) {
@@ -277,9 +182,5 @@ class ConsoleLineViewModel : ViewModel() {
             ConsolePosition.HEADER -> ConsolePosition.FOOTER
             ConsolePosition.FOOTER -> ConsolePosition.HEADER
         }
-    }
-    
-    override fun onCleared() {
-        super.onCleared()
     }
 }

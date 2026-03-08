@@ -46,7 +46,7 @@ object ThumbnailConstants {
     
     object Cache {
         const val MAX_CACHE_SIZE = 200L * 1024 * 1024
-        const val CACHE_VERSION = 3
+        const val CACHE_VERSION = 4
         const val MEMORY_CACHE_SIZE = 100
         const val TRIM_RATIO_DIVISOR = 4
         const val INITIAL_SEGMENTS_TO_PRELOAD = 5

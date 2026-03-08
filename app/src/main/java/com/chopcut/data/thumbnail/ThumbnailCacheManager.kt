@@ -237,7 +237,8 @@ object ThumbnailCacheManager {
         thumbWidth: Int,
         thumbHeight: Int,
         thumbsPerStrip: Int,
-        onlyFirstFrame: Boolean = false
+        onlyFirstFrame: Boolean = false,
+        onFrameExtracted: ((Long, Bitmap) -> Unit)? = null
     ): Bitmap? {
         Timber.d("ThumbnailCacheManager.getStrip called: segment=$segmentIndex, duration=$durationMs, size=${thumbWidth}x$thumbHeight, overview=$onlyFirstFrame")
         ensureInitialized()
@@ -246,13 +247,11 @@ object ThumbnailCacheManager {
         val needsNewStripManager = stripManager == null ||
             stripManager!!.thumbWidth != thumbWidth ||
             stripManager!!.thumbHeight != thumbHeight ||
-            (!onlyFirstFrame && stripManager!!.thumbsPerStrip != thumbsPerStrip)
+            stripManager!!.thumbsPerStrip != thumbsPerStrip
 
         if (needsNewStripManager) {
-            // Se for overview, não precisamos mudar o thumbsPerStrip do manager fixo
-            val targetThumbsPerStrip = if (onlyFirstFrame) 1 else thumbsPerStrip
-            configureStripManager(thumbWidth, thumbHeight, targetThumbsPerStrip)
-            Timber.d("ThumbnailCacheManager: Configured manager (ov=$onlyFirstFrame)")
+            configureStripManager(thumbWidth, thumbHeight, thumbsPerStrip)
+            Timber.d("ThumbnailCacheManager: Configured manager (ov=$onlyFirstFrame, thumbsPerStrip=$thumbsPerStrip)")
         }
 
         val uriString = uri.toString()
@@ -271,7 +270,7 @@ object ThumbnailCacheManager {
                 metrics.recordMiss()
                 Timber.tag("CacheMetrics").d("🟠 Cache miss — uri=$uriString, segment=$segmentIndex, extracting (ov=$onlyFirstFrame)...")
 
-                val strip = stripManager!!.extractSegment(uri, segmentIndex, durationMs, onlyFirstFrame)
+                val strip = stripManager!!.extractSegment(uri, segmentIndex, durationMs, onlyFirstFrame, onFrameExtracted)
                     ?: run {
                         Timber.e("ThumbnailCacheManager: Failed to extract segment $segmentIndex")
                         throw NoSuchElementException("Failed to extract segment $segmentIndex")
@@ -303,6 +302,7 @@ object ThumbnailCacheManager {
         thumbWidth: Int,
         thumbHeight: Int,
         thumbsPerStrip: Int,
+        onFrameExtracted: ((Long, Bitmap) -> Unit)? = null,
         onResult: (Bitmap?) -> Unit
     ) {
         ensureInitialized()
@@ -317,7 +317,7 @@ object ThumbnailCacheManager {
         
         val job = scope.launch {
             try {
-                val strip = getStrip(uri, segmentIndex, durationMs, thumbWidth, thumbHeight, thumbsPerStrip, false)
+                val strip = getStrip(uri, segmentIndex, durationMs, thumbWidth, thumbHeight, thumbsPerStrip, false, onFrameExtracted)
                 
                 withContext(Dispatchers.Main) {
                     onResult(strip)
