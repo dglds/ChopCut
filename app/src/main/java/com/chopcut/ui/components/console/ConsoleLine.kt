@@ -56,7 +56,6 @@ fun ConsoleLine(
     val hasPendingLogs by viewModel.hasPendingLogs.collectAsStateWithLifecycle()
     val isMultiLine by viewModel.isMultiLine.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val selectedLevel by viewModel.selectedLevel.collectAsStateWithLifecycle()
     val maxLines by viewModel.maxDisplayLines.collectAsStateWithLifecycle()
     
     val context = LocalContext.current
@@ -101,11 +100,11 @@ fun ConsoleLine(
     }
     
     if (isVisible) {
-        val dynamicHeight = if (isMultiLine) {
-            // Header (aprox 48dp) + (linhas * altura da linha) + padding
-            (48 + (maxLines * (theme.fontSize.toInt() + 4)) + 16).dp
+        // Altura dinâmica baseada no estado multi-line e quantidade de linhas configuradas
+        val dynamicContentHeight = if (isMultiLine) {
+            (maxLines * (theme.fontSize.toInt() + 2)).dp
         } else {
-            40.dp
+            (theme.fontSize.toInt() + 4).dp
         }
 
         Column(
@@ -129,55 +128,64 @@ fun ConsoleLine(
                     }
                 }
         ) {
-            if (isMultiLine) {
-                // Header com Busca e Ações na mesma linha
-                Row(
+            // Header ÚNICO com Busca e TODAS as Ações
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 0.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.setSearchQuery(it) },
+                    placeholder = { Text("Filter...", color = theme.textColor.copy(alpha = 0.5f), fontSize = 10.sp) },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                ) {
-                    TextField(
-                        value = searchQuery,
-                        onValueChange = { viewModel.setSearchQuery(it) },
-                        placeholder = { Text("Filter...", color = theme.textColor.copy(alpha = 0.5f), fontSize = 12.sp) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            cursorColor = theme.textColor
-                        ),
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace),
-                        singleLine = true
+                        .weight(1f)
+                        .height(40.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        cursorColor = theme.textColor
+                    ),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
+                    singleLine = true
+                )
+                
+                IconButton(onClick = { viewModel.copyToClipboard(context) }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = theme.textColor, modifier = Modifier.size(14.dp))
+                }
+                IconButton(onClick = { viewModel.clear() }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.DeleteSweep, contentDescription = "Clear", tint = theme.textColor, modifier = Modifier.size(14.dp))
+                }
+                IconButton(onClick = { viewModel.toggleMultiLine() }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        if (isMultiLine) Icons.Default.CloseFullscreen else Icons.Default.OpenInFull,
+                        contentDescription = "Toggle size",
+                        tint = theme.textColor,
+                        modifier = Modifier.size(14.dp)
                     )
-                    
-                    IconButton(onClick = { viewModel.copyToClipboard(context) }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = theme.textColor, modifier = Modifier.size(16.dp))
-                    }
-                    IconButton(onClick = { viewModel.clear() }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.DeleteSweep, contentDescription = "Clear", tint = theme.textColor, modifier = Modifier.size(16.dp))
-                    }
-                    IconButton(onClick = { viewModel.toggleMultiLine() }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.CloseFullscreen, contentDescription = "Minimize", tint = theme.textColor, modifier = Modifier.size(16.dp))
-                    }
+                }
+                IconButton(onClick = { viewModel.togglePosition() }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.SwapVert, contentDescription = "Swap Position", tint = theme.textColor, modifier = Modifier.size(14.dp))
+                }
+                IconButton(onClick = { viewModel.dismiss() }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = theme.textColor, modifier = Modifier.size(14.dp))
                 }
             }
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(dynamicHeight)
+                    .heightIn(max = 300.dp) // Limite de altura máxima
+                    .height(dynamicContentHeight)
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = { tapCount++ },
-                            onDoubleTap = { viewModel.toggleMultiLine() },
-                            onLongPress = { viewModel.togglePosition() }
+                            onDoubleTap = { viewModel.toggleMultiLine() }
                         )
                     }
             ) {
@@ -239,8 +247,8 @@ fun ConsoleLine(
                 if (hasPendingLogs) {
                     Box(
                         modifier = Modifier
-                            .padding(8.dp)
-                            .size(6.dp)
+                            .padding(4.dp)
+                            .size(4.dp)
                             .alpha(alpha)
                             .background(
                                 color = theme.textColor,
