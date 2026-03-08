@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import com.chopcut.util.debug.LogLevel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -102,9 +103,9 @@ fun ConsoleLine(
     if (isVisible) {
         // Altura dinâmica baseada no estado multi-line e quantidade de linhas configuradas
         val dynamicContentHeight = if (isMultiLine) {
-            (maxLines * (theme.fontSize.toInt() + 2)).dp
+            (maxLines * (theme.fontSize.toInt() + 4)).dp
         } else {
-            (theme.fontSize.toInt() + 4).dp
+            (theme.fontSize.toInt() + 6).dp
         }
 
         Column(
@@ -138,7 +139,7 @@ fun ConsoleLine(
                 TextField(
                     value = searchQuery,
                     onValueChange = { viewModel.setSearchQuery(it) },
-                    placeholder = { Text("Filter...", color = theme.textColor.copy(alpha = 0.5f), fontSize = 10.sp) },
+                    placeholder = { Text("Filter Assets...", color = theme.textColor.copy(alpha = 0.5f), fontSize = 10.sp) },
                     modifier = Modifier
                         .weight(1f)
                         .height(40.dp),
@@ -198,10 +199,12 @@ fun ConsoleLine(
                 ) {
                     items(logHistory) { log ->
                         val levelColor = when {
-                            log.fullText.contains("[ERROR]") -> Color(0xFFFF5252)
-                            log.fullText.contains("[WARN]") -> Color(0xFFFFD740)
-                            log.fullText.contains("[INFO]") -> Color(0xFF40C4FF)
-                            log.fullText.contains("[VERBOSE]") -> Color(0xFFBDBDBD)
+                            log.message.contains("■") || log.message.contains("concluída", ignoreCase = true) -> Color(0xFF4CAF50) // VERDE para asserts/conclusão
+                            log.message.contains("▶") || log.message.contains("iniciada", ignoreCase = true) -> Color(0xFF2196F3) // AZUL para início
+                            log.fullText.contains("[ERROR]") || log.message.contains("✕") -> Color(0xFFFF5252) // RED
+                            log.fullText.contains("[WARN]") -> Color(0xFFFFD740) // YELLOW
+                            log.fullText.contains("[INFO]") -> Color(0xFF40C4FF) // CYAN
+                            log.fullText.contains("[VERBOSE]") -> Color(0xFFBDBDBD) // GREY
                             else -> theme.textColor
                         }
 
@@ -238,7 +241,8 @@ fun ConsoleLine(
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            maxLines = if (isMultiLine) Int.MAX_VALUE else 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

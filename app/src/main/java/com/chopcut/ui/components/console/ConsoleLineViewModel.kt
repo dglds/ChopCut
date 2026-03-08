@@ -117,10 +117,18 @@ class ConsoleLineViewModel : ViewModel() {
                 _selectedLevel,
                 _maxDisplayLines
             ) { logs, query, level, maxLines ->
+                val assetKeywords = listOf("Thumbnail", "Strip", "Activity", "Asset", "Video", "Performance")
+                
                 logs.filter { entry ->
-                    val matchesQuery = query.isEmpty() || 
+                    // Se houver busca manual, usa ela. Caso contrário, filtra por assets/importantes.
+                    val matchesQuery = if (query.isNotEmpty()) {
                         entry.tag.contains(query, ignoreCase = true) || 
                         entry.message.contains(query, ignoreCase = true)
+                    } else {
+                        // Filtro padrão: Assets ou logs de alto nível (INFO/WARN/ERROR/WTF)
+                        assetKeywords.any { entry.tag.contains(it, ignoreCase = true) || entry.message.contains(it, ignoreCase = true) } ||
+                        entry.level.ordinal >= LogLevel.INFO.ordinal
+                    }
                     
                     val matchesLevel = level == null || entry.level == level
                     
