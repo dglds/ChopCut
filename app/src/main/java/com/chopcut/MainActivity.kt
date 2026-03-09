@@ -29,8 +29,6 @@ import com.chopcut.data.local.PreferencesManager
 import com.chopcut.ui.components.feedback.DebugState
 import com.chopcut.ui.components.feedback.DebugToast
 import com.chopcut.ui.components.feedback.DebugViewModel
-import com.chopcut.ui.components.console.ConsoleLine
-import com.chopcut.ui.components.console.ConsoleLineViewModel
 import com.chopcut.ui.onboarding.OnboardingScreen
 import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.PreferencesScreen
@@ -70,7 +68,6 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
 
                     val debugViewModel: DebugViewModel = viewModel()
-                    val consoleLineViewModel: ConsoleLineViewModel = viewModel()
 
                     // ViewModels especializadas no escopo da Activity
                     val application = remember { context.applicationContext as Application }
@@ -140,8 +137,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onNavigateToTests = {
                                         navController.navigate("audio_waveforms_test")
-                                    },
-                                    debugViewModel = debugViewModel
+                                    }
                                 )
                             }
 
@@ -197,19 +193,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-
-                        ConsoleLine(
-                            viewModel = consoleLineViewModel,
-                            modifier = Modifier
-                                .align(
-                                    when (consoleLineViewModel.position.value) {
-                                        ConsoleLineViewModel.ConsolePosition.HEADER -> Alignment.TopCenter
-                                        ConsoleLineViewModel.ConsolePosition.FOOTER -> Alignment.BottomCenter
-                                    }
-                                )
-                                .navigationBarsPadding()
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
 
                         if (BuildConfig.DEBUG) {
                             val debugState = debugViewModel.debugState.collectAsState()

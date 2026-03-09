@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -47,27 +46,11 @@ class PreloadViewModel(
     private val _uiState = MutableStateFlow<PreloadUiState>(PreloadUiState.Idle)
     val uiState: StateFlow<PreloadUiState> = _uiState.asStateFlow()
 
-    // StateFlow reativo para isReady (Apenas thumbnails são críticas para entrar no editor)
-    // Regra: Liberar com 50% das strips OU se estiver em cache.
-    val isReadyFlow: StateFlow<Boolean> = combine(
-        thumbnailVM.strips,
-        thumbnailVM.totalSegments,
-        thumbnailVM.isCached
-    ) { strips, total, isCached ->
-        if (total == 0) return@combine false
-        
-        // Se já está em cache, libera automático!
-        if (isCached) {
-            return@combine true
-        }
-
-        // Critério: 50% das strips prontas
-        // Para vídeos muito curtos, garantimos um mínimo de 1 ou o total se o total for pequeno
-        val threshold = if (total <= 6) total else (total * 0.5).toInt().coerceAtLeast(6)
-        val ready = strips.size >= threshold
-        
-        ready
-    }.stateIn(
+    // StateFlow reativo para isReady — libera assim que o número de segmentos é conhecido
+    // (logo após obter os metadados do vídeo, antes de qualquer extração)
+    val isReadyFlow: StateFlow<Boolean> = thumbnailVM.totalSegments
+        .map { total -> total > 0 }
+        .stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = false

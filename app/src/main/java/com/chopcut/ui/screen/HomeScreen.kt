@@ -81,8 +81,6 @@ import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.atoms.formatDuration
 import com.chopcut.ui.components.buttons.ChopCutPrimaryButton
 import com.chopcut.ui.components.buttons.ChopCutSecondaryButton
-import com.chopcut.ui.components.feedback.DebugEntry
-import com.chopcut.ui.components.feedback.DebugViewModel
 import com.chopcut.data.thumbnail.ThumbnailCacheManager
 import com.chopcut.ChopCutApplication
 import com.chopcut.data.local.PreferencesManager
@@ -112,8 +110,7 @@ fun HomeScreen(
     preloadViewModel: PreloadViewModel,
     onNavigateToEditor: (Uri) -> Unit = {},
     onNavigateToTests: () -> Unit = {},
-    onNavigateToPreferences: () -> Unit = {},
-    debugViewModel: DebugViewModel? = null
+    onNavigateToPreferences: () -> Unit = {}
 ) {
     val application = LocalContext.current.applicationContext as Application
     val videoRepository = remember { VideoRepository(application) }
@@ -186,8 +183,7 @@ fun HomeScreen(
                      val uri = selectedUri
                     when {
                         uri != null && uiState is HomeUiState.VideoLoaded -> {
-                            // Usar o isPreloadReady reativo
-                            val isLoading = preloadUiState is PreloadUiState.Loading
+                            val isLoading = !isPreloadReady
 
                             VideoPickerLoaded(
                                 videoInfo = (uiState as HomeUiState.VideoLoaded).videoInfo,
@@ -234,17 +230,6 @@ fun HomeScreen(
                 item { Spacer(Modifier.height(ChopCutSpacing.md)) }
             }
 
-            // Debug logging de preload
-            if (com.chopcut.BuildConfig.DEBUG && debugViewModel != null) {
-                if (preloadUiState is PreloadUiState.Loading) {
-                    val progress = (preloadUiState as PreloadUiState.Loading).progress
-                    LaunchedEffect(progress.logs) {
-                        progress.logs.forEach { log ->
-                            debugViewModel.log(log)
-                        }
-                    }
-                }
-            }
         }
     }
 
