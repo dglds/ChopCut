@@ -303,7 +303,7 @@ data class SessionInfo(
     val tags: Set<String>
 ) {
     fun formattedDate(): String {
-        return dateFormat.format(Date(createdAt))
+        return SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(createdAt))
     }
     
     fun formattedTime(): String {

@@ -100,7 +100,7 @@ class LogMetricsTracker {
         
         val logsPerMinute = if (recentLogs.isNotEmpty()) {
             val duration = (now - recentLogs.first().timestamp) / 1000.0
-            recentLogs.size / duration
+            (recentLogs.size / duration).toFloat()
         } else 0f
         
         val logsPerSecond = lastSecondLogs.size.toFloat()
