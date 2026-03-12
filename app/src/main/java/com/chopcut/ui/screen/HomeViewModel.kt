@@ -12,11 +12,16 @@ import com.chopcut.util.DispatcherProvider
 import com.chopcut.util.error.ErrorHandler
 import com.chopcut.util.error.RecoveryStrategy
 import com.chopcut.util.error.safeExecuteSuspend
+import com.chopcut.data.thumbnail.ThumbnailCacheManager
+import com.chopcut.data.thumbnail.ThumbnailStripManager
 import com.chopcut.utils.VideoConstraints
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * ViewModel para HomeScreen.
@@ -149,7 +154,47 @@ class HomeViewModel(
     fun resetState() {
         _uiState.value = HomeUiState.Initial
     }
+
+    // --- Cache management ---
+
+    private val _cacheSizeBytes = MutableStateFlow(0L)
+    val cacheSizeBytes: StateFlow<Long> = _cacheSizeBytes.asStateFlow()
+
+    private val _clearCacheState = MutableStateFlow(ClearCacheState.Idle)
+    val clearCacheState: StateFlow<ClearCacheState> = _clearCacheState.asStateFlow()
+
+    init {
+        loadCacheInfo()
+    }
+
+    fun loadCacheInfo() {
+        viewModelScope.launch(DispatcherProvider.io) {
+            val cacheDir = File(getApplication<Application>().cacheDir, ThumbnailStripManager.CACHE_DIR)
+            if (cacheDir.exists()) {
+                val files = cacheDir.listFiles() ?: emptyArray()
+                _cacheSizeBytes.value = files.sumOf { it.length() }
+            } else {
+                _cacheSizeBytes.value = 0L
+            }
+        }
+    }
+
+    fun clearCache() {
+        viewModelScope.launch {
+            _clearCacheState.value = ClearCacheState.Clearing
+            withContext(DispatcherProvider.io) {
+                ThumbnailStripManager.clearCache(getApplication())
+                ThumbnailCacheManager.clearAll()
+            }
+            _cacheSizeBytes.value = 0L
+            _clearCacheState.value = ClearCacheState.Done
+            delay(2000)
+            _clearCacheState.value = ClearCacheState.Idle
+        }
+    }
 }
+
+enum class ClearCacheState { Idle, Clearing, Done }
 
 sealed class HomeUiState {
     object Initial : HomeUiState()

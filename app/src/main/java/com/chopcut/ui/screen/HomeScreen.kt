@@ -49,12 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,10 +76,6 @@ import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.atoms.formatDuration
 import com.chopcut.ui.components.buttons.ChopCutPrimaryButton
 import com.chopcut.ui.components.buttons.ChopCutSecondaryButton
-import com.chopcut.data.thumbnail.ThumbnailCacheManager
-import com.chopcut.ChopCutApplication
-import com.chopcut.data.local.PreferencesManager
-import java.io.File
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.chopcut.ui.components.feedback.ErrorState
@@ -121,6 +112,8 @@ fun HomeScreen(
     val selectedUri by viewModel.selectedVideoUri.collectAsStateWithLifecycle()
     val preloadUiState by preloadViewModel.uiState.collectAsStateWithLifecycle()
     val isPreloadReady by preloadViewModel.isReadyFlow.collectAsStateWithLifecycle()
+    val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsStateWithLifecycle()
+    val clearCacheState by viewModel.clearCacheState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Iniciar preload ao selecionar vídeo
@@ -210,9 +203,9 @@ fun HomeScreen(
         
                 item {
                     FeatureGrid(
-                        onClearCache = {
-                            ChopCutApplication.clearThumbnailCache()
-                        }
+                        cacheSizeBytes = cacheSizeBytes,
+                        clearCacheState = clearCacheState,
+                        onClearCache = { viewModel.clearCache() }
                     )
                 }
 
@@ -521,38 +514,22 @@ private data class FeatureInfo(
 )
 
 @Composable
-private fun FeatureGrid(onClearCache: () -> Unit) {
-        val context = LocalContext.current
-        val prefsManager = remember { PreferencesManager(context) }
-
-        // Calcular tamanho do cache de disco
-        val diskCacheSize = remember { mutableStateOf(0L) }
-        val diskCacheFiles = remember { mutableStateOf(0) }
-
-        // Atualizar informações do cache ao criar o composable
-        androidx.compose.runtime.LaunchedEffect(Unit) {
-            val cacheDir = File(context.cacheDir, "thumbnail_strips")
-            if (cacheDir.exists()) {
-                val files = cacheDir.listFiles() ?: emptyArray()
-                diskCacheFiles.value = files.size
-                diskCacheSize.value = files.sumOf { it.length() }
-            } else {
-                diskCacheFiles.value = 0
-                diskCacheSize.value = 0L
-            }
-        }
-
-        val features = remember {
-            listOf(
-                FeatureInfo(Icons.Default.Settings, "Cache", formatBytes(diskCacheSize.value), Color(0xFF6B7280), isCacheFeature = true),
-                FeatureInfo(Icons.Default.ContentCut, "Trim", "Cortar trechos", Primary),
-                FeatureInfo(Icons.AutoMirrored.Filled.CallMerge, "Join", "Concatenar vídeos", Waveform),
-                FeatureInfo(Icons.Default.Compress, "Compress", "Reduzir tamanho", Warning),
-                FeatureInfo(Icons.Default.AspectRatio, "Resize", "Alterar resolução", Info),
-                FeatureInfo(Icons.Default.Crop, "Crop", "Recortar área", Success),
-                FeatureInfo(Icons.Default.MusicNote, "Áudio", "Extrair trilha sonora", Color(0xFFEC4899))
-            )
-        }
+private fun FeatureGrid(
+    cacheSizeBytes: Long,
+    clearCacheState: ClearCacheState,
+    onClearCache: () -> Unit
+) {
+    val features = remember {
+        listOf(
+            FeatureInfo(Icons.Default.Settings, "Cache", "", Color(0xFF6B7280), isCacheFeature = true),
+            FeatureInfo(Icons.Default.ContentCut, "Trim", "Cortar trechos", Primary),
+            FeatureInfo(Icons.AutoMirrored.Filled.CallMerge, "Join", "Concatenar vídeos", Waveform),
+            FeatureInfo(Icons.Default.Compress, "Compress", "Reduzir tamanho", Warning),
+            FeatureInfo(Icons.Default.AspectRatio, "Resize", "Alterar resolução", Info),
+            FeatureInfo(Icons.Default.Crop, "Crop", "Recortar área", Success),
+            FeatureInfo(Icons.Default.MusicNote, "Áudio", "Extrair trilha sonora", Color(0xFFEC4899))
+        )
+    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
@@ -581,14 +558,11 @@ private fun FeatureGrid(onClearCache: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xs)
             ) {
                 rowFeatures.forEachIndexed { colIndex, feature ->
-                    if (feature.isCacheFeature && rowIndex == 0) {  // Primeira linha, primeiro card
+                    if (feature.isCacheFeature && rowIndex == 0) {
                         CacheFeatureCard(
-                            diskCacheSize = diskCacheSize.value,
+                            diskCacheSize = cacheSizeBytes,
+                            clearCacheState = clearCacheState,
                             onClearCache = onClearCache,
-                            onCacheCleared = {
-                                diskCacheSize.value = 0L
-                                diskCacheFiles.value = 0
-                            },
                             modifier = Modifier.weight(1f)
                         )
                     } else {
@@ -678,8 +652,6 @@ private fun BadgeText(text: String) {
     )
 }
 
-private enum class ClearCacheState { Idle, Clearing, Done }
-
 /**
  * Card de Cache de Thumbnails nos recursos
  * Mostra os bytes de cache e botão para limpar
@@ -687,13 +659,10 @@ private enum class ClearCacheState { Idle, Clearing, Done }
 @Composable
 private fun CacheFeatureCard(
     diskCacheSize: Long,
+    clearCacheState: ClearCacheState,
     onClearCache: () -> Unit,
-    onCacheCleared: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var clearState by remember { mutableStateOf(ClearCacheState.Idle) }
-    val scope = rememberCoroutineScope()
-
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
@@ -712,33 +681,24 @@ private fun CacheFeatureCard(
                 color = OnSurface
             )
             Text(
-                text = when (clearState) {
+                text = when (clearCacheState) {
                     ClearCacheState.Idle -> formatBytes(diskCacheSize)
                     ClearCacheState.Clearing -> "Limpando..."
                     ClearCacheState.Done -> "Cache limpo!"
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = if (clearState == ClearCacheState.Done) Success else TextSecondary
+                color = if (clearCacheState == ClearCacheState.Done) Success else TextSecondary
             )
         }
 
         ChopCutSecondaryButton(
-            onClick = {
-                scope.launch {
-                    clearState = ClearCacheState.Clearing
-                    withContext(Dispatchers.IO) { onClearCache() }
-                    onCacheCleared()
-                    clearState = ClearCacheState.Done
-                    delay(2000)
-                    clearState = ClearCacheState.Idle
-                }
-            },
-            text = when (clearState) {
+            onClick = onClearCache,
+            text = when (clearCacheState) {
                 ClearCacheState.Idle -> "Limpar"
                 ClearCacheState.Clearing -> "Limpando..."
                 ClearCacheState.Done -> "Limpo!"
             },
-            enabled = clearState == ClearCacheState.Idle
+            enabled = clearCacheState == ClearCacheState.Idle
         )
     }
 }

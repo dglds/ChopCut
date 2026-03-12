@@ -71,7 +71,7 @@ class ThumbnailStripManager(
         private val ioSemaphore = Semaphore(ThumbnailConstants.Concurrency.IO_SEMAPHORE_PERMITS)
 
         /** Diretório de cache para strips */
-        private const val CACHE_DIR = "thumbnail_strips"
+        internal const val CACHE_DIR = "thumbnail_strips"
 
         /** Tamanho máximo do cache em bytes */
         private const val MAX_CACHE_SIZE = ThumbnailConstants.Cache.MAX_CACHE_SIZE
@@ -450,6 +450,7 @@ class ThumbnailStripManager(
             
             // Se for overview, usamos o índice para pular o intervalo correto
             val segDuration = getThumbsPerStripForSegment(segmentIndex, totalSegments)
+            // TODO: quando adaptiveStrips for reativado, usar soma cumulativa em vez de multiplicação
             val startSec = segmentIndex * segDuration
             
             if (startSec >= totalSeconds) return@withPermit null
