@@ -2,7 +2,6 @@ package com.chopcut.ui.components
 
 import android.graphics.Bitmap
 import android.net.Uri
-import androidx.annotation.OptIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -69,12 +68,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 
-@OptIn(UnstableApi::class)
 @Composable
 fun TimelineEditor(
     videoUri: Uri,
@@ -102,7 +96,7 @@ fun TimelineEditor(
          val pxPerSecond = remember { with(density) { 60.dp.toPx() } }
          var scrollOffsetPx by remember { mutableFloatStateOf(0f) }
          var videoDurationMs by remember { mutableLongStateOf(0L) }
-         var isPlaying by remember { mutableStateOf(false) }
+         // isPlaying agora vem do PlayerManager (definido após exoPlayer)
          
          // Detecção de velocidade do scroll para pre-fetching adaptativo
          var scrollVelocity by remember { mutableFloatStateOf(0f) }
@@ -200,6 +194,11 @@ fun TimelineEditor(
         // Aumentado para 500 para suportar vídeos longos (~83 min) sem descarte agressivo
         val maxStrips = 500
 
+        // Total de segmentos para o vídeo atual (usado em culling e renderização)
+        val totalSegments = remember(videoDurationMs) {
+            if (videoDurationMs > 0) stripManager.getSegmentCount(videoDurationMs) else 0
+        }
+
 
         // SEQUENTIAL LOADING: Delegar o carregamento para o ViewModel.
         // Isso garante que o processo sobreviva à navegação entre telas.
@@ -244,80 +243,38 @@ fun TimelineEditor(
             label = "shimmerProgress"
         )
 
-        val exoPlayer = remember(videoUri) {
-            ExoPlayer.Builder(context).build().apply {
-                setMediaItem(MediaItem.fromUri(videoUri))
-                prepare()
-                repeatMode = Player.REPEAT_MODE_OFF
-                playWhenReady = false
-            }
+        val playerManager = remember(videoUri) {
+            com.chopcut.ui.components.player.PlayerManager(
+                context = context,
+                videoUri = videoUri,
+                onDurationReady = { duration -> videoDurationMs = duration }
+            )
         }
-    
+        val exoPlayer = playerManager.exoPlayer
+        val isPlaying by playerManager.isPlaying.collectAsState()
+        val playerError by playerManager.playerError.collectAsState()
+        val isSecurityError by playerManager.isSecurityError.collectAsState()
+
         var currentTimeMs by remember { mutableLongStateOf(0L) }
-        
+
         val isInsideRange = remember(trimPosition, currentTimeMs) {
             trimPosition.isPositionInRange(currentTimeMs)
         }
-    
-        var playerError by remember(videoUri) { mutableStateOf<String?>(null) }
-        var isSecurityError by remember(videoUri) { mutableStateOf(false) }
-    
-        DisposableEffect(exoPlayer) {
-            val listener = object : Player.Listener {
-                override fun onPlaybackStateChanged(state: Int) {
-                    if (state == Player.STATE_READY) {
-                        videoDurationMs = exoPlayer.duration.coerceAtLeast(0L)
-                        playerError = null
-                        isSecurityError = false
-                    }
-                }
-                override fun onIsPlayingChanged(playing: Boolean) {
-                    isPlaying = playing
-                }
-                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                    val cause = error.cause
-                    // Check for SecurityException (Permission denied)
-                    val isPermError = cause?.toString()?.contains("SecurityException") == true || 
-                                      cause?.cause?.toString()?.contains("SecurityException") == true
-                    
-                    isSecurityError = isPermError
-                    playerError = if (isPermError) {
-                        "Permissão do arquivo expirou. Toque em 'Re-Localizar' para corrigir."
-                    } else {
-                        "Erro ao reproduzir: ${error.message ?: "Desconhecido"}"
-                    }
-                    
-                    if (isPermError && onRequestNewMedia != null) {
-                       // Auto-trigger handled in LaunchedEffect to avoid side-effects in listener
-                    }
-                }
-            }
-            exoPlayer.addListener(listener)
-            onDispose {
-                exoPlayer.removeListener(listener)
-                exoPlayer.release()
-            }
+
+        DisposableEffect(playerManager) {
+            onDispose { playerManager.release() }
         }
-        
+
         // Auto-launch recovery if security error
         LaunchedEffect(isSecurityError) {
-            if (isSecurityError && onRequestNewMedia != null) {
-                // Optional: Add a small delay or check strict conditions to avoid loops
-                // For now, we rely on the parent to handle "one-time" logic if needed, 
-                // or just let the user click.
-                // User requested "funcione de cara", so let's TRY to auto-launch?
-                // Actually, auto-launching a system picker without user click might be blocked or jarring.
-                // Let's stick to clear UI, but maybe the user meant "Don't show generic error".
-                // We improved the message.
-            }
+            // Mensagem de erro já é informativa no PlayerManager
         }
-    
+
         // OTIMIZAÇÃO: Remover scrollOffsetPx das dependências para evitar feedback loop
-        // O LaunchedEffect modifica scrollOffsetPx, então não deve depender dele
         LaunchedEffect(isPlaying) {
             if (!isPlaying) return@LaunchedEffect
             while (isActive) {
-                val pos = exoPlayer.currentPosition
+                val pos = playerManager.currentPosition
                 scrollOffsetPx = (pos / 1000f) * pxPerSecond
                 currentTimeMs = if (pxPerSecond > 0) {
                     ((scrollOffsetPx / pxPerSecond) * 1000).toLong().coerceIn(0, videoDurationMs)
@@ -325,7 +282,7 @@ fun TimelineEditor(
                 onPositionChange(currentTimeMs)
                 delay(16)
             }
-        }    
+        }
         LaunchedEffect(scrollOffsetPx) {
             if (!isPlaying) {
                 currentTimeMs = if (pxPerSecond > 0) {
@@ -333,8 +290,8 @@ fun TimelineEditor(
                 } else 0L
                 onPositionChange(currentTimeMs)
                 val playerPos = (scrollOffsetPx / pxPerSecond) * 1000
-                if (kotlin.math.abs(exoPlayer.currentPosition - playerPos) > 30) {
-                    exoPlayer.seekTo(playerPos.toLong())
+                if (kotlin.math.abs(playerManager.currentPosition - playerPos) > 30) {
+                    playerManager.seekTo(playerPos.toLong())
                 }
             }
         }
@@ -367,18 +324,9 @@ fun TimelineEditor(
                 playerError = playerError,
                 isSecurityError = isSecurityError,
                 onRequestNewMedia = onRequestNewMedia,
-                onRetry = {
-                    playerError = null
-                    isSecurityError = false
-                    exoPlayer.prepare()
-                    exoPlayer.play()
-                },
+                onRetry = { playerManager.retry() },
                 onTogglePlayPause = {
-                    if (isPlaying) {
-                        exoPlayer.pause()
-                    } else {
-                        exoPlayer.play()
-                    }
+                    if (isPlaying) playerManager.pause() else playerManager.play()
                 }
             )
 
@@ -415,8 +363,7 @@ fun TimelineEditor(
             val scrollableState = androidx.compose.foundation.gestures.rememberScrollableState { delta ->
                 // PAUSE ON MANIPULATION
                 if (isPlaying) {
-                    isPlaying = false
-                    exoPlayer.pause()
+                    playerManager.pause()
                 }
                 
                 // Aplicar amortecimento (30% de redução na velocidade/sensibilidade)
@@ -591,10 +538,12 @@ fun TimelineEditor(
                        // ✅ NOVO: Renderização por STRIP (OTIMIZADO - 30x menos draw calls)
                        // ═══════════════════════════════════════════════════════════════
                         for (segIdx in visibleSegmentIndices) {
-                            val strip = strips[segIdx]
-                            val startSec = segIdx * thumbsPerStrip
-                            val stripWidthPx = pxPerSecond * thumbsPerStrip // Largura visual TOTAL do segmento
-                            val x = centerOffset + (startSec * pxPerSecond) - currentScroll
+                             val strip = strips[segIdx]
+                             val thumbsPerStripForThisSeg = stripManager.getThumbsPerStripForSegment(segIdx, totalSegments)
+                             // TODO: quando adaptiveStrips for reativado, usar soma cumulativa em vez de multiplicação
+                             val startSec = segIdx * thumbsPerStripForThisSeg
+                             val stripWidthPx = pxPerSecond * thumbsPerStripForThisSeg // BUG FIX: Usar valor adaptivo, não fixo
+                             val x = centerOffset + (startSec * pxPerSecond) - currentScroll
 
                              drawCallCount.intValue++
 
