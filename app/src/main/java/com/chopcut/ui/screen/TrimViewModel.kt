@@ -13,22 +13,26 @@ import com.chopcut.data.audio.WaveformQuality
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.TrimPosition
 import com.chopcut.ui.components.WaveformData
+import com.chopcut.ui.components.player.PlayerManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import androidx.media3.exoplayer.ExoPlayer
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
 
 /**
  * ViewModel para TrimScreen.
- * 
+ *
  * Responsabilidades:
  * - Gerenciar estado do editor de trim (posições, duração, trim ranges)
  * - Carregar waveform de áudio
  * - Gerenciar posição atual do playhead
- * - Receber dados preloaded de AudioViewModel
- * 
+ * - Gerenciar Player de vídeo (ExoPlayer)
+ *
  * NOTA: O pré-carregamento de thumbnails e áudio é gerenciado
  * pela PreloadViewModel (Activity-scoped), não por esta ViewModel.
  */
@@ -76,9 +80,43 @@ class TrimViewModel(
     private val audioDataExtractor = AudioDataExtractor(application)
     private val videoRepository = VideoRepository(application)
 
+    private var playerManager: PlayerManager? = null
+
     init {
-        // NOTA: PreloadViewModel (Activity-scoped) gerencia o preload
-        // Esta ViewModel não inicia preload próprio
+        // Instantiate PlayerManager
+        if (videoUri != null) {
+            playerManager = PlayerManager(
+                context = application,
+                videoUri = videoUri,
+                onDurationReady = { duration ->
+                    _state.update { it.copy(videoDurationMs = duration) }
+                }
+            )
+
+            _state.update { it.copy(exoPlayer = playerManager?.exoPlayer) }
+
+            // Observe player states
+            viewModelScope.launch {
+                playerManager?.isPlaying?.collectLatest { isPlaying ->
+                    _state.update { it.copy(isPlaying = isPlaying) }
+                }
+            }
+            viewModelScope.launch {
+                playerManager?.playerError?.collectLatest { error ->
+                    _state.update { it.copy(playerError = error) }
+                }
+            }
+            viewModelScope.launch {
+                playerManager?.isSecurityError?.collectLatest { isSecurityError ->
+                    _state.update { it.copy(isSecurityError = isSecurityError) }
+                }
+            }
+            viewModelScope.launch {
+                playerManager?.currentPositionFlow?.collectLatest { position: Long ->
+                    _state.update { it.copy(currentPosition = position) }
+                }
+            }
+        }
     }
 
     fun setWaveformQuality(quality: WaveformQuality) {
@@ -121,7 +159,7 @@ class TrimViewModel(
 
     fun loadAudioWaveforms(uri: Uri, targetBarCount: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            
+
             if (initialAudioAmplitudes != null) {
                 _state.update { it.copy(
                     audioWaveformsAmplitudes = initialAudioAmplitudes,
@@ -129,7 +167,7 @@ class TrimViewModel(
                 ) }
                 return@launch
             }
-            
+
             _state.update { it.copy(isAudioWaveformsLoading = true, audioWaveformsAmplitudes = emptyList()) }
             try {
                 val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = targetBarCount)
@@ -144,13 +182,13 @@ class TrimViewModel(
             }
         }
     }
-    
+
     /**
      * Atualiza as amplitudes de áudio.
      * Usado para sincronizar dados do AudioViewModel.
      */
     fun updateAudioAmplitudes(amplitudes: List<Float>) {
-        
+
         _state.update { it.copy(
             audioWaveformsAmplitudes = amplitudes
         ) }
@@ -166,6 +204,7 @@ class TrimViewModel(
 
     fun setCurrentPosition(pos: Long) {
         _state.update { it.copy(currentPosition = pos) }
+        playerManager?.seekTo(pos)
     }
 
     fun setVideoDuration(duration: Long) {
@@ -194,4 +233,22 @@ class TrimViewModel(
     fun getCompleteRanges(): List<Pair<Long, Long>> {
         return _state.value.trimPosition.completeRanges
     }
+
+    fun play() {
+        playerManager?.play()
+    }
+
+    fun pause() {
+        playerManager?.pause()
+    }
+    
+    fun retryPlayer() {
+        playerManager?.retry()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        playerManager?.release()
+    }
 }
+

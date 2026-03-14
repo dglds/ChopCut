@@ -1,5 +1,6 @@
 package com.chopcut.ui.screen
 
+import androidx.media3.exoplayer.ExoPlayer
 import com.chopcut.ui.components.TrimPosition
 import com.chopcut.ui.components.WaveformData
 
@@ -15,7 +16,13 @@ data class TrimEditorState(
     val waveformError: String? = null,
     // Novos campos para AudioWaveForms
     val audioWaveformsAmplitudes: List<Float> = emptyList(),
-    val isAudioWaveformsLoading: Boolean = false
+    val isAudioWaveformsLoading: Boolean = false,
+    
+    // Player related states
+    val exoPlayer: ExoPlayer? = null,
+    val isPlaying: Boolean = false,
+    val playerError: String? = null,
+    val isSecurityError: Boolean = false
 ) {
     val totalTrimmedMs: Long
         get() = trimPosition.completeRanges.sumOf { it.second - it.first }
@@ -35,3 +42,4 @@ data class TrimEditorState(
     val hasTrims: Boolean
         get() = trimPosition.completeRanges.isNotEmpty()
 }
+
