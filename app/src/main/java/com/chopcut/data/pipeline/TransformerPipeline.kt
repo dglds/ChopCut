@@ -214,3 +214,12 @@ class TransformerPipeline(
         }
     }
 }
+
+/**
+ * Progresso da transformação de vídeo.
+ */
+sealed class TrimProgress {
+    data class InProgress(val progress: Float) : TrimProgress()
+    data class Finished(val outputFile: File) : TrimProgress()
+    data class Error(val exception: Exception) : TrimProgress()
+}

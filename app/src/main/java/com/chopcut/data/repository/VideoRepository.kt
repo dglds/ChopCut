@@ -467,13 +467,11 @@ class VideoRepository(
                 arrayOf(file.absolutePath),
                 arrayOf("video/mp4")
             ) { path, uri ->
+                // Callback é assíncrono, não precisamos de delay
                 if (uri != null) {
                 } else {
                 }
             }
-
-            // Give MediaStore a moment to process
-            Thread.sleep(100)
         } catch (e: Exception) {
         }
     }
