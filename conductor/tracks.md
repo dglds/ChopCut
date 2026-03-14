@@ -32,5 +32,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 ---
 
 - [~] **Track: Otimização de thumbnails da timeline com aspect ratio dinâmico, extração progressiva e compressão WEBP.**
-*Link: [./tracks/thumb_optimization_20260226/](./tracks/thumb_optimization_20260226/)*
+*Link: [./tracks/thumb_optimization_20260226/](./tracks/thumb_o ptimization_20260226/)*
 
+---
+
+- [ ] **Track: Timeline v3 Optimization - Otimização do componente de timeline para performance e UX.**
+*Link: [./tracks/timelinev3/](./tracks/timelinev3/)*
