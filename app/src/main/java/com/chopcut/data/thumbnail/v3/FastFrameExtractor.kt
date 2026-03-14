@@ -142,32 +142,24 @@ class FastFrameExtractor(
                         if (isTargetFrame) {
                             // Get the YUV data from the output buffer
                             val outputBuffer = codec.getOutputBuffer(outputIndex)
-                            if (outputBuffer != null) {
+                            if (outputBuffer != null && outputBuffer.remaining() > 0) {
                                 try {
-                                    // Copy YUV data (NV21 format from COLOR_FormatYUV420Flexible)
+                                    // YUV420Flexible requires proper stride handling
                                     val yuvData = ByteArray(outputBuffer.remaining())
                                     outputBuffer.get(yuvData)
 
-                                    // Convert YUV to Bitmap
-                                    val yuvImage = YuvImage(yuvData, ImageFormat.NV21, width, height, null)
-                                    val out = ByteArrayOutputStream()
-                                    yuvImage.compressToJpeg(android.graphics.Rect(0, 0, width, height), 100, out)
-                                    val jpegData = out.toByteArray()
-                                    out.close()
+                                    Timber.d("YUV buffer size: ${yuvData.size}, expected min: ${width * height * 3 / 2}")
 
-                                    // Decode JPEG to Bitmap
-                                    val bitmap = BitmapFactory.decodeByteArray(jpegData, 0, jpegData.size)
+                                    // Convert YUV420 semi-planar (NV21) to RGB_565
+                                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+                                    convertYuv420ToRgb565(yuvData, width, height, bitmap)
 
-                                    if (bitmap != null) {
-                                        // Convert to RGB_565
-                                        frameAcquired = bitmap.copy(Bitmap.Config.RGB_565, false)
-                                        if (bitmap.config != Bitmap.Config.RGB_565) {
-                                            bitmap.recycle()
-                                        }
-                                    }
+                                    frameAcquired = bitmap
                                 } catch (e: Exception) {
-                                    Timber.e(e, "Failed to convert YUV frame at $timeUs")
+                                    Timber.e(e, "Failed to convert YUV frame at $timeUs, buffer size: ${outputBuffer.remaining()}")
                                 }
+                            } else {
+                                Timber.w("Output buffer is null or empty at $timeUs")
                             }
                         }
 
@@ -192,5 +184,36 @@ class FastFrameExtractor(
         } catch (e: Exception) {
             Timber.e(e, "Error releasing resources")
         }
+    }
+
+    /**
+     * Convert YUV420 semi-planar (NV21) format to RGB_565 Bitmap.
+     * Layout: Y plane (W×H) followed by interleaved UV plane (W/2×H/2, but stored as W×H/2)
+     */
+    private fun convertYuv420ToRgb565(yuvData: ByteArray, width: Int, height: Int, bitmap: Bitmap) {
+        val frameSize = width * height
+        val rgb565Data = IntArray(frameSize)
+
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val pixelIndex = y * width + x
+                val yValue = yuvData[pixelIndex].toInt() and 0xFF
+
+                // UV plane starts at frameSize, interleaved
+                val uvIndex = frameSize + (y / 2) * width + (x / 2) * 2
+                val u = (yuvData[uvIndex].toInt() and 0xFF) - 128
+                val v = (yuvData[uvIndex + 1].toInt() and 0xFF) - 128
+
+                // YUV to RGB conversion
+                val r = (yValue + 1.402 * v).toInt().coerceIn(0, 255)
+                val g = (yValue - 0.344136 * u - 0.714136 * v).toInt().coerceIn(0, 255)
+                val b = (yValue + 1.772 * u).toInt().coerceIn(0, 255)
+
+                // RGB to RGB565 (5 bits R, 6 bits G, 5 bits B)
+                rgb565Data[pixelIndex] = ((r shr 3) shl 11) or ((g shr 2) shl 5) or (b shr 3)
+            }
+        }
+
+        bitmap.setPixels(rgb565Data, 0, width, 0, 0, width, height)
     }
 }
