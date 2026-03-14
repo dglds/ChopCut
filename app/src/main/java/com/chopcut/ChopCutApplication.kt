@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import java.io.File
+import timber.log.Timber
 
 class ChopCutApplication : Application() {
 
@@ -35,6 +36,7 @@ class ChopCutApplication : Application() {
 
         // Setup Timber for logging
         if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
         }
 
         // Setup File Logger (no dispositivo)
