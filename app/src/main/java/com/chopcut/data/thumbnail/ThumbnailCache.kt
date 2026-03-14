@@ -1,6 +1,7 @@
 package com.chopcut.data.thumbnail
 
 import android.graphics.Bitmap
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 /**
  * Cache LRU (Least Recently Used) para thumbnails de timeline
@@ -8,12 +9,15 @@ import android.graphics.Bitmap
  * Armazena bitmaps em memória com limite máximo de itens.
  * Quando o limite é atingido, os itens menos usados são removidos.
  * 
+ * Otimizado: Usa ReentrantReadWriteLock para leituras paralelas.
+ * 
  * Implementa o padrão Cache-Aside para carregamento eficiente.
  */
 class ThumbnailCache(
     private val maxSize: Int = DEFAULT_MAX_SIZE
 ) {
     private val cache = LinkedHashMap<String, Bitmap>(maxSize, 0.75f, true)
+    private val lock = ReentrantReadWriteLock()
     
     private var cacheHits = 0
     private var cacheMisses = 0
@@ -38,12 +42,28 @@ class ThumbnailCache(
      */
     fun get(uri: String, positionMs: Long): Bitmap? {
         val key = generateKey(uri, positionMs)
-        return synchronized(cache) {
+        lock.readLock().lock()
+        try {
             val bitmap = cache[key]
-            when {
+            return when {
                 bitmap == null -> { cacheMisses++; null }
-                bitmap.isRecycled -> { cache.remove(key); cacheMisses++; null }
+                bitmap.isRecycled -> {
+                    // Sair do read lock e entrar no write lock para remover bitmap reciclado
+                    lock.readLock().unlock()
+                    lock.writeLock().lock()
+                    try {
+                        cache.remove(key)
+                        cacheMisses++
+                        null
+                    } finally {
+                        lock.writeLock().unlock()
+                    }
+                }
                 else -> { cacheHits++; bitmap }
+            }
+        } finally {
+            if (lock.readLock().tryLock()) {
+                lock.readLock().unlock()
             }
         }
     }
@@ -57,11 +77,14 @@ class ThumbnailCache(
      */
     fun put(uri: String, positionMs: Long, bitmap: Bitmap) {
         val key = generateKey(uri, positionMs)
-        synchronized(cache) {
+        lock.writeLock().lock()
+        try {
             if (cache.size >= maxSize && !cache.containsKey(key)) {
                 cache.remove(cache.keys.first())
             }
             cache[key] = bitmap
+        } finally {
+            lock.writeLock().unlock()
         }
     }
 
@@ -95,10 +118,13 @@ class ThumbnailCache(
      * @return CacheStats com estatísticas atuais
      */
     fun getStats(): CacheStats {
-        return synchronized(cache) {
+        lock.readLock().lock()
+        try {
             val total = cacheHits + cacheMisses
             val hitRate = if (total > 0) (cacheHits.toFloat() / total * 100) else 0f
-            CacheStats(size = cache.size, maxSize = maxSize, hits = cacheHits, misses = cacheMisses, hitRate = hitRate)
+            return CacheStats(size = cache.size, maxSize = maxSize, hits = cacheHits, misses = cacheMisses, hitRate = hitRate)
+        } finally {
+            lock.readLock().unlock()
         }
     }
 
@@ -106,30 +132,50 @@ class ThumbnailCache(
      * Limpa todos os itens do cache e estatísticas.
      */
     fun clear() {
-        synchronized(cache) {
+        lock.writeLock().lock()
+        try {
             cache.clear()
             cacheHits = 0
             cacheMisses = 0
+        } finally {
+            lock.writeLock().unlock()
         }
     }
 
     /**
      * Retorna o número atual de itens no cache
      */
-    fun size(): Int = synchronized(cache) { cache.size }
+    fun size(): Int {
+        lock.readLock().lock()
+        try {
+            return cache.size
+        } finally {
+            lock.readLock().unlock()
+        }
+    }
 
     /**
      * Verifica se o cache contém uma chave específica
      */
     fun contains(uri: String, positionMs: Long): Boolean {
-        return synchronized(cache) { cache.containsKey(generateKey(uri, positionMs)) }
+        lock.readLock().lock()
+        try {
+            return cache.containsKey(generateKey(uri, positionMs))
+        } finally {
+            lock.readLock().unlock()
+        }
     }
 
     /**
      * Remove um item específico do cache
      */
     fun remove(uri: String, positionMs: Long) {
-        synchronized(cache) { cache.remove(generateKey(uri, positionMs)) }
+        lock.writeLock().lock()
+        try {
+            cache.remove(generateKey(uri, positionMs))
+        } finally {
+            lock.writeLock().unlock()
+        }
     }
 
     /**
@@ -137,8 +183,11 @@ class ThumbnailCache(
      * Útil para saber se um vídeo já foi processado antes de iniciar extração.
      */
     fun containsVideo(uri: String): Boolean {
-        return synchronized(cache) {
-            cache.keys.any { it.startsWith("${uri}_") }
+        lock.readLock().lock()
+        try {
+            return cache.keys.any { it.startsWith("${uri}_") }
+        } finally {
+            lock.readLock().unlock()
         }
     }
 
@@ -147,10 +196,13 @@ class ThumbnailCache(
      * @return Número de entradas removidas.
      */
     fun removeVideo(uri: String): Int {
-        return synchronized(cache) {
+        lock.writeLock().lock()
+        try {
             val keys = cache.keys.filter { it.startsWith("${uri}_") }
             keys.forEach { cache.remove(it) }
-            keys.size
+            return keys.size
+        } finally {
+            lock.writeLock().unlock()
         }
     }
 
@@ -160,8 +212,11 @@ class ThumbnailCache(
      * Chave interna: "${uri}_${positionMs}" — extraímos o URI removendo o sufixo numérico.
      */
     fun getTrackedUris(): Set<String> {
-        return synchronized(cache) {
-            cache.keys.map { it.substringBeforeLast("_") }.toSet()
+        lock.readLock().lock()
+        try {
+            return cache.keys.map { it.substringBeforeLast("_") }.toSet()
+        } finally {
+            lock.readLock().unlock()
         }
     }
 
@@ -170,8 +225,11 @@ class ThumbnailCache(
      * @param thresholdPercent Percentual de uso para considerar "próximo do limite" (padrão: 80%)
      */
     fun isNearCapacity(thresholdPercent: Int = 80): Boolean {
-        return synchronized(cache) {
-            cache.size * 100 >= maxSize * thresholdPercent
+        lock.readLock().lock()
+        try {
+            return cache.size * 100 >= maxSize * thresholdPercent
+        } finally {
+            lock.readLock().unlock()
         }
     }
 
@@ -180,8 +238,11 @@ class ThumbnailCache(
      * Usa [Bitmap.byteCount] que reflete a alocação real (RGB_565=2b/px, ARGB_8888=4b/px).
      */
     fun totalSizeBytes(): Long {
-        return synchronized(cache) {
-            cache.values.sumOf { if (it.isRecycled) 0L else it.byteCount.toLong() }
+        lock.readLock().lock()
+        try {
+            return cache.values.sumOf { if (it.isRecycled) 0L else it.byteCount.toLong() }
+        } finally {
+            lock.readLock().unlock()
         }
     }
 
