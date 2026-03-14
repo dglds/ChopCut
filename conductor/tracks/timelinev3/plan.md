@@ -38,15 +38,15 @@
 ## Phase 2: Minimal Core Development
 
 1.  **Setup Environment:**
-    *   Create `timelinev3` development branch.
-2.  **Implement Simplified UI:**
+    *   Create `timelinev3` development branch. (DONE)
+2.  **Implement Simplified UI:** (DONE)
     *   Develop the basic video player component.
     *   Implement the horizontal thumbnail scroll with placeholder data.
-3.  **Implement v3 Extraction/Decoding Proof-of-Concept (POC):**
+3.  **Implement v3 Extraction/Decoding Proof-of-Concept (POC):** (DONE)
     *   Develop a basic, functional implementation of the new extraction/decoding methods.
-4.  **Integrate MAX_PERFORMANCE Toggle:**
+4.  **Integrate MAX_PERFORMANCE Toggle:** (DONE)
     *   Implement the basic mechanism to enable/disable `MAX_PERFORMANCE` mode.
-5.  **Basic Integration & Initial Performance Test:**
+5.  **Basic Integration & Initial Performance Test:** (DONE)
     *   Connect the UI, player, and extraction POC.
     *   Perform initial tests to validate core functionality and identify immediate performance gains/issues.
 

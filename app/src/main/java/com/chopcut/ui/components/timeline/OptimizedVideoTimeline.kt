@@ -26,6 +26,9 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+
 /**
  * Timeline de thumbnails de vídeo otimizada usando RecyclerView dentro do Compose.
  *
@@ -175,7 +178,7 @@ fun OptimizedVideoTimeline(
                 .fillMaxHeight()
                 .width(2.dp)
                 .background(androidx.compose.ui.graphics.Color.Red)
-                .align(androidx.compose.ui.Alignment.CenterHorizontally)
+                .align(Alignment.Center)
         )
     }
 }
