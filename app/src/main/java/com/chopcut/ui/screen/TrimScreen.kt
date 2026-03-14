@@ -27,19 +27,22 @@ import com.chopcut.ui.components.loading.LoadingOverlay
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.data.pipeline.TrimProgress
 import com.chopcut.data.repository.VideoRepository
-import com.chopcut.ui.components.TimelineEditor
+import com.chopcut.ui.components.VideoFileInfo
 import com.chopcut.ui.components.trim.TrimControlPanel
 import com.chopcut.ui.components.trim.SaveDialogState
 import com.chopcut.ui.components.trim.TrimSaveDialog
 import com.chopcut.ui.components.feedback.ErrorState
+import com.chopcut.ui.components.timeline.OptimizedVideoTimeline
+import com.chopcut.ui.components.timeline.SeekbarProgress
+import com.chopcut.ui.components.timeline.CurrentTimeDisplay
+import com.chopcut.ui.components.timeline.VideoPreview
 import com.chopcut.ui.theme.ChopCutSpacing
 import com.chopcut.utils.FileNameUtils
 import com.chopcut.utils.RangeUtils
+import com.chopcut.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,7 +54,8 @@ fun TrimScreen(
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
-
+    val scope = rememberCoroutineScope()
+ 
     // Observar PreloadViewModel com lifecycle awareness
     val preloadUiState by preloadViewModel.uiState.collectAsStateWithLifecycle()
 
@@ -119,7 +123,7 @@ fun TrimScreen(
         val startTime = System.currentTimeMillis()
 
         // Timer para atualizar elapsedTimeMs periodicamente
-        launch {
+        scope.launch {
             while (showLoadingOverlay) {
                 elapsedTimeMs = System.currentTimeMillis() - startTime
                 delay(100) // Apenas para atualizar o timer visual
@@ -276,31 +280,56 @@ fun TrimScreen(
                                 .fillMaxSize()
                                 .padding(paddingValues)
                         ) {
-                            // Área do Timeline com contador
-                            Box(
+                            // Area do Video Player e Timelines
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f)
                                     .background(Color(0xFF1A1A1A))
+                                    .padding(vertical = ChopCutSpacing.xs)
                             ) {
-                                TimelineEditor(
-                                    videoUri = videoUri,
-                                    trimPosition = state.trimPosition,
-                                    currentPosition = state.currentPosition,
-                                    waveformData = state.waveformData,
-                                    isWaveformLoading = state.isWaveformLoading,
-                                    waveformError = state.waveformError,
-                                    waveformStyle = com.chopcut.ui.components.WaveformStyle(),
-                                    audioWaveformsAmplitudes = state.audioWaveformsAmplitudes,
-                                    isAudioWaveformsLoading = state.isAudioWaveformsLoading,
-                                    preloadedStrips = thumbnailStrips,
-                                    aspectRatio = 16f/9f,
-                                    onPositionChange = { viewModel.setCurrentPosition(it) },
-                                    onAddPosition = { viewModel.addPosition(state.currentPosition) },
-                                    onRequestNewMedia = { },
-                                    onVideoDurationChange = { duration -> viewModel.setVideoDuration(duration) },
-                                    modifier = Modifier.fillMaxSize()
+                                com.chopcut.ui.components.VideoFileInfo(
+                                    fileInfo = FormatUtils.getFileInfo(context, videoUri, state.videoDurationMs)
                                 )
+
+                                com.chopcut.ui.components.timeline.VideoPreview(
+                                    exoPlayer = state.exoPlayer ?: return@Column,
+                                    isPlaying = state.isPlaying,
+                                    isInsideRange = state.isInsideRange,
+                                    playerError = state.playerError,
+                                    isSecurityError = state.isSecurityError,
+                                    onRequestNewMedia = { /* TODO: Implement media relocalization */ },
+                                    onRetry = { viewModel.retryPlayer() },
+                                    onTogglePlayPause = {
+                                        if (state.isPlaying) viewModel.pause() else viewModel.play()
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                // Passive Seekbar
+                                val progress = if (state.videoDurationMs > 0) state.currentPosition.toFloat() / state.videoDurationMs.toFloat() else 0f
+                                com.chopcut.ui.components.timeline.SeekbarProgress(progress = progress)
+
+                                // Current Time Display
+                                com.chopcut.ui.components.timeline.CurrentTimeDisplay(
+                                    currentTimeMs = state.currentPosition,
+                                    isInsideRange = state.isInsideRange
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Optimized Thumbnail Timeline
+                                if (state.videoDurationMs > 0) {
+                                    OptimizedVideoTimeline(
+                                        uri = videoUri,
+                                        durationMs = state.videoDurationMs,
+                                        currentPosition = state.currentPosition,
+                                        onScrollChanged = { newPosition ->
+                                            viewModel.setCurrentPosition(newPosition)
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
 
                             val isInsideRange = state.trimPosition.isPositionInRange(state.currentPosition)
@@ -404,7 +433,7 @@ private fun shouldHideLoadingOverlay(
 ): Boolean {
     return when (state) {
         is PreloadUiState.Ready -> {
-            hasSufficientThumbnails
+            true
         }
         is PreloadUiState.Loading -> {
             // Sempre esconder no timeout máximo
