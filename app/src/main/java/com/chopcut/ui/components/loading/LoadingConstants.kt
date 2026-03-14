@@ -16,7 +16,7 @@ object LoadingConstants {
     const val TARGET_DURATION_MS = 3_500L         // Duração otimista para progressão
 
     // Porcentagem da duração do vídeo para tempo mínimo de loading
-    const val MIN_LOADING_PERCENTAGE = 0.05f      // 5% da duração do vídeo
+    const val MIN_LOADING_PERCENTAGE = 0.01f      // 1% da duração do vídeo (era 5%)
 
     // Progresso mínimo de thumbnails
     const val MINIMUM_THUMBNAIL_PROGRESS = 20f     // 20% das thumbnails (foco em renderizar o que existe)

@@ -35,47 +35,18 @@ fun LoadingOverlay(
     isReadyToHide: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    AnimatedVisibility(
-        visible = true,
-        enter = fadeIn(
-            animationSpec = tween(
-                durationMillis = ChopCutAnimation.Normal,
-                easing = ChopCutEasing.Emphasized
-            )
-        ) + scaleIn(
-            initialScale = 0.85f,
-            animationSpec = tween(
-                durationMillis = ChopCutAnimation.Normal,
-                easing = ChopCutEasing.Emphasized
-            )
-        ),
-        exit = fadeOut(
-            animationSpec = tween(
-                durationMillis = LoadingConstants.OVERLAY_FADE_OUT_DURATION_MS,
-                easing = ChopCutEasing.Emphasized
-            )
-        ) + scaleOut(
-            targetScale = LoadingConstants.OVERLAY_SCALE_OUT_TARGET,
-            animationSpec = tween(
-                durationMillis = LoadingConstants.OVERLAY_FADE_OUT_DURATION_MS,
-                easing = ChopCutEasing.Emphasized
-            )
-        ),
+    Box(
         modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xCC000000)) // 80% black scrim
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { /* Block clicks - não cancela ao clicar fora */ },
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xCC000000)) // 80% black scrim
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { /* Block clicks - não cancela ao clicar fora */ },
-            contentAlignment = Alignment.Center
-        ) {
             LoadingCard(progress = progress, elapsedTimeMs = elapsedTimeMs)
         }
-    }
 }
 
 @Composable
