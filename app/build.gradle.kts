@@ -106,7 +106,43 @@ dependencies {
     implementation(libs.androidx.compose.ui.test.manifest)
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
-    implementation(libs.androidx.recyclerview) // Added for RecyclerView usage
+    implementation(libs.androidx.recyclerview)
+}
+
+tasks.register("logcatTimber", Exec::class) {
+    group = "Debug"
+    description = "Starts logcat with a filter for the app's PID and specific tags."
+
+    val pid by lazy {
+        val output = ByteArrayOutputStream()
+        try {
+            serviceOf<org.gradle.process.ExecOperations>().exec {
+                commandLine("adb", "shell", "pidof", "-s", "com.chopcut")
+                standardOutput = output
+                isIgnoreExitValue = true
+            }.rethrowFailure()
+            output.toString().trim()
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    commandLine("echo", "Checking for app PID...")
+
+    doFirst {
+        if (pid.isBlank()) {
+            val errorMsg = "Could not find PID for com.chopcut. Is the app running?"
+            logger.lifecycle(errorMsg)
+            throw StopExecutionException(errorMsg)
+        }
+        logger.lifecycle("Found PID: $pid. Starting logcat...")
+        commandLine(
+            "adb",
+            "logcat",
+            "--pid=$pid",
+            "-s", "Timber:D", "ThumbnailStrip:I", "ThumbnailExtractorBatch:D"
+        )
+    }
 }
 
 // ============================================================================
@@ -153,26 +189,26 @@ tasks.register("pullPerformanceReports", Exec::class) {
     val devicePath = "/storage/emulated/0/Android/data/com.chopcut/files/performance_reports/"
 
     doFirst {
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("📥 Pulling performance reports from device...")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.lifecycle("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.lifecycle("📥 Pulling performance reports from device...")
+        logger.lifecycle("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         // Cria diretório local se não existir
         if (!reportsDir.exists()) {
             reportsDir.mkdirs()
-            println("✓ Created local directory: ${reportsDir.absolutePath}")
+            logger.lifecycle("✓ Created local directory: ${reportsDir.absolutePath}")
         }
     }
 
     commandLine("adb", "pull", devicePath, reportsDir.absolutePath)
 
     doLast {
-        println()
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("✅ Reports downloaded to: ${reportsDir.absolutePath}")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println()
-        println("Available reports:")
+        logger.lifecycle("")
+        logger.lifecycle("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.lifecycle("✅ Reports downloaded to: ${reportsDir.absolutePath}")
+        logger.lifecycle("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.lifecycle("")
+        logger.lifecycle("Available reports:")
         reportsDir.listFiles()?.filter { it.isFile }?.forEach {
             val icon = when {
                 it.name.endsWith(".json") -> "📊"
@@ -180,9 +216,9 @@ tasks.register("pullPerformanceReports", Exec::class) {
                 it.name.endsWith(".csv") -> "📈"
                 else -> "📄"
             }
-            println("  $icon ${it.name}")
+            logger.lifecycle("  $icon ${it.name}")
         }
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.lifecycle("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 }
 
@@ -198,9 +234,9 @@ tasks.register("listPerformanceReports", Exec::class) {
     commandLine("adb", "shell", "ls", "-lh", devicePath)
 
     doFirst {
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("📋 Listing reports on device: $devicePath")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.lifecycle("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.lifecycle("📋 Listing reports on device: $devicePath")
+        logger.lifecycle("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 }
 
@@ -216,14 +252,14 @@ tasks.register("clearPerformanceReports", Exec::class) {
     commandLine("adb", "shell", "rm", "-rf", devicePath)
 
     doFirst {
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        println("🗑️  Clearing reports from device...")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.lifecycle("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.lifecycle("🗑️  Clearing reports from device...")
+        logger.lifecycle("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 
     doLast {
-        println("✅ Reports cleared from device")
-        println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logger.lifecycle("✅ Reports cleared from device")
+        logger.lifecycle("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 }
 
@@ -257,7 +293,7 @@ tasks.register("checkDeviceConnection") {
         if (!hasDevice) {
             throw GradleException("❌ ERRO: Nenhum dispositivo Android ou emulador conectado. Conecte um dispositivo via USB ou inicie um emulador para rodar os testes.")
         } else {
-            println("✅ Dispositivo Android detectado. Continuando com os testes...")
+            logger.lifecycle("✅ Dispositivo Android detectado. Continuando com os testes...")
         }
     }
 }

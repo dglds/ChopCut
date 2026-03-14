@@ -19,6 +19,7 @@ lifecycleProcess = "2.8.7"
 coreKtxVersion = "1.7.0"
 room = "2.6.1"
 ksp = "2.0.21-1.0.28"
+recyclerview = "1.4.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -51,6 +52,7 @@ timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "tim
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 coil-compose = { module = "io.coil-kt:coil-compose", version = "2.5.0" }
