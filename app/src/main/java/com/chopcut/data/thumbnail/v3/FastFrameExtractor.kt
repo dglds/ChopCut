@@ -6,14 +6,11 @@ import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
-import android.media.Image
-import android.media.ImageReader
 import android.media.MediaCodec
+import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
-import android.os.Handler
-import android.os.HandlerThread
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -23,12 +20,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * A highly optimized frame extractor using MediaCodec in Surface mode
- * with an ImageReader configured for YUV_420_888 (the native output
- * format of hardware video decoders).
+ * Fast frame extractor using MediaCodec in ByteBuffer mode.
  *
- * Keeps the codec session open across multiple getFrameAt() calls
- * for maximum performance.
+ * Reads the actual output stride/slice-height from [MediaCodec.getOutputFormat]
+ * after the codec starts producing output, so the YUV→RGB conversion uses
+ * hardware-accurate layout metadata instead of guessing.
  */
 class FastFrameExtractor(
     private val context: Context,
@@ -36,20 +32,19 @@ class FastFrameExtractor(
 ) {
     private var extractor: MediaExtractor? = null
     private var codec: MediaCodec? = null
-    private var imageReader: ImageReader? = null
     private var videoTrackIndex = -1
-    private var format: MediaFormat? = null
     private var outputWidth = 0
     private var outputHeight = 0
 
-    private val mutex = Mutex()
-    private val handlerThread = HandlerThread("FastFrameExtractor")
-    private var handler: Handler? = null
+    // Actual hardware layout — populated from codec.getOutputFormat()
+    private var stride = 0
+    private var sliceHeight = 0
+    private var colorFormat = 0
+    private var codecWidth = 0   // actual decoded frame width
+    private var codecHeight = 0  // actual decoded frame height
+    private var outputFormatRead = false
 
-    init {
-        handlerThread.start()
-        handler = Handler(handlerThread.looper)
-    }
+    private val mutex = Mutex()
 
     suspend fun prepare(width: Int, height: Int): Boolean = mutex.withLock {
         withContext(Dispatchers.IO) {
@@ -66,30 +61,29 @@ class FastFrameExtractor(
                 }
 
                 extractor!!.selectTrack(videoTrackIndex)
-                format = extractor!!.getTrackFormat(videoTrackIndex)
-                val mime = format!!.getString(MediaFormat.KEY_MIME)
+                val format = extractor!!.getTrackFormat(videoTrackIndex)
+                val mime = format.getString(MediaFormat.KEY_MIME)
                 if (mime == null) {
                     Timber.e("Video MIME type is null.")
                     return@withContext false
                 }
-                Timber.d("Video format: %s, MIME: %s", format, mime)
+                Timber.d("Input format: %s", format)
 
                 outputWidth = width
                 outputHeight = height
 
-                // YUV_420_888 is the native output format of hardware video decoders.
-                // Unlike RGBA_8888, this does NOT require a color-space conversion
-                // the decoder can't do — it matches what the decoder already produces.
-                imageReader = ImageReader.newInstance(
-                    width, height, ImageFormat.YUV_420_888, 3
+                // Request YUV420Flexible — the most universally supported format
+                format.setInteger(
+                    MediaFormat.KEY_COLOR_FORMAT,
+                    MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
                 )
 
                 codec = MediaCodec.createDecoderByType(mime)
-                // Surface mode: decoder renders directly to ImageReader's surface
-                codec!!.configure(format, imageReader!!.surface, null, 0)
+                // null surface = ByteBuffer mode
+                codec!!.configure(format, null, null, 0)
                 codec!!.start()
-                Timber.d("MediaCodec started in Surface mode with YUV_420_888 ImageReader")
 
+                Timber.d("MediaCodec started in ByteBuffer mode")
                 true
             } catch (e: Exception) {
                 Timber.e(e, "Prepare failed for %s", videoUri)
@@ -107,11 +101,31 @@ class FastFrameExtractor(
         return -1
     }
 
+    /**
+     * Read the actual hardware output format once the codec has produced output.
+     * This gives us the real stride and slice-height the hardware is using.
+     */
+    private fun readOutputFormat() {
+        if (outputFormatRead) return
+        val fmt = codec?.outputFormat ?: return
+
+        codecWidth = fmt.getIntegerSafe(MediaFormat.KEY_WIDTH, outputWidth)
+        codecHeight = fmt.getIntegerSafe(MediaFormat.KEY_HEIGHT, outputHeight)
+        stride = fmt.getIntegerSafe(MediaFormat.KEY_STRIDE, codecWidth)
+        sliceHeight = fmt.getIntegerSafe("slice-height", codecHeight)
+        colorFormat = fmt.getIntegerSafe(MediaFormat.KEY_COLOR_FORMAT, 0)
+
+        Timber.d(
+            "Output format: %dx%d, stride=%d, sliceHeight=%d, colorFormat=0x%x, target=%dx%d",
+            codecWidth, codecHeight, stride, sliceHeight, colorFormat, outputWidth, outputHeight
+        )
+        outputFormatRead = true
+    }
+
     suspend fun getFrameAt(timeUs: Long): Bitmap? = mutex.withLock {
         withContext(Dispatchers.IO) {
             val codec = this@FastFrameExtractor.codec ?: return@withContext null
             val extractor = this@FastFrameExtractor.extractor ?: return@withContext null
-            val reader = this@FastFrameExtractor.imageReader ?: return@withContext null
 
             try {
                 codec.flush()
@@ -120,7 +134,6 @@ class FastFrameExtractor(
                 val info = MediaCodec.BufferInfo()
                 val timeoutUs = 10_000L
                 var frameAcquired: Bitmap? = null
-
                 val startTime = System.currentTimeMillis()
                 var eos = false
 
@@ -132,10 +145,16 @@ class FastFrameExtractor(
                             val inputBuffer = codec.getInputBuffer(inputIndex)!!
                             val sampleSize = extractor.readSampleData(inputBuffer, 0)
                             if (sampleSize < 0) {
-                                codec.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                codec.queueInputBuffer(
+                                    inputIndex, 0, 0, 0,
+                                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                                )
                                 eos = true
                             } else {
-                                codec.queueInputBuffer(inputIndex, 0, sampleSize, extractor.sampleTime, 0)
+                                codec.queueInputBuffer(
+                                    inputIndex, 0, sampleSize,
+                                    extractor.sampleTime, 0
+                                )
                                 extractor.advance()
                             }
                         }
@@ -143,36 +162,34 @@ class FastFrameExtractor(
 
                     // Drain output
                     val outputIndex = codec.dequeueOutputBuffer(info, timeoutUs)
-                    if (outputIndex >= 0) {
-                        val isTargetFrame = info.presentationTimeUs >= timeUs ||
-                            (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0)
+                    when {
+                        outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            readOutputFormat()
+                        }
+                        outputIndex >= 0 -> {
+                            // Read format if we haven't yet (some codecs don't signal FORMAT_CHANGED)
+                            readOutputFormat()
 
-                        // true = render to ImageReader's surface; false = discard
-                        codec.releaseOutputBuffer(outputIndex, isTargetFrame)
+                            val isTarget = info.presentationTimeUs >= timeUs ||
+                                (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0)
 
-                        if (isTargetFrame) {
-                            // Give the surface a moment to deliver the frame
-                            Thread.sleep(5)
-                            var image: Image? = null
-                            var retries = 0
-                            while (image == null && retries < 20) {
-                                image = reader.acquireLatestImage()
-                                if (image == null) {
-                                    Thread.sleep(5)
-                                    retries++
+                            if (isTarget) {
+                                // Prefer getOutputImage() — gives exact plane layout info
+                                val image = codec.getOutputImage(outputIndex)
+                                if (image != null) {
+                                    frameAcquired = convertImageToBitmap(image)
+                                    image.close()
+                                } else {
+                                    // Fallback: raw ByteBuffer (some codecs may not support getOutputImage)
+                                    val outputBuffer = codec.getOutputBuffer(outputIndex)
+                                    if (outputBuffer != null) {
+                                        frameAcquired = convertYuvToBitmap(outputBuffer)
+                                    }
                                 }
                             }
-
-                            image?.use { img ->
-                                frameAcquired = yuvImageToBitmap(img)
-                            }
-
-                            if (frameAcquired == null) {
-                                Timber.w("Could not acquire image after %d retries at %dms", retries, timeUs / 1000)
-                            }
+                            codec.releaseOutputBuffer(outputIndex, false)
                         }
-                    } else if (outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER && eos) {
-                        break
+                        outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER && eos -> break
                     }
                 }
                 frameAcquired
@@ -184,89 +201,192 @@ class FastFrameExtractor(
     }
 
     /**
-     * Converts a YUV_420_888 [Image] to an RGB_565 [Bitmap].
+     * Convert an [android.media.Image] (YUV_420_888) to an RGB_565 Bitmap.
      *
-     * Strategy: pack the Image planes into NV21 byte array (respecting actual
-     * hardware strides from Image.Plane), then delegate to YuvImage.compressToJpeg()
-     * + BitmapFactory — both are native C implementations and ~10-20x faster than
-     * a Kotlin pixel loop.
+     * Uses [Image.getPlanes] to read Y, U, V with exact rowStride and pixelStride,
+     * so we correctly handle NV12, NV21, I420, and YV12 layouts without guessing.
      */
-    private fun yuvImageToBitmap(image: Image): Bitmap? {
-        val width = image.width
-        val height = image.height
+    private fun convertImageToBitmap(image: android.media.Image): Bitmap? {
+        val w = image.width
+        val h = image.height
+        val planes = image.planes  // [0]=Y, [1]=U, [2]=V
 
-        val nv21 = imageToNv21(image, width, height)
+        val yPlane = planes[0]
+        val uPlane = planes[1]
+        val vPlane = planes[2]
 
-        val yuvImage = YuvImage(nv21, ImageFormat.NV21, width, height, null)
-        val out = ByteArrayOutputStream(width * height)
-        yuvImage.compressToJpeg(Rect(0, 0, width, height), 90, out)
+        Timber.d(
+            "Image format=%d, %dx%d | Y: rowStride=%d pixelStride=%d | U: rowStride=%d pixelStride=%d | V: rowStride=%d pixelStride=%d",
+            image.format, w, h,
+            yPlane.rowStride, yPlane.pixelStride,
+            uPlane.rowStride, uPlane.pixelStride,
+            vPlane.rowStride, vPlane.pixelStride
+        )
 
-        val opts = BitmapFactory.Options().apply {
-            inPreferredConfig = Bitmap.Config.RGB_565
-        }
-        return BitmapFactory.decodeByteArray(out.toByteArray(), 0, out.size(), opts)
-    }
+        // Build NV21 byte array: Y (w*h) + interleaved VU (w*h/2)
+        val nv21 = ByteArray(w * h * 3 / 2)
 
-    /**
-     * Packs YUV_420_888 Image planes into a contiguous NV21 byte array.
-     *
-     * NV21 layout: [Y plane: W×H bytes] [VU interleaved: W×H/2 bytes]
-     * Uses actual rowStride/pixelStride from each plane to handle
-     * hardware-specific memory alignment.
-     */
-    private fun imageToNv21(image: Image, width: Int, height: Int): ByteArray {
-        val yPlane = image.planes[0]
-        val uPlane = image.planes[1]
-        val vPlane = image.planes[2]
-
+        // Copy Y plane, respecting rowStride
         val yBuffer = yPlane.buffer
-        val uBuffer = uPlane.buffer
-        val vBuffer = vPlane.buffer
-
         val yRowStride = yPlane.rowStride
+        for (row in 0 until h) {
+            yBuffer.position(row * yRowStride)
+            yBuffer.get(nv21, row * w, w)
+        }
+
+        // Copy UV into NV21 order (V, U interleaved)
+        val uvDst = w * h
+        val vBuffer = vPlane.buffer
+        val uBuffer = uPlane.buffer
         val uvRowStride = uPlane.rowStride
         val uvPixelStride = uPlane.pixelStride
 
-        val nv21 = ByteArray(width * height * 3 / 2)
-
-        // Copy Y plane
-        if (yRowStride == width) {
-            // Fast path: no padding, bulk copy
-            yBuffer.get(nv21, 0, width * height)
-        } else {
-            // Slow path: copy row by row, skipping padding
-            var pos = 0
-            for (row in 0 until height) {
-                yBuffer.position(row * yRowStride)
-                yBuffer.get(nv21, pos, width)
-                pos += width
+        if (uvPixelStride == 2) {
+            // Interleaved (NV12 or NV21) — read V and U from their respective buffers
+            for (row in 0 until h / 2) {
+                for (col in 0 until w / 2) {
+                    val srcIdx = row * uvRowStride + col * uvPixelStride
+                    val dstIdx = uvDst + row * w + col * 2
+                    nv21[dstIdx] = vBuffer.get(srcIdx)       // V
+                    nv21[dstIdx + 1] = uBuffer.get(srcIdx)   // U
+                }
             }
-        }
-
-        // Copy UV planes interleaved as V,U (NV21 ordering)
-        val uvHeight = height / 2
-        val uvWidth = width / 2
-        var uvPos = width * height
-
-        if (uvPixelStride == 2 && uvRowStride == width) {
-            // Fast path: UV data is already semi-planar and contiguous.
-            // V and U buffers in YUV_420_888 overlap by 1 byte when pixelStride==2,
-            // meaning the underlying data is already NV21 or NV12.
-            // Check first byte ordering to determine which.
-            vBuffer.position(0)
-            vBuffer.get(nv21, uvPos, uvHeight * width)
         } else {
-            // General path: repack from separate/strided planes
-            for (row in 0 until uvHeight) {
-                for (col in 0 until uvWidth) {
-                    val uvIndex = row * uvRowStride + col * uvPixelStride
-                    nv21[uvPos++] = vBuffer.get(uvIndex)  // V first (NV21)
-                    nv21[uvPos++] = uBuffer.get(uvIndex)  // then U
+            // Planar (I420/YV12): pixelStride == 1
+            for (row in 0 until h / 2) {
+                for (col in 0 until w / 2) {
+                    val srcIdx = row * uvRowStride + col
+                    val dstIdx = uvDst + row * w + col * 2
+                    nv21[dstIdx] = vBuffer.get(srcIdx)       // V
+                    nv21[dstIdx + 1] = uBuffer.get(srcIdx)   // U
                 }
             }
         }
 
-        return nv21
+        return try {
+            val yuvImage = YuvImage(nv21, ImageFormat.NV21, w, h, null)
+            val out = ByteArrayOutputStream(w * h)
+            yuvImage.compressToJpeg(Rect(0, 0, w, h), 85, out)
+
+            val opts = BitmapFactory.Options().apply {
+                inPreferredConfig = Bitmap.Config.RGB_565
+                if (outputWidth > 0 && outputHeight > 0) {
+                    inSampleSize = calculateSampleSize(w, h, outputWidth, outputHeight)
+                }
+            }
+            val bitmap = BitmapFactory.decodeByteArray(out.toByteArray(), 0, out.size(), opts)
+                ?: return null
+
+            if (outputWidth > 0 && outputHeight > 0) {
+                val scaled = Bitmap.createScaledBitmap(bitmap, outputWidth, outputHeight, true)
+                if (scaled !== bitmap) bitmap.recycle()
+                scaled
+            } else {
+                bitmap
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Image conversion failed: %dx%d", w, h)
+            null
+        }
+    }
+
+    /**
+     * Fallback: convert a raw YUV output buffer to an RGB_565 Bitmap.
+     *
+     * Used only when [MediaCodec.getOutputImage] returns null. Copies UV data
+     * directly without swap (the codec format is unknown, but direct copy is
+     * more likely correct than assuming NV12).
+     */
+    private fun convertYuvToBitmap(buffer: java.nio.ByteBuffer): Bitmap? {
+        val w = codecWidth
+        val h = codecHeight
+        val s = stride.coerceAtLeast(w)
+        val sh = sliceHeight.coerceAtLeast(h)
+
+        val data = ByteArray(buffer.remaining())
+        buffer.get(data)
+
+        Timber.d("Buffer: %d bytes, expected s*sh*1.5=%d, s*h*1.5=%d", data.size, s * sh * 3 / 2, s * h * 3 / 2)
+
+        // Detect UV plane offset: some codecs use stride*sliceHeight, others stride*height
+        val uvOffsetPadded = s * sh
+        val uvOffsetCompact = s * h
+        val uvNeeded = s * (h / 2)  // bytes needed for UV plane
+
+        val uvSrcStart = when {
+            uvOffsetPadded + uvNeeded <= data.size -> uvOffsetPadded
+            uvOffsetCompact + uvNeeded <= data.size -> uvOffsetCompact
+            else -> {
+                // Fallback: UV immediately after Y data
+                Timber.w("Buffer too small for expected UV offset, using compact layout")
+                uvOffsetCompact.coerceAtMost(data.size - 1)
+            }
+        }
+        Timber.d("UV offset: %d (padded=%d, compact=%d)", uvSrcStart, uvOffsetPadded, uvOffsetCompact)
+
+        // Pack into NV21: contiguous Y (w×h) + interleaved VU (w×h/2)
+        val nv21Size = w * h * 3 / 2
+        val nv21 = ByteArray(nv21Size)
+
+        // Copy Y plane, removing stride padding
+        for (row in 0 until h) {
+            val srcOffset = row * s
+            val dstOffset = row * w
+            if (srcOffset + w <= data.size) {
+                System.arraycopy(data, srcOffset, nv21, dstOffset, w)
+            }
+        }
+
+        // Copy UV plane directly — no swap, since we don't know the exact format
+        // in this fallback path. Direct copy works if codec emits NV21 natively.
+        val uvDstStart = w * h
+        for (row in 0 until h / 2) {
+            val srcRowOffset = uvSrcStart + row * s
+            val dstRowOffset = uvDstStart + row * w
+            val copyLen = w.coerceAtMost(data.size - srcRowOffset).coerceAtMost(nv21.size - dstRowOffset)
+            if (copyLen > 0) {
+                System.arraycopy(data, srcRowOffset, nv21, dstRowOffset, copyLen)
+            }
+        }
+
+        return try {
+            val yuvImage = YuvImage(nv21, ImageFormat.NV21, w, h, null)
+            val out = ByteArrayOutputStream(w * h)
+            yuvImage.compressToJpeg(Rect(0, 0, w, h), 85, out)
+
+            val opts = BitmapFactory.Options().apply {
+                inPreferredConfig = Bitmap.Config.RGB_565
+                if (outputWidth > 0 && outputHeight > 0) {
+                    inSampleSize = calculateSampleSize(w, h, outputWidth, outputHeight)
+                }
+            }
+            val fullBitmap = BitmapFactory.decodeByteArray(out.toByteArray(), 0, out.size(), opts)
+                ?: return null
+
+            // Scale to target, preserving aspect ratio
+            if (outputWidth > 0 && outputHeight > 0) {
+                val scaled = Bitmap.createScaledBitmap(fullBitmap, outputWidth, outputHeight, true)
+                if (scaled !== fullBitmap) fullBitmap.recycle()
+                scaled
+            } else {
+                fullBitmap
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "YUV conversion failed: %dx%d stride=%d sh=%d buf=%d", w, h, s, sh, data.size)
+            null
+        }
+    }
+
+    private fun calculateSampleSize(srcW: Int, srcH: Int, dstW: Int, dstH: Int): Int {
+        var sample = 1
+        var w = srcW
+        var h = srcH
+        while (w / 2 >= dstW && h / 2 >= dstH) {
+            sample *= 2
+            w /= 2
+            h /= 2
+        }
+        return sample
     }
 
     fun release() {
@@ -274,10 +394,16 @@ class FastFrameExtractor(
             codec?.stop()
             codec?.release()
             extractor?.release()
-            imageReader?.close()
-            handlerThread.quitSafely()
         } catch (e: Exception) {
             Timber.e(e, "Error releasing resources")
+        }
+    }
+
+    private fun MediaFormat.getIntegerSafe(key: String, default: Int): Int {
+        return try {
+            if (containsKey(key)) getInteger(key) else default
+        } catch (_: Exception) {
+            default
         }
     }
 }
