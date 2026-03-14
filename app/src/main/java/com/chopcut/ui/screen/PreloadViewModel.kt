@@ -21,19 +21,21 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel coordenadora para pré-carregamento de vídeo.
+ * ViewModel coordenadora para preparação de vídeo.
  * 
  * Responsabilidades:
- * - Orquestrar pré-carregamento de thumbnails e áudio
- * - Coordenar ThumbnailViewModel e AudioViewModel
+ * - Configurar ThumbnailViewModel com metadados do vídeo
+ * - Liberação de acesso ao editor (apenas após obter metadados)
  * - Gerenciar estado geral (Loading/Ready/Error)
- * - Fornecer métodos para verificar se o preload está pronto
+ * - Fornecer métodos para verificar se o vídeo está pronto
  * 
  * Escopo: Activity (compartilhada entre HomeScreen e TrimScreen)
  * 
- * Esta ViewModel não realiza extração diretamente - ela delega para:
- * - ThumbnailViewModel: Carregamento de strips
- * - AudioViewModel: Carregamento de waveform
+ * Estratégia On-Demand:
+ * - Thumbnails são carregadas apenas quando o usuário rola a timeline
+ * - Preload está DESATIVADO para maximizar performance de abertura
+ * - ThumbnailViewModel.handleOnDemand() carrega strips conforme necessário
+ * - AudioViewModel não é usado atualmente (áudio carregado sob demanda no TrimScreen)
  */
 class PreloadViewModel(
     application: Application,
@@ -69,13 +71,20 @@ class PreloadViewModel(
     // ========== MÉTODOS PÚBLICOS ==========
     
     /**
-     * Inicia pré-carregamento de vídeo.
+     * Inicia preparação de vídeo para o editor.
      * 
-     * Orquestra ThumbnailViewModel e AudioViewModel para carregar
-     * thumbnails e waveform em paralelo.
+     * Estratégia On-Demand:
+     * - Apenas obtém metadados do vídeo (duração, dimensões, segmentos)
+     * - Configura ThumbnailViewModel para carregamento on-demand
+     * - Thumbnails são carregadas apenas quando o usuário rola a timeline
+     * - Áudio não é pré-carregado (carregado sob demanda no TrimScreen)
+     * 
+     * Benefícios:
+     * - Abertura do editor é quase instantânea
+     * - Menor uso de memória inicial
+     * - Thumbnails carregadas apenas conforme necessário
      * 
      * @param uri URI do vídeo
-     * @param stripsToPreload Número de strips a carregar (padrão: 6)
      */
     fun startPreload(uri: Uri) {
         
@@ -103,17 +112,15 @@ class PreloadViewModel(
                     thumbnailsTotal = 0
                 ))
                 
-                // Job para thumbnails
-                val thumbPreloadJob = launch {
+                // Configurar ThumbnailViewModel (obter metadados, carregar strips on-demand)
+                val thumbnailSetupJob = launch {
                     thumbnailVM.preload(uri)
                     thumbnailVM.uiState.first { it is ThumbnailViewModel.ThumbnailUiState.Ready }
                 }
 
                 /* 
-                // Job para áudio (Desabilitado temporariamente por performance)
-                val audioPreloadJob = launch {
-                    audioVM.loadWaveform(uri, targetBarCount = calculateTargetBarCount(durationMs = 0))
-                }
+                // Áudio não é pré-carregado (on-demand no TrimScreen)
+                // Isso maximiza performance de abertura do editor
                 */
 
                 // Observar progresso de thumbnails para UI
@@ -133,11 +140,11 @@ class PreloadViewModel(
                     }
                 }
 
-                // AGUARDAR: Liberamos o acesso assim que o thumbPreloadJob terminar (mínimo de 6 strips)
-                // O áudio continuará em background se ainda estiver processando
-                thumbPreloadJob.join()
+                // AGUARDAR: Liberamos o acesso assim que o thumbnailSetupJob terminar (apenas metadados)
+                // Thumbnails são carregadas on-demand quando o usuário rola a timeline
+                thumbnailSetupJob.join()
                 
-                // 3. Marcar como Ready
+                // Marcar como Ready (apenas metadados, strips vazias para on-demand)
                 val preloadedData = PreloadedData(
                     videoInfo = com.chopcut.data.model.VideoInfo(
                         uri = uri,
@@ -154,9 +161,9 @@ class PreloadViewModel(
                         hasAudio = true, // Assumimos que tem áudio para não bloquear
                         sizeBytes = 0
                     ),
-                    audioAmplitudes = audioVM.amplitudes.value,
-                    preloadedStrips = thumbnailVM.strips.value,
-                    totalSegments = thumbnailVM.strips.value.size,
+                    audioAmplitudes = emptyList(),
+                    preloadedStrips = emptyMap(),
+                    totalSegments = thumbnailVM.totalSegments.value,
                     preloadPercentage = 1f
                 )
                 _uiState.value = PreloadUiState.Ready(preloadedData)
@@ -170,7 +177,7 @@ class PreloadViewModel(
     }
     
     /**
-     * Cancela o pré-carregamento em andamento.
+     * Cancela a preparação do vídeo em andamento.
      */
     fun cancelPreload() {
         
@@ -181,7 +188,7 @@ class PreloadViewModel(
     }
     
     /**
-     * Limpa todo o estado de pré-carregamento.
+     * Limpa todo o estado de preparação do vídeo.
      */
     fun clear() {
         

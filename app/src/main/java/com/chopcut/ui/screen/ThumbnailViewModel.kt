@@ -14,6 +14,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import timber.log.Timber
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -65,17 +66,21 @@ class ThumbnailViewModel(
     // ========== MÉTODOS PÚBLICOS ==========
     
     /**
-     * Carrega todos os segmentos de um vídeo sequencialmente em background.
-     * Esta função sobrevive à navegação pois está no viewModelScope.
+     * Carrega strips visíveis + buffer de on-demand.
      * 
      * @param uri URI do vídeo
      * @param durationMs Duração em ms
+     * @param currentSecond Segundo atual da timeline
+     * @param viewportWidthSeconds Largura da viewport em segundos
+     * @param bufferSize Buffer de strips antes e depois da viewport (padrão: 6)
      */
-    fun loadAllStripsSequentially(uri: Uri, durationMs: Long) {
-        if (activeLoadingUri == uri && loadingJob?.isActive == true) {
-            return
-        }
-
+    fun loadVisibleStripsWithBuffer(
+        uri: Uri,
+        durationMs: Long,
+        currentSecond: Int,
+        viewportWidthSeconds: Int,
+        bufferSize: Int = 6
+    ) {
         loadingJob?.cancel()
         activeLoadingUri = uri
         
@@ -95,21 +100,54 @@ class ThumbnailViewModel(
 
                     stripManager = com.chopcut.data.thumbnail.ThumbnailStripManager(
                         getApplication(), thumbWidth, thumbHeight, thumbsPerStrip,
-                        adaptiveStrips = false
+                        adaptiveStrips = true
                     )
                 }
 
                 
                 val totalSegments = stripManager?.getSegmentCount(durationMs) ?: 0
+                if (totalSegments == 0) return@launch
                 _totalSegments.value = totalSegments
+
+                // 1. Calcular segmentos visíveis
+                val thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10
+                val startSegment = (currentSecond / thumbsPerStrip).coerceAtLeast(0)
+                val endSegment = ((currentSecond + viewportWidthSeconds) / thumbsPerStrip)
+                    .coerceAtMost(totalSegments - 1)
+
+                // 2. Adicionar buffer
+                val bufferedStart = maxOf(0, startSegment - bufferSize)
+                val bufferedEnd = minOf(totalSegments - 1, endSegment + bufferSize)
+
+                Timber.tag("OnDemandLoading").d("Viewport: second=$currentSecond, segments=$startSegment..$endSegment, buffer=$bufferSize, range=$bufferedStart..$bufferedEnd")
+
+                // 3. Carregar apenas segmentos no buffer (sem delay fixo)
+                val segmentsToLoad = (bufferedStart..bufferedEnd).filter { segIdx ->
+                    !_strips.value.containsKey(segIdx)
+                }
+
+                if (segmentsToLoad.isNotEmpty()) {
+                    Timber.tag("OnDemandLoading").i("Carregando ${segmentsToLoad.size} strips: ${segmentsToLoad.first()}..${segmentsToLoad.last()}")
+                    
+                    // Carregar em batch de 5 para performance
+                    segmentsToLoad.chunked(5).forEach { chunk ->
+                        ensureActive()
+                        chunk.forEach { segIdx ->
+                            launch {
+                                loadStrip(uri, segIdx, durationMs)
+                            }
+                        }
+                    }
+                }
                 
-                // Usar a lógica de batching já implementada no extractThumbnailsLOD
-                extractThumbnailsLOD(
-                    uri = uri,
-                    totalSegments = totalSegments,
-                    durationMs = durationMs,
-                    onlyFirstFrame = false
+                // 4. Cancelar jobs distantes (ThumbnailCacheManager já salva em disco)
+                com.chopcut.data.thumbnail.ThumbnailCacheManager.cancelFarJobs(
+                    uri,
+                    currentSegment = (currentSecond / thumbsPerStrip),
+                    threshold = bufferSize + 2
                 )
+                
+                Timber.tag("OnDemandLoading").i("Jobs distantes cancelados: threshold=${bufferSize + 2} strips")
                 
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
@@ -120,6 +158,8 @@ class ThumbnailViewModel(
     
     /**
      * Pré-carrega um número fixo de strips para um vídeo.
+     * 
+     * DESATIVADO PARA TESTE: Usando apenas on-demand loading
      * 
      * @param uri URI do vídeo
      * @param stripsToPreload Número de strips a carregar (padrão: 6)
@@ -149,56 +189,22 @@ class ThumbnailViewModel(
                 
                 stripManager = com.chopcut.data.thumbnail.ThumbnailStripManager(
                     getApplication(), thumbWidth, thumbHeight, thumbsPerStrip,
-                    adaptiveStrips = false
+                    adaptiveStrips = true
                 )
 
                 val totalSegments = stripManager!!.getSegmentCount(videoInfo.durationMs)
                 _totalSegments.value = totalSegments
                 
-                // 3. Verificar se já está em cache para liberação automática
-                val hasCache = com.chopcut.data.thumbnail.ThumbnailCacheManager.hasInitialStripsCached(uri, totalSegments)
-                _isCached.value = hasCache
-                if (hasCache) {
-                }
-
-
-                // Carregar TODOS os segmentos do vídeo
-                val effectiveStripsToPreload = totalSegments
-
+                Timber.tag("ThumbnailPreload").i("Metadados carregados: duração=${videoInfo.durationMs}ms, totalSegments=$totalSegments, adaptiveStrips=true")
                 
-                // 3. Carregar em Dois Estágios (LOD)
-                // Estágio 1: Apenas o primeiro frame de cada strip (Rápido!)
-                val overviewStrips = extractThumbnailsLOD(
-                    uri = uri,
-                    totalSegments = totalSegments,
-                    durationMs = videoInfo.durationMs,
-                    onlyFirstFrame = true
-                )
+                // Notificar que a visualização está pronta (sem strips pré-carregadas)
+                _uiState.value = ThumbnailUiState.Ready(0, totalSegments)
                 
-                _strips.value = overviewStrips
-                _thumbnailProgress.value = 0.5f // 50% do progresso total (Overview pronta)
-                
-                // Notificar que a visualização básica está pronta
-                _uiState.value = ThumbnailUiState.Ready(overviewStrips.size, totalSegments)
-
-                // Estágio 2: Preencher o resto em background (Sem bloquear a UI)
-                viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        extractThumbnailsLOD(
-                            uri = uri,
-                            totalSegments = totalSegments,
-                            durationMs = videoInfo.durationMs,
-                            onlyFirstFrame = false // Carrega o resto
-                        )
-                        _thumbnailProgress.value = 1f
-                    } catch (e: Exception) {
-                    }
-                }
-                
+                Timber.tag("ThumbnailPreload").i("Preload DESATIVADO - On-demand loading vai carregar strips conforme usuário rola")
+                 
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
                     _uiState.value = ThumbnailUiState.Error(e.message ?: "Erro desconhecido")
-                } else {
                 }
             }
         }
@@ -229,9 +235,7 @@ class ThumbnailViewModel(
                 
                 if (strip != null) {
                     _strips.update { current ->
-                        current.toMutableMap().apply {
-                            put(segmentIndex, strip)
-                        }
+                        current.toMutableMap().also { it[segmentIndex] = strip }
                     }
                     trimMemory() // Evitar OOM durante scroll
                 }
@@ -295,16 +299,17 @@ class ThumbnailViewModel(
     /**
      * Limita o número de bitmaps em memória para evitar OOM.
      * Mantém os 500 segmentos mais recentes para suportar vídeos longos (> 1h).
+     * Otimizado: Remove diretamente sem criar cópia do map.
      */
     private fun trimMemory() {
-        val currentStrips = _strips.value
-        if (currentStrips.size > 500) {
-            // Manter os últimos 500 adicionados (FIFO)
-            val keysToRemove = currentStrips.keys.toList().take(currentStrips.size - 500)
-            _strips.update { current ->
-                current.toMutableMap().apply {
-                    keysToRemove.forEach { remove(it) }
+        _strips.update { current ->
+            if (current.size > 500) {
+                val keysToRemove = current.keys.take(current.size - 500)
+                current.toMutableMap().also { map ->
+                    keysToRemove.forEach { map.remove(it) }
                 }
+            } else {
+                current
             }
         }
     }
@@ -351,20 +356,23 @@ class ThumbnailViewModel(
             val results: List<Pair<Int, Bitmap>> = jobs.awaitAll().filterNotNull()
             
             _strips.update { current ->
-                current.toMutableMap().apply {
-                    results.forEach { (segmentIndex, strip) -> put(segmentIndex, strip) }
+                current.toMutableMap().also { map ->
+                    results.forEach { (segmentIndex, strip) ->
+                        map[segmentIndex] = strip
+                    }
                 }
             }
             
             trimMemory()
             
-            val baseDelay = if (onlyFirstFrame) 10L else {
-                if (durationMs > 3_600_000L) 150L else 50L
+            // Reduzido drasticamente para scroll mais fluido
+            val baseDelay = if (onlyFirstFrame) 5L else {
+                if (durationMs > 3_600_000L) 20L else 10L
             }
             kotlinx.coroutines.delay(baseDelay)
         }
 
-        _strips.value
+        _strips.value.toMap()
     }
     
     /**
