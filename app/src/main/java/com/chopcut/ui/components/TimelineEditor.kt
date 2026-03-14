@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -134,11 +135,9 @@ fun TimelineEditor(
             }
             val thumbsPerStrip = remember { PreferencesManager(context).thumbsPerStrip }
             val stripManager = remember(thumbWidth, thumbHeight, thumbsPerStrip) {
-                // TEMPORÁRIAMENTE DESABILITADO: adaptiveStrips = false
-                // Strip adaptativas causam problemas na renderização porque cada
-                // segmento tem largura diferente. Precisamos de uma solução
-                // mais complexa para suportar isso corretamente.
-                ThumbnailStripManager(context, thumbWidth, thumbHeight, thumbsPerStrip, adaptiveStrips = false)
+                // Strip adaptativas ativadas para otimizar carregamento
+                // Strips iniciais têm 5 thumbs (rápido), crescendo até 10 thumbs (detalhe)
+                ThumbnailStripManager(context, thumbWidth, thumbHeight, thumbsPerStrip, adaptiveStrips = true)
             }
           // Observar StateFlow de ThumbnailViewModel se disponível
           val stripsFromViewModel = if (thumbnailViewModel != null) {
@@ -147,41 +146,12 @@ fun TimelineEditor(
               emptyMap()
           }
 
-          // Estado mutável local para strips
-          val strips = remember {
-              androidx.compose.runtime.mutableStateMapOf<Int, android.graphics.Bitmap>().apply {
-                  putAll(preloadedStrips)
-              }
-          }
-
-          // OTIMIZAÇÃO: Sincronizar strips de forma eficiente
-          LaunchedEffect(stripsFromViewModel.size, preloadedStrips.size) {
-              if (thumbnailViewModel != null) {
-                  // 1. Sincronizar - Adicionar novas
-                  stripsFromViewModel.forEach { (k, v) ->
-                      if (strips[k] != v) {
-                          strips[k] = v
-                      }
-                  }
-                  
-                  // 2. Limpar - Remover as que saíram do cache do ViewModel (Memory Limit)
-                  if (stripsFromViewModel.isNotEmpty()) {
-                      val currentKeys = strips.keys.toList()
-                      currentKeys.forEach { k ->
-                          if (!stripsFromViewModel.containsKey(k)) {
-                              strips.remove(k)
-                          }
-                      }
-                  }
-              }
-              // Caso contrário, usar preloadedStrips (compatibilidade)
-              else if (preloadedStrips.isNotEmpty()) {
-                  preloadedStrips.forEach { (k, v) ->
-                      if (!strips.containsKey(k)) {
-                          strips[k] = v
-                      }
-                  }
-              }
+          // Usar strips do ViewModel diretamente (reativo via collectAsState)
+          // Fallback para preloadedStrips se ViewModel não disponível
+          val strips: Map<Int, android.graphics.Bitmap> = if (thumbnailViewModel != null) {
+              stripsFromViewModel
+          } else {
+              preloadedStrips
           }
 
           // Rastrear quantos tempos tem em cada segmento (para strips adaptativas)
@@ -199,45 +169,19 @@ fun TimelineEditor(
             if (videoDurationMs > 0) stripManager.getSegmentCount(videoDurationMs) else 0
         }
 
-
-        // SEQUENTIAL LOADING: Delegar o carregamento para o ViewModel.
-        // Isso garante que o processo sobreviva à navegação entre telas.
-        LaunchedEffect(videoUri, videoDurationMs) {
-            if (videoDurationMs == 0L) return@LaunchedEffect
-            
-            if (thumbnailViewModel != null) {
-                thumbnailViewModel.loadAllStripsSequentially(videoUri, videoDurationMs)
-            } else {
-                // FALLBACK: Se o ViewModel não estiver disponível, mantemos o loop local simples
-                val totalSegments = stripManager.getSegmentCount(videoDurationMs)
-                for (segIdx in 0 until totalSegments) {
-                    if (strips.containsKey(segIdx) || loadingStrips.containsKey(segIdx)) continue
-                    
-                    com.chopcut.data.thumbnail.ThumbnailCacheManager.loadStripWithTracking(
-                        uri = videoUri,
-                        segmentIndex = segIdx,
-                        durationMs = videoDurationMs,
-                        thumbWidth = thumbWidth,
-                        thumbHeight = thumbHeight,
-                        thumbsPerStrip = thumbsPerStrip
-                    ) { strip ->
-                        if (strip != null) {
-                            strips[segIdx] = strip
-                        }
-                    }
-                    kotlinx.coroutines.delay(100)
-                }
-            }
+        // Log inicial da timeline
+        androidx.compose.runtime.LaunchedEffect(videoUri, totalSegments) {
+            Timber.tag("Timeline").i("Timeline inicializada: URI=$videoUri, durationMs=$videoDurationMs, totalSegments=$totalSegments")
         }
 
-        // Animação de shimmer suave - v4.0 (Ambient Flow)
-        // Mais lenta e sutil para não distrair o usuário
+        // Animação de shimmer suave - v4.1 (Accelerated)
+        // Mais rápida para feedback visual imediato
         val infiniteTransition = rememberInfiniteTransition(label = "thumbnailShimmer")
         val shimmerProgress by infiniteTransition.animateFloat(
             initialValue = -1f,
             targetValue = 2f,
             animationSpec = infiniteRepeatable(
-                animation = tween(3000, easing = LinearEasing),
+                animation = tween(1200, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "shimmerProgress"
@@ -262,7 +206,10 @@ fun TimelineEditor(
         }
 
         DisposableEffect(playerManager) {
-            onDispose { playerManager.release() }
+            onDispose { 
+                Timber.tag("TimelineComplete").i("Timeline session finalizada: URI=$videoUri, strips carregadas=${strips.size}, total segments=$totalSegments")
+                playerManager.release() 
+            }
         }
 
         // Auto-launch recovery if security error
@@ -296,15 +243,8 @@ fun TimelineEditor(
             }
         }
     
-        // Cleanup: reciclar strips quando o composable sai da composição
-        DisposableEffect(videoUri) {
-            onDispose {
-                strips.values.forEach { bitmap ->
-                    if (!bitmap.isRecycled) bitmap.recycle()
-                }
-                strips.clear()
-            }
-        }
+        // Cleanup: NÃO reciclar bitmaps — são compartilhados com ThumbnailCacheManager
+        // A gestão de memória é feita pelo cache LRU e trimMemory() do ViewModel
 
         Column(
             modifier = modifier
@@ -341,19 +281,161 @@ fun TimelineEditor(
         )
 
           // 3. TIMELINE RULER (Moved up, Gray BG, Pause on Scroll)
-          Spacer(modifier = Modifier.height(10.dp))
-          BoxWithConstraints(
-              modifier = Modifier
-                  .fillMaxWidth()
-                  .height(150.dp)
-                  .background(Color(0xFF2A2A2A)) // Fundo Cinza
-                  .border(1.dp, Color(0xFF404040))
-          ) {
-              val timelineWidth = constraints.maxWidth.toFloat()
-              val centerOffset = timelineWidth / 2f
-              val durationPx = (videoDurationMs / 1000f) * pxPerSecond
+           Spacer(modifier = Modifier.height(10.dp))
+           BoxWithConstraints(
+               modifier = Modifier
+                   .fillMaxWidth()
+                   .height(150.dp)
+                   .background(Color(0xFF2A2A2A))
+                   .border(1.dp, Color(0xFF404040))
+           ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val width = size.width
+                    val height = size.height
+                    
+                    val filmHeight = 12.dp.toPx()
+                    val holeWidth = 6.dp.toPx()
+                    val holeHeight = 4.dp.toPx()
+                    val frameSpacing = 20.dp.toPx()
+                    val frameNumber = 8.dp.toPx()
+                    
+                    val amberDark = Color(0xFF4A2C0A)
+                    val amberMid = Color(0xFF6B4423)
+                    val amberLight = Color(0xFF8B5A2B)
+                    val metalSheen = Color(0xFFE8DCC8)
+                    
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                amberDark.copy(alpha = 0.9f),
+                                amberMid.copy(alpha = 0.85f),
+                                amberLight.copy(alpha = 0.9f),
+                                amberMid.copy(alpha = 0.85f),
+                                amberDark.copy(alpha = 0.9f)
+                            )
+                        ),
+                        topLeft = Offset(0f, 0f),
+                        size = Size(width, filmHeight)
+                    )
+                    
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                amberDark.copy(alpha = 0.9f),
+                                amberMid.copy(alpha = 0.85f),
+                                amberLight.copy(alpha = 0.9f),
+                                amberMid.copy(alpha = 0.85f),
+                                amberDark.copy(alpha = 0.9f)
+                            )
+                        ),
+                        topLeft = Offset(0f, height - filmHeight),
+                        size = Size(width, filmHeight)
+                    )
+                    
+                     val startX = ((scrollOffsetPx * -1) % frameSpacing)
+                     for (x in startX.toInt() - frameSpacing.toInt()..(width.toInt() + frameSpacing.toInt()) step frameSpacing.toInt()) {
+                         if (x < 0) continue
+                         
+                         val holeYTop = 4.dp.toPx()
+                         val holeYBottom = height - filmHeight + holeYTop
+                         
+                         drawRoundRect(
+                             color = Color.Black.copy(alpha = 0.7f),
+                             topLeft = Offset(x.toFloat() - holeWidth / 2, holeYTop),
+                             size = Size(holeWidth, holeHeight),
+                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(holeWidth / 2)
+                         )
+                         
+                         drawRoundRect(
+                             color = Color.Black.copy(alpha = 0.7f),
+                             topLeft = Offset(x.toFloat() - holeWidth / 2, holeYBottom),
+                             size = Size(holeWidth, holeHeight),
+                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(holeWidth / 2)
+                         )
+                         
+                         val frameNum = ((x + scrollOffsetPx) / frameSpacing).toInt()
+                         if (frameNum >= 0) {
+                             val text = frameNum.toString().padStart(3, '0')
+                             drawIntoCanvas { canvas ->
+                                 val paint = android.graphics.Paint().apply {
+                                     color = metalSheen.copy(alpha = 0.6f).hashCode()
+                                     textSize = 8.dp.toPx()
+                                     typeface = android.graphics.Typeface.create(
+                                        android.graphics.Typeface.MONOSPACE,
+                                        android.graphics.Typeface.BOLD
+                                    )
+                                    isAntiAlias = true
+                                    textAlign = android.graphics.Paint.Align.CENTER
+                                }
+                                canvas.nativeCanvas.drawText(
+                                    text,
+                                    x.toFloat(),
+                                    filmHeight - 2.dp.toPx(),
+                                    paint
+                                )
+                                canvas.nativeCanvas.drawText(
+                                    text,
+                                    x.toFloat(),
+                                    height - 2.dp.toPx(),
+                                    paint
+                                )
+                            }
+                        }
+                        
+                        drawRect(
+                            color = metalSheen.copy(alpha = 0.15f),
+                            topLeft = Offset(x.toFloat() - 1.dp.toPx(), 0f),
+                            size = Size(0.5.dp.toPx(), filmHeight)
+                        )
+                        drawRect(
+                            color = metalSheen.copy(alpha = 0.15f),
+                            topLeft = Offset(x.toFloat() - 1.dp.toPx(), height - filmHeight),
+                            size = Size(0.5.dp.toPx(), filmHeight)
+                        )
+                    }
+                    
+                    drawLine(
+                        color = metalSheen.copy(alpha = 0.3f),
+                        start = Offset(0f, filmHeight),
+                        end = Offset(width, filmHeight),
+                        strokeWidth = 0.5.dp.toPx()
+                    )
+                    drawLine(
+                        color = metalSheen.copy(alpha = 0.3f),
+                        start = Offset(0f, height - filmHeight),
+                        end = Offset(width, height - filmHeight),
+                        strokeWidth = 0.5.dp.toPx()
+                    )
+                }
 
-              // Alturas calculadas dinamicamente
+                 val timelineWidth = constraints.maxWidth.toFloat()
+                val centerOffset = timelineWidth / 2f
+               val durationPx = (videoDurationMs / 1000f) * pxPerSecond
+
+               // ON-DEMAND LOADING: Carrega strips visíveis + buffer conforme usuário rola
+               androidx.compose.runtime.LaunchedEffect(videoUri, videoDurationMs, scrollOffsetPx, timelineWidth) {
+                   if (videoDurationMs == 0L || thumbnailViewModel == null) return@LaunchedEffect
+                   
+                   // Calcular posição atual em segundos
+                   val currentSecond = ((scrollOffsetPx - centerOffset) / pxPerSecond).toInt()
+                       .coerceAtLeast(0)
+                   
+                   // Calcular largura da viewport em segundos
+                   val viewportWidthSeconds = (timelineWidth / pxPerSecond).toInt()
+                   
+                   Timber.tag("TimelineViewport").d("Viewport mudou: second=$currentSecond, width=${viewportWidthSeconds}s, scroll=$scrollOffsetPx")
+                   
+                   // Carregar strips visíveis + buffer
+                   thumbnailViewModel.loadVisibleStripsWithBuffer(
+                       uri = videoUri,
+                       durationMs = videoDurationMs,
+                       currentSecond = currentSecond,
+                       viewportWidthSeconds = viewportWidthSeconds,
+                       bufferSize = 6
+                   )
+               }
+
+               // Alturas calculadas dinamicamente
               val rulerHeight = with(density) { 44.dp.toPx() }
               val waveformHeightDp = 36.dp
               val thumbnailsHeightDp = 48.dp
@@ -540,10 +622,9 @@ fun TimelineEditor(
                         for (segIdx in visibleSegmentIndices) {
                              val strip = strips[segIdx]
                              val thumbsPerStripForThisSeg = stripManager.getThumbsPerStripForSegment(segIdx, totalSegments)
-                             // TODO: quando adaptiveStrips for reativado, usar soma cumulativa em vez de multiplicação
-                             val startSec = segIdx * thumbsPerStripForThisSeg
-                             val stripWidthPx = pxPerSecond * thumbsPerStripForThisSeg // BUG FIX: Usar valor adaptivo, não fixo
-                             val x = centerOffset + (startSec * pxPerSecond) - currentScroll
+                              val startSec = stripManager.getSegmentStartSecond(segIdx, totalSegments)
+                              val stripWidthPx = pxPerSecond * thumbsPerStripForThisSeg
+                              val x = centerOffset + (startSec * pxPerSecond) - currentScroll
 
                              drawCallCount.intValue++
 
