@@ -4,9 +4,10 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
-import com.chopcut.config.constants.AudioConstants
+import com.chopcut.config.constants.AudioConfig
 import com.chopcut.util.TimeTracker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.sqrt
@@ -20,9 +21,9 @@ class AudioDataExtractor(
 ) {
 
     companion object {
-        private const val SILENCE_THRESHOLD = AudioConstants.Quality.SILENCE_THRESHOLD
-        private const val VOICE_BOOST = AudioConstants.Quality.VOICE_BOOST_FACTOR
-        private const val NOISE_SAMPLE_SIZE = AudioConstants.Extraction.NOISE_SAMPLE_SIZE
+        private const val SILENCE_THRESHOLD = AudioConfig.Quality.SILENCE_THRESHOLD
+        private const val VOICE_BOOST = AudioConfig.Quality.VOICE_BOOST_FACTOR
+        private const val NOISE_SAMPLE_SIZE = AudioConfig.Extraction.NOISE_SAMPLE_SIZE
     }
 
     suspend fun extractRawPcmData(
@@ -53,7 +54,7 @@ class AudioDataExtractor(
 
             val format = extractor.getTrackFormat(audioTrackIndex)
             val mime = format.getString(MediaFormat.KEY_MIME)!!
-            val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE, AudioConstants.Extraction.DEFAULT_SAMPLE_RATE)
+            val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE, AudioConfig.Extraction.DEFAULT_SAMPLE_RATE)
             val channelCount = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
                 format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             } else 1
@@ -66,7 +67,7 @@ class AudioDataExtractor(
                 val totalFrames = (sampleRate * channelCount * expectedDurationMs / 1000).toLong()
                 (totalFrames.toFloat() / targetBarCount).toInt().coerceAtLeast(1)
             } else {
-                AudioConstants.Extraction.DEFAULT_SAMPLES_PER_BAR
+                AudioConfig.Extraction.DEFAULT_SAMPLES_PER_BAR
             }
             val estimatedPoints = targetBarCount
 
@@ -74,12 +75,12 @@ class AudioDataExtractor(
             // FASE 1: Coletar amostras para análise de ruído (primeiros segundos)
             val noiseSamples = mutableListOf<Float>()
             val bufferInfo = MediaCodec.BufferInfo()
-            val timeoutUs = AudioConstants.Extraction.DECODER_TIMEOUT_US
+            val timeoutUs = AudioConfig.Extraction.DECODER_TIMEOUT_US
 
             var outputDone = false
             var inputDone = false
             var tryAgainCount = 0
-            val maxTryAgain = AudioConstants.Extraction.MAX_TRY_AGAIN
+            val maxTryAgain = AudioConfig.Extraction.MAX_TRY_AGAIN
             var needsEosSent = false
 
             var reusableShortArray: ShortArray? = null
@@ -95,10 +96,12 @@ class AudioDataExtractor(
             var totalSamplesProcessed = 0L
             var lastProgressLog = 0
 
-            val pcmData = java.util.ArrayList<Float>(estimatedPoints)
-
-            // Processamento em streaming - não carrega tudo na memória
-            while (!outputDone) {
+        val pcmData = java.util.ArrayList<Float>(estimatedPoints)
+        
+        // Processamento em streaming - não carrega tudo na memória
+        var frameCount = 0
+        while (!outputDone) {
+            ensureActive() // Permitir cancelamento responsivo
                 if (needsEosSent) {
                     val eosBufferIndex = decoder.dequeueInputBuffer(timeoutUs)
                     if (eosBufferIndex >= 0) {
@@ -175,6 +178,12 @@ class AudioDataExtractor(
                                         }
                                     }
                                 }
+                                
+                                // Checkpoint a cada frame para responsividade
+                                frameCount++
+                                if (frameCount % 10 == 0) {
+                                    ensureActive()
+                                }
                             }
                         }
 
@@ -214,7 +223,7 @@ class AudioDataExtractor(
                 val sortedNoise = noiseSamples.sorted()
                 val noiseSampleSize = (sortedNoise.size * 0.2).toInt().coerceAtLeast(1)
                 val noiseFloor = sortedNoise.take(noiseSampleSize).average().toFloat()
-                val dynamicThreshold = (noiseFloor * AudioConstants.Quality.DYNAMIC_THRESHOLD_MULTIPLIER).coerceAtLeast(SILENCE_THRESHOLD)
+                val dynamicThreshold = (noiseFloor * AudioConfig.Quality.DYNAMIC_THRESHOLD_MULTIPLIER).coerceAtLeast(SILENCE_THRESHOLD)
 
 
                 // Aplicar threshold e boost de voz
@@ -277,7 +286,7 @@ data class AudioRawData(
     companion object {
         fun empty() = AudioRawData(
             pcmSamples = floatArrayOf(),
-            sampleRate = AudioConstants.Extraction.DEFAULT_SAMPLE_RATE,
+            sampleRate = AudioConfig.Extraction.DEFAULT_SAMPLE_RATE,
             durationMs = 0
         )
     }

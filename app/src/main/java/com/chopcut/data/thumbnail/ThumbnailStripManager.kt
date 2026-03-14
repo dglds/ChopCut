@@ -11,9 +11,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.util.Size
-import com.chopcut.config.constants.ThumbnailConstants
-import com.chopcut.config.constants.CacheConstants
-import com.chopcut.config.constants.PerformanceConstants
+import com.chopcut.config.constants.ThumbnailConfig
 import com.chopcut.data.local.PreferencesManager
 import com.chopcut.data.model.ThumbnailQuality
 import com.chopcut.util.logging.ActivityLogger
@@ -61,26 +59,26 @@ class ThumbnailStripManager(
     private val prefsManager = PreferencesManager(context)
 
     /** Configuração de strips adaptativas */
-    private val minThumbsPerStrip = ThumbnailConstants.Quality.MIN_THUMBS_PER_STRIP
+    private val minThumbsPerStrip = ThumbnailConfig.Adaptive.MIN_THUMBS_PER_STRIP
     
     companion object {
         /** Limite de concorrência para extração (Aumentado para 2 para melhor throughput) */
         private val extractSemaphore = Semaphore(2)
 
         /** Limite de concorrência para I/O de escrita (permite escrita paralela) */
-        private val ioSemaphore = Semaphore(ThumbnailConstants.Concurrency.IO_SEMAPHORE_PERMITS)
+        private val ioSemaphore = Semaphore(ThumbnailConfig.Concurrency.IO_SEMAPHORE_PERMITS)
 
         /** Diretório de cache para strips */
         internal const val CACHE_DIR = "thumbnail_strips"
 
         /** Tamanho máximo do cache em bytes */
-        private const val MAX_CACHE_SIZE = ThumbnailConstants.Cache.MAX_CACHE_SIZE
+        private const val MAX_CACHE_SIZE = ThumbnailConfig.Cache.MAX_CACHE_SIZE
 
         /** Versão do cache para invalidação manual ao mudar formatos/lógica */
-        private const val CACHE_VERSION = ThumbnailConstants.Cache.CACHE_VERSION
+        private const val CACHE_VERSION = ThumbnailConfig.Cache.CACHE_VERSION
 
         /** Qualidade para compressão das strips */
-        private const val COMPRESSION_QUALITY = ThumbnailConstants.Quality.STRIP_COMPRESSION_QUALITY
+        private const val COMPRESSION_QUALITY = ThumbnailConfig.Compression.STRIP_COMPRESSION_QUALITY
 
         
         /**
@@ -106,7 +104,7 @@ class ThumbnailStripManager(
             segmentIndex: Int,
             totalSegments: Int,
             maxThumbsPerStrip: Int,
-            minThumbsPerStrip: Int = ThumbnailConstants.Quality.MIN_THUMBS_PER_STRIP
+            minThumbsPerStrip: Int = ThumbnailConfig.Adaptive.MIN_THUMBS_PER_STRIP
         ): Int {
             if (totalSegments <= 1) return maxThumbsPerStrip
 
@@ -115,7 +113,7 @@ class ThumbnailStripManager(
 
             // Curva de potência suave (ex: progress^0.5)
             // Isso faz o crescimento ser mais rápido no início, mais lento depois
-            val power = ThumbnailConstants.Quality.ADAPTIVE_POWER_CURVE_EXPONENT
+            val power = ThumbnailConfig.Adaptive.ADAPTIVE_POWER_CURVE_EXPONENT
             val adjustedProgress = progress.coerceIn(0f, 1f).pow(power)
 
             // Calcular thumbsPerStrip ajustado
@@ -171,6 +169,29 @@ class ThumbnailStripManager(
         }
         
         return result
+    }
+    
+    /**
+     * Calcula a posição inicial (em segundos) de um segmento específico.
+     * Para strips adaptativas, usa soma cumulativa das thumbs dos segmentos anteriores.
+     * Para strips fixas, usa multiplicação simples.
+     * 
+     * @param segmentIndex Índice do segmento
+     * @param totalSegments Número total de segmentos
+     * @return Posição inicial em segundos
+     */
+    fun getSegmentStartSecond(segmentIndex: Int, totalSegments: Int): Int {
+        if (segmentIndex == 0) return 0
+        
+        if (adaptiveStrips) {
+            var totalSeconds = 0
+            for (i in 0 until segmentIndex) {
+                totalSeconds += getThumbsPerStripForSegment(i, totalSegments)
+            }
+            return totalSeconds
+        } else {
+            return segmentIndex * thumbsPerStrip
+        }
     }
     
     /**
@@ -254,7 +275,7 @@ class ThumbnailStripManager(
                 val elapsed = System.currentTimeMillis() - startTime
 
                 // MÉTRICAS DE PERFORMANCE: Alertar se cache I/O está lento
-                if (elapsed > ThumbnailConstants.Timing.CACHE_READ_THRESHOLD_MS) {
+                if (elapsed > 50L) {
                 } else {
                 }
             } else {
@@ -344,7 +365,7 @@ class ThumbnailStripManager(
 
                 // Ordenar por lastModified (mais antigos primeiro)
                 val sortedFiles: List<File> = cacheFiles.sortedBy { file -> file.lastModified() }
-                val filesToDelete: List<File> = sortedFiles.take(cacheFiles.size / CacheConstants.Thumbnail.TRIM_RATIO_DIVISOR)
+                val filesToDelete: List<File> = sortedFiles.take(cacheFiles.size / 4)
 
                 var deletedSize = 0L
                 filesToDelete.forEach { file: File ->

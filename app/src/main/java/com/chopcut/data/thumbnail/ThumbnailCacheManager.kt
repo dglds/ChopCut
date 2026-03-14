@@ -569,7 +569,7 @@ object ThumbnailCacheManager {
             // Se o stripManager não estiver configurado, não podemos garantir a chave correta
             // mas podemos tentar com o stripManager atual se ele existir
             val manager = stripManager ?: return false
-            val cacheKey = "strip_v${com.chopcut.config.constants.ThumbnailConstants.Cache.CACHE_VERSION}_${manager.getFileIdentifier(uri)}_${segmentIndex}.webp"
+            val cacheKey = "strip_v${com.chopcut.config.constants.ThumbnailConfig.Cache.CACHE_VERSION}_${manager.getFileIdentifier(uri)}_${segmentIndex}.webp"
             val dir = File(appContext?.cacheDir, "thumbnail_strips")
             return File(dir, cacheKey).exists()
         } catch (e: Exception) {
