@@ -5,6 +5,7 @@ data class TrimPosition(
 ) {
     companion object {
         val Empty = TrimPosition()
+        const val MIN_RANGE_DURATION_MS = 500L
     }
 
     val draftPosition: Long?
@@ -36,6 +37,17 @@ data class TrimPosition(
         } else {
             this
         }
+    }
+
+    fun updateRangeAt(rangeIndex: Int, newStartMs: Long, newEndMs: Long): TrimPosition {
+        val ranges = completeRanges.toMutableList()
+        if (rangeIndex !in ranges.indices) return this
+        val clampedEnd = maxOf(newEndMs, newStartMs + MIN_RANGE_DURATION_MS)
+        val clampedStart = minOf(newStartMs, clampedEnd - MIN_RANGE_DURATION_MS)
+        ranges[rangeIndex] = clampedStart to clampedEnd
+        val newPositions = ranges.flatMap { listOf(it.first, it.second) }.toMutableList()
+        if (isDraftMode) newPositions.add(positions.last())
+        return copy(positions = newPositions)
     }
 
     private fun mergeRanges(positions: List<Long>): List<Pair<Long, Long>> {

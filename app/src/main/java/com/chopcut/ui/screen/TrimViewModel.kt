@@ -7,14 +7,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.chopcut.data.audio.AudioDataExtractor
-import com.chopcut.data.audio.WaveFormGenerator
 import com.chopcut.data.audio.WaveformQuality
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.TrimPosition
 import com.chopcut.ui.components.WaveformData
 import com.chopcut.ui.components.player.PlayerManager
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,7 +19,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.map
 
 /**
  * ViewModel para TrimScreen.
@@ -77,7 +73,6 @@ class TrimViewModel(
     val state: StateFlow<TrimEditorState> = _state.asStateFlow()
 
     private var waveformQuality: WaveformQuality = WaveformQuality.Medium
-    private val audioDataExtractor = AudioDataExtractor(application)
     private val videoRepository = VideoRepository(application)
 
     private var playerManager: PlayerManager? = null
@@ -123,66 +118,6 @@ class TrimViewModel(
         waveformQuality = quality
     }
 
-    fun loadWaveform(uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _state.update { it.copy(isWaveformLoading = true, waveformError = null) }
-            try {
-                val barCount = waveformQuality.calculateBarCount(
-                    durationMs = 0,
-                    screenWidthDp = 400f
-                )
-
-                val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = barCount)
-
-                val threshold = 0.05f
-                val silenceHeight: Float? = null
-
-                val amplitudes = WaveFormGenerator.generateWaveform(
-                    pcmSamples = rawData.pcmSamples,
-                    durationMs = rawData.durationMs,
-                    quality = waveformQuality,
-                    screenWidthDp = 400f,
-                    threshold = threshold,
-                    silenceHeight = silenceHeight
-                )
-                val waveformData = WaveformData(
-                    amplitudes = amplitudes,
-                    sampleRate = rawData.sampleRate,
-                    durationMs = rawData.durationMs
-                )
-                _state.update { it.copy(waveformData = waveformData, isWaveformLoading = false) }
-            } catch (e: Exception) {
-                _state.update { it.copy(waveformData = WaveformData.empty(), isWaveformLoading = false, waveformError = e.message) }
-            }
-        }
-    }
-
-    fun loadAudioWaveforms(uri: Uri, targetBarCount: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-
-            if (initialAudioAmplitudes != null) {
-                _state.update { it.copy(
-                    audioWaveformsAmplitudes = initialAudioAmplitudes,
-                    isAudioWaveformsLoading = false
-                ) }
-                return@launch
-            }
-
-            _state.update { it.copy(isAudioWaveformsLoading = true, audioWaveformsAmplitudes = emptyList()) }
-            try {
-                val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = targetBarCount)
-
-                val amplitudesList = rawData.pcmSamples.toList()
-                _state.update { it.copy(
-                    audioWaveformsAmplitudes = amplitudesList,
-                    isAudioWaveformsLoading = false
-                ) }
-            } catch (e: Exception) {
-                _state.update { it.copy(audioWaveformsAmplitudes = emptyList(), isAudioWaveformsLoading = false) }
-            }
-        }
-    }
-
     /**
      * Atualiza as amplitudes de áudio.
      * Usado para sincronizar dados do AudioViewModel.
@@ -213,6 +148,11 @@ class TrimViewModel(
 
     fun setWaveformData(data: WaveformData) {
         _state.update { it.copy(waveformData = data) }
+    }
+
+    fun updateRange(rangeIndex: Int, newStartMs: Long, newEndMs: Long) {
+        val current = _state.value.trimPosition
+        _state.update { it.copy(trimPosition = current.updateRangeAt(rangeIndex, newStartMs, newEndMs)) }
     }
 
     fun removeRangeAt(pos: Long) {

@@ -35,7 +35,7 @@ import com.chopcut.ui.components.trim.TrimControlPanel
 import com.chopcut.ui.components.trim.SaveDialogState
 import com.chopcut.ui.components.trim.TrimSaveDialog
 import com.chopcut.ui.components.feedback.ErrorState
-import com.chopcut.ui.components.timeline.OptimizedVideoTimeline
+import com.chopcut.ui.components.timeline.VideoTimeline
 import com.chopcut.ui.components.timeline.SeekbarProgress
 import com.chopcut.ui.components.timeline.CurrentTimeDisplay
 import com.chopcut.ui.components.timeline.VideoPreview
@@ -67,8 +67,6 @@ fun TrimScreen(
 
     // Observar AudioViewModel com lifecycle awareness
     val audioAmplitudes by audioViewModel.amplitudes.collectAsStateWithLifecycle()
-    val audioWaveform by audioViewModel.waveform.collectAsStateWithLifecycle()
-
     // Criar TrimViewModel
     val viewModel: TrimViewModel = viewModel(
         factory = TrimViewModel.TrimViewModelFactory(videoUri)
@@ -183,32 +181,12 @@ fun TrimScreen(
     val videoRepository = remember { VideoRepository(context) }
     val transformerPipeline = remember { TransformerPipeline(context, videoRepository) }
     
-    // Calcular número de barras baseado na duração do vídeo
-    val targetBarCount = remember(state.videoDurationMs) {
-        if (state.videoDurationMs > 0) {
-            // Para vídeos curtos (< 30s): mais barras para detalhe
-            // Para vídeos longos: menos barras para performance
-            when {
-                state.videoDurationMs < 30000 -> (state.videoDurationMs / 50).toInt().coerceAtLeast(100)
-                state.videoDurationMs < 120000 -> (state.videoDurationMs / 100).toInt().coerceAtLeast(200)
-                else -> (state.videoDurationMs / 200).toInt().coerceAtLeast(300).coerceAtMost(800)
-            }
-        } else {
-            300 // valor padrão antes de conhecer a duração
-        }
-    }
-
-    /* 
+    // Carregar waveform de áudio via AudioViewModel (Activity-scoped)
     LaunchedEffect(videoUri) {
         if (videoUri != Uri.EMPTY) {
-            viewModel.loadWaveform(videoUri)
+            audioViewModel.loadWaveform(videoUri)
         }
     }
-    */
-
-    // OTIMIZAÇÃO: Removido LaunchedEffect que chamava loadAudioWaveforms()
-    // Os dados de áudio já são carregados pelo AudioViewModel e sincronizados via updateAudioAmplitudes()
-    // Isso elimina extração duplicada de áudio (economia de 66% de I/O)
 
     when {
         videoUri == Uri.EMPTY -> {
@@ -318,16 +296,15 @@ fun TrimScreen(
 
                                 Spacer(modifier = Modifier.height(10.dp))
 
-                                // Optimized Thumbnail Timeline
+                                // Thumbnail Timeline
                                 if (state.videoDurationMs > 0) {
-                                    OptimizedVideoTimeline(
-                                        uri = videoUri,
+                                    VideoTimeline(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        videoUri = videoUri,
                                         durationMs = state.videoDurationMs,
-                                        currentPosition = state.currentPosition,
-                                        onScrollChanged = { newPosition ->
-                                            viewModel.setCurrentPosition(newPosition)
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
+                                        currentPositionMs = state.currentPosition,
+                                        onSeek = { viewModel.setCurrentPosition(it) },
+                                        trimRanges = state.trimPosition.completeRanges
                                     )
                                 }
                             }
@@ -465,15 +442,5 @@ private fun getHideReason(
         state is PreloadUiState.Ready -> "Ready (${elapsedTimeMs / 1000}s, ${thumbnailProgress.toInt()}% thumbnails)"
         minTimeReached && hasSufficientThumbnails -> "Min time reached + sufficient data"
         else -> "Unknown reason"
-    }
-}
-
-private fun formatAspectRatio(ratio: Float): String {
-    return when {
-        (ratio - 16f / 9f).let { kotlin.math.abs(it) } < 0.01f -> "16:9"
-        (ratio - 9f / 16f).let { kotlin.math.abs(it) } < 0.01f -> "9:16"
-        (ratio - 4f / 3f).let { kotlin.math.abs(it) } < 0.01f -> "4:3"
-        (ratio - 1f).let { kotlin.math.abs(it) } < 0.01f -> "1:1"
-        else -> "%.2f".format(ratio)
     }
 }

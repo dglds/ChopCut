@@ -1,4 +1,5 @@
-package com.chopcut.ui.components.timeline
+// ARCHIVED — superseded by VideoTimeline (ex-TimelineV3) + FastFrameExtractor
+package com.chopcut.archive
 
 import android.graphics.Bitmap
 import android.net.Uri
@@ -8,7 +9,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import com.chopcut.R
-import com.chopcut.data.thumbnail.OptimizedThumbnailProvider
+import com.chopcut.archive.OptimizedThumbnailProvider
 import com.chopcut.data.thumbnail.ThumbnailPriority
 
 /**
