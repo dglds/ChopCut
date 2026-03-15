@@ -2,7 +2,6 @@ package com.chopcut.ui.components.timeline
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -36,18 +35,29 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.LaunchedEffect
 import android.graphics.Bitmap
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOutQuint
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -184,7 +194,7 @@ fun TimelineV3(
             fastExtractor.release()
         }
     }
-    
+
     // Observer to get duration and video dimensions when player is ready
     DisposableEffect(exoPlayer) {
         val listener = object : androidx.media3.common.Player.Listener {
@@ -358,44 +368,6 @@ fun TimelineV3(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // === TEST: Extract first frame ===
-        var testBitmap by remember { mutableStateOf<Bitmap?>(null) }
-        var testStatus by remember { mutableStateOf("Waiting...") }
-
-        LaunchedEffect(isExtractorReady) {
-            if (isExtractorReady) {
-                testStatus = "Extracting frame 0..."
-                timber.log.Timber.d("TEST: Calling getFrameAt(0)")
-                val bmp = fastExtractor.getFrameAt(0L)
-                timber.log.Timber.d("TEST: getFrameAt(0) returned: %s", if (bmp != null) "${bmp.width}x${bmp.height}" else "null")
-                testBitmap = bmp
-                testStatus = if (bmp != null) "OK: ${bmp.width}x${bmp.height} ${bmp.config}" else "FAILED: null"
-            } else {
-                testStatus = "Extractor not ready"
-            }
-        }
-
-        Text(
-            text = "Test: $testStatus",
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        if (testBitmap != null) {
-            Image(
-                bitmap = testBitmap!!.asImageBitmap(),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        // === END TEST ===
-
         // Horizontal Thumbnail Scroll
         val totalSeconds = (durationMs / 1000).toInt().coerceAtLeast(0)
 
@@ -405,82 +377,104 @@ fun TimelineV3(
                 text = "Thumbs: ${thumbnails.size()} / $totalSeconds",
                 style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.padding(bottom = 2.dp)
-            )
-        }
-        if (extractionCount > 0) {
-            Text(
-                text = "Cadence: ${cadenceMs}ms/frame",
-                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.padding(bottom = 4.dp)
             )
         }
-        
+
         LazyRow(
             state = listState,
             modifier = Modifier
-                .fillMaxWidth()
-                ,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)
         ) {
             items(totalSeconds) { index ->
-                val timeUs = index * 1000000L // 1 second intervals
+                val bitmap = thumbnails[index]
 
-                // Detecta cache hit: se já existia antes do LaunchedEffect extrair
-                var isCacheHit by remember(videoUri, selectedQuality, index) { mutableStateOf(false) }
+                // Animação sincopada: progress 0→1 triggered quando bitmap aparece no cache
+                val progress = remember(videoUri, selectedQuality, index) { Animatable(0f) }
 
-                LaunchedEffect(videoUri, index, isExtractorReady, selectedQuality, thumbWidth) {
-                    if (!isExtractorReady) return@LaunchedEffect
-                    if (thumbnails.containsKey(index)) {
-                        isCacheHit = true
-                    } else {
-                        val bitmap = fastExtractor.getFrameAt(timeUs)
-                        if (bitmap != null) {
-                            thumbnails[index] = bitmap
+                LaunchedEffect(bitmap != null) {
+                    if (bitmap != null && progress.value == 0f) {
+                        val variant = index % 3
+                        when (variant) {
+                            0 -> progress.animateTo(
+                                1f,
+                                animationSpec = spring(
+                                    dampingRatio = 0.6f,
+                                    stiffness = 800f
+                                )
+                            )
+                            1 -> progress.animateTo(
+                                1f,
+                                animationSpec = tween(
+                                    durationMillis = 350,
+                                    easing = FastOutSlowInEasing
+                                )
+                            )
+                            2 -> progress.animateTo(
+                                1f,
+                                animationSpec = tween(
+                                    durationMillis = 500,
+                                    easing = EaseOutQuint
+                                )
+                            )
                         }
                     }
                 }
 
-                val neonCyan = Color(0xFF00FFFF)
+                // Derivar scale, alpha e offsetY do progress
+                val variant = index % 3
+                val p = progress.value
+                val scale = when (variant) {
+                    0 -> 0.8f + 0.2f * p    // pop: 0.8→1.0
+                    1 -> 0.92f + 0.08f * p   // ease: 0.92→1.0
+                    else -> 0.95f + 0.05f * p // drift: 0.95→1.0
+                }
+                val alpha = p
+                val offsetY = when (variant) {
+                    0 -> 6f * (1f - p)    // pop: +6dp→0
+                    1 -> 3f * (1f - p)    // ease: +3dp→0
+                    else -> 2f * (1f - p) // drift: +2dp→0
+                }
 
-                Column(
-                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "T ${index}s",
-                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(width = thumbWidth.dp, height = thumbHeight.dp)
-                            .then(
-                                if (isCacheHit) Modifier
-                                    .border(1.dp, neonCyan.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                                    .border(2.dp, neonCyan, RoundedCornerShape(8.dp))
-                                else Modifier
-                            )
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.DarkGray),
-                        contentAlignment = androidx.compose.ui.Alignment.Center
-                    ) {
-                        val bitmap = thumbnails[index]
-                        if (bitmap != null) {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White.copy(alpha = 0.5f)
-                            )
+                Box(
+                    modifier = Modifier
+                        .size(width = thumbWidth.dp, height = thumbHeight.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            this.alpha = alpha
                         }
+                        .offset(y = offsetY.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.DarkGray),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        // Shimmer placeholder
+                        val shimmerTransition = rememberInfiniteTransition(label = "shimmer")
+                        val shimmerAlpha by shimmerTransition.animateFloat(
+                            initialValue = 0.15f,
+                            targetValue = 0.3f,
+                            animationSpec = infiniteRepeatable(
+                                tween(800),
+                                RepeatMode.Reverse
+                            ),
+                            label = "shimmerAlpha"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.White.copy(alpha = shimmerAlpha))
+                        )
                     }
                 }
             }
