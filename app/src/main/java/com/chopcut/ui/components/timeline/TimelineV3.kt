@@ -50,15 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 
-import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Velocity
 import kotlinx.coroutines.ensureActive
 import android.util.LruCache
 import androidx.compose.runtime.mutableIntStateOf
@@ -250,58 +242,9 @@ fun TimelineV3(
 
     // LazyRow scroll state
     val listState = rememberLazyListState()
-    val density = LocalDensity.current
 
-    // Janela visível atual
-    val visibleCenter by remember {
-        derivedStateOf {
-            val first = listState.firstVisibleItemIndex
-            val visibleCount = listState.layoutInfo.visibleItemsInfo.size
-            first + visibleCount / 2
-        }
-    }
-
-    // Fling prediction: onde o scroll violento vai parar
-    var predictedCenter by remember { mutableStateOf(-1) }
-
-    // Largura de cada item em pixels (thumb + spacing de 8.dp)
-    val itemWidthPx = remember(thumbWidth) {
-        with(density) { (thumbWidth + 8).dp.toPx() }
-    }
-
-    // NestedScrollConnection para interceptar fling e prever destino
-    val flingPredictionConnection = remember(itemWidthPx) {
-        object : NestedScrollConnection {
-            override suspend fun onPreFling(available: Velocity): Velocity {
-                val vx = available.x
-                // Fórmula simplificada da física de fling do Android:
-                // distância ≈ velocidade × fator_de_decaimento
-                // O fator ~0.3s é uma boa aproximação do decay do OverScroller
-                val predictedDistancePx = vx * 0.3f
-                val predictedItems = (predictedDistancePx / itemWidthPx).toInt()
-                predictedCenter = visibleCenter + predictedItems
-                timber.log.Timber.d(
-                    "Fling prediction: vx=%.0f, items=%d, predicted=%d",
-                    vx, predictedItems, predictedCenter
-                )
-                return Velocity.Zero // não consome — LazyRow faz o scroll
-            }
-
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource
-            ): Offset {
-                // Quando o scroll para (fling terminou), limpa a predição
-                if (source == NestedScrollSource.SideEffect) {
-                    predictedCenter = -1
-                }
-                return Offset.Zero
-            }
-        }
-    }
-
-    // Coroutine de loading: NUNCA para, prioriza predicted > visible > sequencial
+    // Coroutine de loading: sempre sequencial (0, 1, 2, 3...)
+    // Scroll não influencia a ordem — carregamento é linear e previsível
     // Cadência fixa: cada frame aparece a cada ~cadenceMs, criando ritmo visual
     LaunchedEffect(isExtractorReady, selectedQuality, thumbWidth, durationMs) {
         if (!isExtractorReady) return@LaunchedEffect
@@ -310,24 +253,12 @@ fun TimelineV3(
         val totalSecs = (durationMs / 1000).toInt().coerceAtLeast(0)
         if (totalSecs == 0) return@LaunchedEffect
 
-        while (true) {
+        for (index in 0 until totalSecs) {
             ensureActive()
+            if (thumbnails.containsKey(index)) continue
+
             val frameStart = System.nanoTime()
-
-            // Prioridade: predição do fling > centro visível > sequencial
-            val target = if (predictedCenter >= 0) {
-                predictedCenter.coerceIn(0, totalSecs - 1)
-            } else {
-                visibleCenter.coerceIn(0, totalSecs - 1)
-            }
-
-            val nextIndex = (0 until totalSecs)
-                .sortedBy { kotlin.math.abs(it - target) }
-                .firstOrNull { !thumbnails.containsKey(it) }
-
-            if (nextIndex == null) break // tudo carregado
-
-            extractAndCache(fastExtractor, thumbnails, nextIndex) { extractionCount++ }
+            extractAndCache(fastExtractor, thumbnails, index) { extractionCount++ }
 
             // Ritmo fixo: se a extração foi mais rápida que o cadence, espera
             val elapsedMs = (System.nanoTime() - frameStart) / 1_000_000
@@ -490,7 +421,7 @@ fun TimelineV3(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .nestedScroll(flingPredictionConnection),
+                ,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)
         ) {

@@ -27,6 +27,7 @@ import com.chopcut.ui.components.loading.LoadingOverlay
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.data.pipeline.TrimProgress
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.VideoFileInfo
@@ -43,6 +44,7 @@ import com.chopcut.utils.FileNameUtils
 import com.chopcut.utils.RangeUtils
 import com.chopcut.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,8 +179,6 @@ fun TrimScreen(
         showLoadingOverlay = false
         onNavigateBack()
     }
-
-    val scope = rememberCoroutineScope()
 
     val videoRepository = remember { VideoRepository(context) }
     val transformerPipeline = remember { TransformerPipeline(context, videoRepository) }

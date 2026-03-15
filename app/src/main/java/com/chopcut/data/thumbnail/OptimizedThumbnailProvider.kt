@@ -16,19 +16,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.util.concurrent.PriorityBlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 /**
  * Provedor de thumbnails otimizado para a timeline do editor.
- * 
+ *
  * Implementa:
  * - Quantização de timestamp (500ms)
  * - Cache LRU baseado em timestamp
- * - Fila de extração com prioridade (VISIBLE > PREFETCH > DISTANT)
+ * - Fila FIFO de extração (ordem sequencial, scroll não influencia)
  * - Pool de threads limitado (2 threads)
- * - Cancelamento de requests obsoletos
  * - Batching de atualizações (via Flow)
  */
 class OptimizedThumbnailProvider(
@@ -44,7 +42,7 @@ class OptimizedThumbnailProvider(
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val extractorBatch = ThumbnailExtractorBatch(context)
-    private val requestQueue = PriorityBlockingQueue<ThumbnailRequest>()
+    private val requestQueue = LinkedBlockingQueue<ThumbnailRequest>()
     private val executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE)
     
     // Mutex para proteger a fila de requests pendentes
@@ -103,28 +101,6 @@ class OptimizedThumbnailProvider(
         }
     }
 
-    /**
-     * Realiza prefetch de uma janela de timestamps.
-     */
-    fun prefetch(uri: Uri, startMs: Long, endMs: Long) {
-        var current = quantizeTimestamp(startMs)
-        val limit = quantizeTimestamp(endMs)
-        
-        while (current <= limit) {
-            requestThumbnail(uri, current, ThumbnailPriority.PREFETCH)
-            current += QUANTIZATION_INTERVAL_MS
-        }
-    }
-
-    /**
-     * Limpa a fila de extração (útil em scroll rápido).
-     */
-    suspend fun clearQueue() {
-        queueMutex.withLock {
-            requestQueue.clear()
-            pendingTimestamps.clear()
-        }
-    }
 
     /**
      * Quantiza o timestamp para intervalos de 500ms para maximizar reuso.

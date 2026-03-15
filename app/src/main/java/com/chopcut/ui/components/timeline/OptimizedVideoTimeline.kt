@@ -19,8 +19,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.chopcut.data.thumbnail.OptimizedThumbnailProvider
 import kotlinx.coroutines.flow.collectLatest
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
@@ -56,7 +54,6 @@ fun OptimizedVideoTimeline(
     thumbnailWidth: Int = 120
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
     // Provedor e Adapter são lembrados durante a vida do Composable
@@ -129,36 +126,17 @@ fun OptimizedVideoTimeline(
                     setItemViewCacheSize(40) // Manter mais views em cache
                     itemAnimator = null // Desabilitar animações para performance
 
-                    // Lógica de cancelamento de requests em scroll rápido e notificação de scroll
+                    // Scroll listener apenas para feedback de posição — NÃO influencia carregamento
                     addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                        override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                            // Clear queue only when dragging (user initiated scroll)
-                            if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
-                                scope.launch {
-                                    provider.clearQueue()
-                                }
-                            }
-                        }
-
                         override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                            val firstVisibleItemPosition = layoutManagerRef.value?.findFirstVisibleItemPosition() ?: 0
-                            val lastVisibleItemPosition = layoutManagerRef.value?.findLastVisibleItemPosition() ?: 0
-                            
-                            // Calculate visible range for prefetching
                             if (durationMs > 0) {
-                                val firstVisibleMs = (firstVisibleItemPosition.toLong() * durationMs) / adapter.itemCount
-                                val lastVisibleMs = (lastVisibleItemPosition.toLong() * durationMs) / adapter.itemCount
-                                provider.prefetch(uri, firstVisibleMs, lastVisibleMs + 2000L) // Add some buffer
-
-                                // Calculate new current position at the center of the RecyclerView for user scroll feedback
                                 val centerItemPosition = layoutManagerRef.value?.findFirstCompletelyVisibleItemPosition()?.let { firstCompletelyVisible ->
                                     val lastCompletelyVisible = layoutManagerRef.value?.findLastCompletelyVisibleItemPosition() ?: firstCompletelyVisible
                                     (firstCompletelyVisible + lastCompletelyVisible) / 2
                                 } ?: 0
-                                
+
                                 val newPositionMs = (centerItemPosition.toLong() * durationMs) / adapter.itemCount
                                 if (newPositionMs != currentPosition) {
-                                    // Notify only if user is actively scrolling or on a significant change
                                     if (recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING || recyclerView.scrollState == RecyclerView.SCROLL_STATE_SETTLING) {
                                         onScrollChanged(newPositionMs)
                                     }

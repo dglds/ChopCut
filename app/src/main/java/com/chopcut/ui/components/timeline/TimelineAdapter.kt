@@ -31,7 +31,6 @@ class TimelineAdapter(
 
     companion object {
         private const val PAYLOAD_THUMB = "PAYLOAD_THUMB"
-        private const val PREFETCH_DISTANCE = 30 // Janela de prefetch
     }
 
     // Map de timestamps pendentes para posições (para atualização batch)
@@ -79,21 +78,8 @@ class TimelineAdapter(
             positions.add(position)
         }
 
-        // Solicitar thumbnail (Prioridade VISIBLE para o bind atual)
+        // Solicitar thumbnail (FIFO — ordem de chegada, sem prioridade)
         provider.requestThumbnail(uri, quantizedTime, ThumbnailPriority.VISIBLE)
-        
-        // Realizar prefetch das posições adjacentes
-        performPrefetch(position)
-    }
-
-    private fun performPrefetch(currentPosition: Int) {
-        val start = (currentPosition + 1).coerceAtMost(itemCountLimit - 1)
-        val end = (currentPosition + PREFETCH_DISTANCE).coerceAtMost(itemCountLimit - 1)
-        
-        for (i in start..end) {
-            val ts = (i.toLong() * durationMs) / itemCountLimit
-            provider.requestThumbnail(uri, ts, ThumbnailPriority.PREFETCH)
-        }
     }
 
     /**

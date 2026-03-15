@@ -8,9 +8,12 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
 
 /**
  * Encapsula a criação e gerenciamento do ExoPlayer.
@@ -43,6 +46,14 @@ class PlayerManager(
     val isSecurityError: StateFlow<Boolean> = _isSecurityError.asStateFlow()
 
     val currentPosition: Long get() = exoPlayer.currentPosition
+
+    /** Emite a posição atual do player a cada 100ms para observação reativa. */
+    val currentPositionFlow: Flow<Long> = flow {
+        while (true) {
+            emit(exoPlayer.currentPosition)
+            delay(100)
+        }
+    }
 
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {

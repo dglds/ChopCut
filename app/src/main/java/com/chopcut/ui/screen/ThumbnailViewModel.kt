@@ -140,14 +140,6 @@ class ThumbnailViewModel(
                     }
                 }
                 
-                // 4. Cancelar jobs distantes (ThumbnailCacheManager já salva em disco)
-                com.chopcut.data.thumbnail.ThumbnailCacheManager.cancelFarJobs(
-                    uri,
-                    currentSegment = (currentSecond / thumbsPerStrip),
-                    threshold = bufferSize + 2
-                )
-                
-                Timber.tag("OnDemandLoading").i("Jobs distantes cancelados: threshold=${bufferSize + 2} strips")
                 
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
