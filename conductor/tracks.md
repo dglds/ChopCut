@@ -4,21 +4,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## ✅ Concluídos
-
-### Timeline Component (2025-01-22)
-- [x] **Implementação da Timeline com múltiplos ranges e playhead fixo**
-  - Renomeado de TimelineV5 para Timeline (simplificação de nomenclatura)
-  - Removidas versões antigas (V2, V4) e código morto
-  - Integrado com ExoPlayer para sync em tempo real
-  - Suporte a múltiplos ranges de seleção
-  - Playhead fixo no centro com scroll automático de thumbnails
-  - Testes completos e documentados
-
-**Branch**: `refactor/timeline-cleanup` (merged)
-
----
-
 ## 📝 Legenda
 - [ ] Pendente
 - [~] Em andamento
@@ -26,15 +11,3 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [~] **Track: Implemente a feature trim-range para remoção de múltiplos pedaços do vídeo na TimelinePlayer.**
-*Link: [./tracks/trim_range_20260203/](./tracks/trim_range_20260203/)*
-
----
-
-- [~] **Track: Otimização de thumbnails da timeline com aspect ratio dinâmico, extração progressiva e compressão WEBP.**
-*Link: [./tracks/thumb_optimization_20260226/](./tracks/thumb_o ptimization_20260226/)*
-
----
-
-- [ ] **Track: Timeline v3 Optimization - Otimização do componente de timeline para performance e UX.**
-*Link: [./tracks/timelinev3/](./tracks/timelinev3/)*
