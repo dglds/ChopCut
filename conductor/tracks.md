@@ -11,3 +11,4 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
+\n---\n\n- [ ] **Track: performance_benchmark**\n*Link: [./tracks/performance_benchmark/](./tracks/performance_benchmark/)*
