@@ -1,7 +1,9 @@
 package com.chopcut
 
 import android.app.Application
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -26,6 +28,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
+        Toast.makeText(this, "ChopCut v${BuildConfig.VERSION_NAME}", Toast.LENGTH_SHORT).show()
         setContent {
             ChopCutTheme {
                 Surface(
@@ -52,7 +55,20 @@ class MainActivity : ComponentActivity() {
                         )
                     )
 
-                    val startDestination = if (preferencesManager.isFirstRun) "onboarding" else "home"
+                    // Suporte a ACTION_VIEW: abre o editor diretamente quando
+                    // lançado com uma URI de vídeo (ex: pelo script de captura Perfetto)
+                    val intentVideoUri: Uri? = intent
+                        ?.takeIf { it.action == android.content.Intent.ACTION_VIEW }
+                        ?.data
+
+                    val startDestination = when {
+                        intentVideoUri != null -> {
+                            val encoded = Uri.encode(intentVideoUri.toString())
+                            "editor?videoUri=$encoded"
+                        }
+                        preferencesManager.isFirstRun -> "onboarding"
+                        else -> "home"
+                    }
 
                     ChopCutNavGraph(
                         navController = navController,

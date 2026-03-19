@@ -20,3 +20,5 @@ prompt.txt
 /logs/
 .claude/
 .carl
+/perfetto
+/scripts

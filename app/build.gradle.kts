@@ -1,6 +1,20 @@
 import java.io.ByteArrayOutputStream
 import org.gradle.kotlin.dsl.support.serviceOf
 
+fun gitCommitCount(): Int {
+    return try {
+        val output = ByteArrayOutputStream()
+        exec {
+            commandLine("git", "rev-list", "--count", "HEAD")
+            standardOutput = output
+            isIgnoreExitValue = true
+        }
+        output.toString().trim().toIntOrNull() ?: 1
+    } catch (e: Exception) {
+        1
+    }
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -17,8 +31,9 @@ android {
         applicationId = "com.chopcut"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        val commitCount = gitCommitCount()
+        versionCode = commitCount
+        versionName = "1.0.$commitCount"
 
         testInstrumentationRunner = "com.chopcut.runner.ChopCutTestRunner"
     }

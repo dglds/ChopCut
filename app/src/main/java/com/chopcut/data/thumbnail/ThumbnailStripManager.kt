@@ -444,14 +444,17 @@ class ThumbnailStripManager(
 
         ActivityLogger.started(AppActivity.StripAssembly, "segmento" to segmentIndex, "total" to totalSegments)
 
+        android.os.Trace.beginSection("TSM.extractSegment")
 
         // Fail-fast se o job já foi cancelado
         coroutineContext.ensureActive()
 
                 // MELHORIA: Tentar carregar do cache primeiro (se habilitado)
                 if (prefsManager.thumbnailCacheEnabled) {
+                    android.os.Trace.beginSection("TSM.loadFromCache")
                     val cacheKey = getCacheKey(uri, segmentIndex, onlyFirstFrame)
                     val cachedStrip = loadFromCache(uri, segmentIndex, onlyFirstFrame)
+                    android.os.Trace.endSection()
                     if (cachedStrip != null) {
                         val cacheHitTime = System.currentTimeMillis() - startTime
                         return@withContext cachedStrip
@@ -495,6 +498,7 @@ class ThumbnailStripManager(
                     sec * 1_000L // Converter para milissegundos (extractBatch espera ms)
                 }
 
+                android.os.Trace.beginSection("TSM.extractBatch")
                 val extractedFrames = batchExtractor.extractBatch(
                     uri = uri,
                     positionsMs = positions,
@@ -513,6 +517,7 @@ class ThumbnailStripManager(
                         }
                     }
                 )
+                android.os.Trace.endSection()
 
 
                 if (extractedFrames.isEmpty()) {
@@ -521,6 +526,7 @@ class ThumbnailStripManager(
 
 
                 // Stitch frames na strip
+                android.os.Trace.beginSection("TSM.stitchFrames")
                 for (frameIdx in 0 until framesInSegment) {
                     coroutineContext.ensureActive() // Responsividade ao cancelamento
 
@@ -539,6 +545,7 @@ class ThumbnailStripManager(
                     } else {
                     }
                 }
+                android.os.Trace.endSection()
 
 
                 val totalTime = System.currentTimeMillis() - startTime
@@ -546,7 +553,9 @@ class ThumbnailStripManager(
 
                 // MELHORIA: Salvar no cache após extração bem-sucedida (se habilitado)
                 if (prefsManager.thumbnailCacheEnabled) {
+                    android.os.Trace.beginSection("TSM.saveToCache")
                     saveToCache(uri, segmentIndex, strip, onlyFirstFrame)
+                    android.os.Trace.endSection()
                 }
 
                 strip
@@ -554,6 +563,8 @@ class ThumbnailStripManager(
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 ActivityLogger.failed(AppActivity.StripAssembly, "segmento" to segmentIndex, "motivo" to e.message)
                 null
+            } finally {
+                android.os.Trace.endSection() // TSM.extractSegment
             }
         }
     }
