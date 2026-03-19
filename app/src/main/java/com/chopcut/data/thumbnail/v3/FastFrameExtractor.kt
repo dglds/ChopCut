@@ -132,12 +132,12 @@ class FastFrameExtractor(
                 extractor.seekTo(timeUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
 
                 val info = MediaCodec.BufferInfo()
-                val timeoutUs = 10_000L
+                val timeoutUs = 5_000L
                 var frameAcquired: Bitmap? = null
                 val startTime = System.currentTimeMillis()
                 var eos = false
 
-                while (frameAcquired == null && System.currentTimeMillis() - startTime < 2000) {
+                while (frameAcquired == null && System.currentTimeMillis() - startTime < 5000) {
                     // Feed input
                     if (!eos) {
                         val inputIndex = codec.dequeueInputBuffer(timeoutUs)
