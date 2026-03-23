@@ -28,12 +28,14 @@ class AudioDataExtractor(
 
     suspend fun extractRawPcmData(
         uri: Uri,
-        targetBarCount: Int = 200
+        targetBarCount: Int = -1
     ): AudioRawData = withContext(Dispatchers.IO) {
+        android.os.Trace.beginSection("AudioDataExtractor.extractRawPcmData")
         val timer = TimeTracker.start("audio_pcm_extract")
 
         val extractor = MediaExtractor()
         try {
+            android.os.Trace.beginSection("AudioDataExtractor.Setup")
             extractor.setDataSource(context, uri, null)
 
             // Find audio track
@@ -49,6 +51,8 @@ class AudioDataExtractor(
             }
 
             if (audioTrackIndex < 0) {
+                android.os.Trace.endSection() // Setup
+                android.os.Trace.endSection() // extractRawPcmData
                 return@withContext AudioRawData.empty()
             }
 
@@ -61,15 +65,21 @@ class AudioDataExtractor(
             val durationUs = format.getLong(MediaFormat.KEY_DURATION)
             val expectedDurationMs = durationUs / 1000
 
+            // DENSIDADE DINÂMICA: 40 barras por segundo de vídeo (Dobrado para mais precisão)
+            val finalBarCount = if (targetBarCount > 0) {
+                targetBarCount 
+            } else {
+                ((expectedDurationMs / 1000f) * 40).toInt().coerceIn(100, 8000)
+            }
 
-            // Calcular samplesPerBar baseado no targetBarCount
-            val samplesPerBar = if (expectedDurationMs > 0 && targetBarCount > 0) {
-                val totalFrames = (sampleRate * channelCount * expectedDurationMs / 1000).toLong()
-                (totalFrames.toFloat() / targetBarCount).toInt().coerceAtLeast(1)
+            // Calcular samplesPerBar baseado no finalBarCount
+            val samplesPerBar = if (expectedDurationMs > 0 && finalBarCount > 0) {
+                val totalFrames = (sampleRate.toLong() * channelCount * expectedDurationMs / 1000)
+                (totalFrames.toFloat() / finalBarCount).toInt().coerceAtLeast(1)
             } else {
                 AudioConfig.Extraction.DEFAULT_SAMPLES_PER_BAR
             }
-            val estimatedPoints = targetBarCount
+            val estimatedPoints = finalBarCount
 
 
             // FASE 1: Coletar amostras para análise de ruído (primeiros segundos)
@@ -98,8 +108,24 @@ class AudioDataExtractor(
 
         val pcmData = java.util.ArrayList<Float>(estimatedPoints)
         
+        android.os.Trace.endSection() // Setup
+        android.os.Trace.beginSection("AudioDataExtractor.DecodeLoop")
+        
         // Processamento em streaming - não carrega tudo na memória
         var frameCount = 0
+        var currentSeekTimeUs = 0L
+        
+        // Pulo agressivo: se o áudio for longo, vamos pular blocos inteiros
+        // Isso degrada a qualidade do gráfico, mas a velocidade vai pro teto.
+        // Pulo moderado: evita ler 100% dos frames mas não pula eventos inteiros
+        val seekStepUs = if (expectedDurationMs > 60000) {
+            100000L // 100ms em vídeos longos (>1min)
+        } else if (expectedDurationMs > 20000) {
+            50000L  // 50ms em vídeos médios
+        } else {
+            0L // leitura contínua em vídeos curtos
+        }
+
         while (!outputDone) {
             ensureActive() // Permitir cancelamento responsivo
                 if (needsEosSent) {
@@ -125,9 +151,21 @@ class AudioDataExtractor(
                                 val presentationTimeUs = extractor.sampleTime
                                 decoder.queueInputBuffer(inputBufferIndex, 0, sampleSize, presentationTimeUs, 0)
 
-                                if (!extractor.advance()) {
-                                    needsEosSent = true
-                                    inputDone = true
+                                if (seekStepUs > 0) {
+                                    // Pulo agressivo: avança no tempo em vez de ler o frame seguinte adjacente
+                                    currentSeekTimeUs += seekStepUs
+                                    if (currentSeekTimeUs > durationUs) {
+                                        needsEosSent = true
+                                        inputDone = true
+                                    } else {
+                                        extractor.seekTo(currentSeekTimeUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                                        // Se o seek cair no fim, o próximo readSampleData vai dar -1 no próximo loop
+                                    }
+                                } else {
+                                    if (!extractor.advance()) {
+                                        needsEosSent = true
+                                        inputDone = true
+                                    }
                                 }
                             }
                         }
@@ -151,8 +189,9 @@ class AudioDataExtractor(
                                 outputBuffer.position(bufferInfo.offset)
                                 outputBuffer.asShortBuffer().get(pcmDataShortArray)
 
-                                // Process samples em streaming
-                                for (sample in pcmDataShortArray) {
+                                // Process samples em streaming (pulando amostras para piorar qualidade e focar em velocidade)
+                                for (i in pcmDataShortArray.indices step 4) {
+                                    val sample = pcmDataShortArray[i]
                                     val normalized = abs(sample.toInt()).toFloat() / 32768f
 
                                     // Coletar amostras para análise de ruído (apenas no início)
@@ -164,25 +203,33 @@ class AudioDataExtractor(
                                     if (normalized > currentMaxAmp) {
                                         currentMaxAmp = normalized
                                     }
-                                    samplesAccumulated++
-                                    totalSamplesProcessed++
+                                    
+                                    if (seekStepUs == 0L) {
+                                        samplesAccumulated += 4
+                                        totalSamplesProcessed += 4
 
-                                    if (samplesAccumulated >= samplesPerBar) {
-                                        pcmData.add(currentMaxAmp)
-                                        currentMaxAmp = 0f
-                                        samplesAccumulated = 0
-
-                                        // Parar de coletar ruído depois de ter amostras suficientes
-                                        if (!noiseCollected && noiseSamples.size >= NOISE_SAMPLE_SIZE) {
-                                            noiseCollected = true
+                                        if (samplesAccumulated >= samplesPerBar) {
+                                            pcmData.add(currentMaxAmp)
+                                            currentMaxAmp = 0f
+                                            samplesAccumulated = 0
                                         }
                                     }
                                 }
+
+                                if (seekStepUs > 0) {
+                                    // Se estamos em modo Seek, consideramos o outputBuffer como uma "amostra"
+                                    // Adicionamos a maior amplitude encontrada neste buffer como uma barra
+                                    // E "avançamos" o total de amostras processadas para manter o timing
+                                    pcmData.add(currentMaxAmp)
+                                    currentMaxAmp = 0f
+                                    totalSamplesProcessed += samplesPerBar // Simular avanço para o timing bater
+                                }
                                 
-                                // Checkpoint a cada frame para responsividade
+                                // Checkpoint a cada frame para responsividade (frequência aumentada para suavidade)
                                 frameCount++
-                                if (frameCount % 10 == 0) {
+                                if (frameCount % 5 == 0) {
                                     ensureActive()
+                                    kotlinx.coroutines.yield()
                                 }
                             }
                         }
@@ -214,10 +261,12 @@ class AudioDataExtractor(
 
             decoder.stop()
             decoder.release()
+            android.os.Trace.endSection() // DecodeLoop
 
             val finalDurationMs = (totalSamplesProcessed.toFloat() / (sampleRate * channelCount) * 1000).toLong()
 
             // FASE 2: Calcular threshold e aplicar processamento de voz
+            android.os.Trace.beginSection("AudioDataExtractor.ThresholdPhase")
             if (noiseSamples.isNotEmpty()) {
                 // Calcular noise floor (mediana dos 20% menores)
                 val sortedNoise = noiseSamples.sorted()
@@ -244,6 +293,7 @@ class AudioDataExtractor(
 
                 val voiceSegments = pcmData.count { it > SILENCE_THRESHOLD * 2 }
             }
+            android.os.Trace.endSection() // ThresholdPhase
 
             val extractedDurationMs = expectedDurationMs
             val effectiveSampleRate = if (extractedDurationMs > 0)
@@ -251,6 +301,7 @@ class AudioDataExtractor(
             else targetBarCount
 
             timer.end()
+            android.os.Trace.endSection() // extractRawPcmData
 
             val result = AudioRawData(
                 pcmSamples = pcmData.toFloatArray(),
@@ -261,9 +312,11 @@ class AudioDataExtractor(
             result
 
         } catch (e: OutOfMemoryError) {
+            android.os.Trace.endSection() // extractRawPcmData (fallback)
             // Retornar waveform vazio em caso de OOM
             AudioRawData.empty()
         } catch (e: Exception) {
+            android.os.Trace.endSection() // extractRawPcmData (fallback)
             AudioRawData.empty()
         } finally {
             try {

@@ -55,14 +55,68 @@ object FormatUtils {
         return if (fileName.length > maxLength) fileName.take(maxLength) + "…" else fileName
     }
 
-    fun formatFileInfo(fileName: String, fileSizeBytes: Long, durationMs: Long): String {
+    fun formatFileInfo(fileName: String, fileSizeBytes: Long, durationMs: Long, width: Int, height: Int): String {
         val truncatedName = truncateFileName(fileName)
         val sizeFormatted = formatFileSize(fileSizeBytes)
         val durationFormatted = TimeUtils.formatDuration(durationMs)
-        return "$truncatedName · $sizeFormatted · $durationFormatted"
+        val ratioFormatted = getAspectRatio(width, height)
+        return "$truncatedName · $sizeFormatted · $durationFormatted · $ratioFormatted"
+    }
+
+    fun getAspectRatio(width: Int, height: Int): String {
+        if (width <= 0 || height <= 0) return "N/D"
+        
+        // Normalizar para lidar com pequenas variações de codec
+        val ratio = width.toFloat() / height
+        return when {
+            Math.abs(ratio - 1.0f) < 0.01f -> "1:1"
+            Math.abs(ratio - 1.777f) < 0.02f -> "16:9"
+            Math.abs(ratio - 0.562f) < 0.02f -> "9:16"
+            Math.abs(ratio - 1.333f) < 0.02f -> "4:3"
+            Math.abs(ratio - 0.75f) < 0.02f -> "3:4"
+            Math.abs(ratio - 2.333f) < 0.03f -> "21:9"
+            else -> {
+                val gcd = findGcd(width, height)
+                "${width / gcd}:${height / gcd}"
+            }
+        }
+    }
+
+    private fun findGcd(a: Int, b: Int): Int {
+        var n1 = a
+        var n2 = b
+        while (n2 != 0) {
+            val temp = n1 % n2
+            n1 = n2
+            n2 = temp
+        }
+        return n1
     }
 
     fun getFileInfo(context: Context, uri: Uri, durationMs: Long): String {
+        var width = 0
+        var height = 0
+        
+        try {
+            android.media.MediaMetadataRetriever().run {
+                setDataSource(context, uri)
+                val vw = extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: 0
+                val vh = extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt() ?: 0
+                val rotation = extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toInt() ?: 0
+                release()
+                
+                if (rotation == 90 || rotation == 270) {
+                    width = vh
+                    height = vw
+                } else {
+                    width = vw
+                    height = vh
+                }
+            }
+        } catch (e: Exception) {
+            // Ignorar erros na extração de dimensões
+        }
+
         val fileName = try {
             context.contentResolver.query(
                 uri,
@@ -79,7 +133,7 @@ object FormatUtils {
             } ?: uri.lastPathSegment?.substringAfterLast('/')
         } catch (e: Exception) {
             uri.lastPathSegment?.substringAfterLast('/')
-        } ?: "unknown"
+        } ?: "desconhecido"
 
         val fileSizeBytes = try {
             context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
@@ -89,7 +143,7 @@ object FormatUtils {
             0L
         }
 
-        return formatFileInfo(fileName, fileSizeBytes, durationMs)
+        return formatFileInfo(fileName, fileSizeBytes, durationMs, width, height)
     }
 }
 

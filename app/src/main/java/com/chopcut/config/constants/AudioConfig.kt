@@ -10,8 +10,8 @@ object AudioConfig {
     }
     
     object Quality {
-        const val SILENCE_THRESHOLD = 0.03f
+        const val SILENCE_THRESHOLD = 0.015f
         const val VOICE_BOOST_FACTOR = 1.5f
-        const val DYNAMIC_THRESHOLD_MULTIPLIER = 4f
+        const val DYNAMIC_THRESHOLD_MULTIPLIER = 2.5f
     }
 }

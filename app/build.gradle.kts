@@ -35,6 +35,9 @@ android {
         versionCode = commitCount
         versionName = "1.0.$commitCount"
 
+        // Log da versão no console do Gradle
+        logger.warn("⚙️  Compilando ChopCut v$versionName ($versionCode)")
+
         testInstrumentationRunner = "com.chopcut.runner.ChopCutTestRunner"
     }
 

@@ -55,7 +55,9 @@ data class GalleryVideo(
     val id: Long,
     val uri: Uri,
     val durationMs: Long,
-    val sizeBytes: Long
+    val sizeBytes: Long,
+    val width: Int,
+    val height: Int
 )
 
 enum class GallerySortOrder(val label: String, val column: String, val direction: String) {
@@ -102,7 +104,9 @@ fun BottomSheetGallery(
             val projection = arrayOf(
                 MediaStore.Video.Media._ID,
                 MediaStore.Video.Media.DURATION,
-                MediaStore.Video.Media.SIZE
+                MediaStore.Video.Media.SIZE,
+                MediaStore.Video.Media.WIDTH,
+                MediaStore.Video.Media.HEIGHT
             )
             val sortOrder = currentSort.toSortClause()
 
@@ -118,16 +122,20 @@ fun BottomSheetGallery(
                 val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
                 val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
                 val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                val widthColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.WIDTH)
+                val heightColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.HEIGHT)
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idColumn)
                     val duration = cursor.getLong(durationColumn)
                     val size = cursor.getLong(sizeColumn)
+                    val width = cursor.getShort(widthColumn).toInt()
+                    val height = cursor.getShort(heightColumn).toInt()
                     val contentUri = ContentUris.withAppendedId(
                         MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                         id
                     )
-                    videoList.add(GalleryVideo(id, contentUri, duration, size))
+                    videoList.add(GalleryVideo(id, contentUri, duration, size, width, height))
                 }
             }
             withContext(Dispatchers.Main) {
@@ -231,6 +239,24 @@ fun VideoGridItem(video: GalleryVideo, imageLoader: ImageLoader, onClick: (Uri) 
                 color = Color.White,
                 fontSize = 10.sp
             )
+        }
+
+        // Ratio Badge (Bottom Start)
+        val ratio = com.chopcut.utils.FormatUtils.getAspectRatio(video.width, video.height)
+        if (ratio != "N/A") {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(4.dp)
+                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = ratio,
+                    color = Color.White,
+                    fontSize = 10.sp
+                )
+            }
         }
 
         // Size Badge (Top Left)

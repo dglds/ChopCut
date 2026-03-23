@@ -74,7 +74,12 @@ fun AudioWaveForms(
             AudioWaveFormsConfig.Baseline.Bottom -> availableHeight
         }
 
-        // Desenhar cada barra
+        // OTIMIZAÇÃO: Batch drawing
+        // Ao invés de chamar drawRoundRect N vezes (o que causa N draw calls na GPU),
+        // criamos um único Path com todos os retângulos e mandamos pra GPU de uma vez só.
+        val wavePath = androidx.compose.ui.graphics.Path()
+
+        // Desenhar cada barra no Path
         amplitudes.forEachIndexed { index, amplitude ->
             val x = index * barSlotWidth + (barSlotWidth - actualBarWidth) / 2
 
@@ -98,28 +103,32 @@ fun AudioWaveForms(
                 }
             }
 
-            // Desenhar barra
-            if (config.gradient != null) {
-                drawRoundRect(
-                    brush = config.gradient,
-                    topLeft = androidx.compose.ui.geometry.Offset(x, y),
-                    size = androidx.compose.ui.geometry.Size(actualBarWidth, finalBarHeight),
+            // Adicionar ao Path em lote
+            wavePath.addRoundRect(
+                androidx.compose.ui.geometry.RoundRect(
+                    left = x,
+                    top = y,
+                    right = x + actualBarWidth,
+                    bottom = y + finalBarHeight,
                     cornerRadius = CornerRadius(
                         config.barCornerRadius.toPx(),
                         config.barCornerRadius.toPx()
                     )
                 )
-            } else {
-                drawRoundRect(
-                    color = barColor,
-                    topLeft = androidx.compose.ui.geometry.Offset(x, y),
-                    size = androidx.compose.ui.geometry.Size(actualBarWidth, finalBarHeight),
-                    cornerRadius = CornerRadius(
-                        config.barCornerRadius.toPx(),
-                        config.barCornerRadius.toPx()
-                    )
-                )
-            }
+            )
+        }
+
+        // Fazer UM único draw call pra toda a waveform!
+        if (config.gradient != null) {
+            drawPath(
+                path = wavePath,
+                brush = config.gradient
+            )
+        } else {
+            drawPath(
+                path = wavePath,
+                color = barColor
+            )
         }
     }
 }

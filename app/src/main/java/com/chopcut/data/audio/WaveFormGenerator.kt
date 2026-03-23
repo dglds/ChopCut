@@ -7,28 +7,41 @@ package com.chopcut.data.audio
 object WaveFormGenerator {
 
     private fun calculateDynamicSilenceHeight(samples: FloatArray, threshold: Float): Float {
-        if (samples.isEmpty()) return 0.15f
+        if (samples.isEmpty()) return 0.05f
 
-        val samplesBelowThreshold = samples.filter { it <= threshold }
-
-        if (samplesBelowThreshold.isEmpty()) {
-            return 0.15f
+        // Use a temporary primitive array to avoid boxing
+        val silenceBuffer = FloatArray(samples.size)
+        var silenceCount = 0
+        
+        for (sample in samples) {
+            if (sample <= threshold) {
+                silenceBuffer[silenceCount++] = sample
+            }
         }
 
-        val sorted = samplesBelowThreshold.sorted()
-        val bottomTwentyPercentIndex = (sorted.size * 0.2f).toInt()
-        val bottomSamples = sorted.take(bottomTwentyPercentIndex.coerceAtLeast(1))
+        if (silenceCount == 0) {
+            return 0.05f
+        }
 
-        val averageSilence = bottomSamples.average().toFloat()
+        // Sort the primitive array (no boxing)
+        java.util.Arrays.sort(silenceBuffer, 0, silenceCount)
+        
+        val bottomSampleSize = (silenceCount * 0.2f).toInt().coerceAtLeast(1)
+        var sum = 0f
+        for (i in 0 until bottomSampleSize) {
+            sum += silenceBuffer[i]
+        }
 
-        return (averageSilence * 1.5f).coerceIn(0.1f, 0.25f)
+        val averageSilence = sum / bottomSampleSize
+
+        return (averageSilence * 1.5f).coerceIn(0.05f, 0.20f)
     }
 
     fun generateWaveform(
         pcmSamples: FloatArray,
         barCount: Int,
         quality: WaveformQuality = WaveformQuality.Medium,
-        threshold: Float = 0.05f,
+        threshold: Float = 0.03f,
         silenceHeight: Float? = null
     ): List<Float> {
         if (pcmSamples.isEmpty()) return emptyList()
@@ -92,7 +105,7 @@ object WaveFormGenerator {
         durationMs: Long,
         quality: WaveformQuality,
         screenWidthDp: Float = 400f,
-        threshold: Float = 0.05f,
+        threshold: Float = 0.03f,
         silenceHeight: Float? = null
     ): List<Float> {
         val barCount = quality.calculateBarCount(durationMs, screenWidthDp)

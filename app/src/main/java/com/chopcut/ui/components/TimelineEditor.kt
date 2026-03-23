@@ -787,24 +787,37 @@ fun TimelineEditor(
                          val waveformClipEnd = centerOffset + (videoDurationMs / 1000f * pxPerSecond) - currentScroll
                          drawContext.canvas.clipRect(0f, waveformTopY, waveformClipEnd, waveformTopY + waveformHeightPx)
 
+                         // OTIMIZAÇÃO: Path Batching para Waveforms
+                         val wavePath = androidx.compose.ui.graphics.Path()
+
                          audioWaveformsAmplitudes.forEachIndexed { index, amplitude ->
                              val x = waveformStartX + (index * barSlotWidth)
 
-                             // Só desenhar se estiver visível
+                             // Só adicionar ao Path se estiver visível
                              if (x + barSlotWidth >= 0f && x <= size.width) {
                                  val normalizedAmp = amplitude.coerceAtLeast(0.01f).coerceAtMost(1.0f)
                                  val barHeight = normalizedAmp * waveformHeightPx
 
                                  // Desenhar barra centralizada verticalmente na área do waveform
                                  val y = waveformTopY + (waveformHeightPx - barHeight) / 2f
+                                 val barStartX = x + (barSlotWidth - barWidthPx) / 2
 
-                                 drawRect(
-                                     color = Color(0xFF00D9FF),
-                                     topLeft = androidx.compose.ui.geometry.Offset(x + (barSlotWidth - barWidthPx) / 2, y),
-                                     size = androidx.compose.ui.geometry.Size(barWidthPx, barHeight)
+                                 wavePath.addRect(
+                                     androidx.compose.ui.geometry.Rect(
+                                         left = barStartX,
+                                         top = y,
+                                         right = barStartX + barWidthPx,
+                                         bottom = y + barHeight
+                                     )
                                  )
                              }
                          }
+                         
+                         drawPath(
+                             path = wavePath,
+                             color = Color(0xFF00D9FF)
+                         )
+                         
                         drawContext.canvas.restore()
 
                        // MÉTRICA DE PERFORMANCE: Logar draw calls por frame (a cada 60 frames ≈ 1s)

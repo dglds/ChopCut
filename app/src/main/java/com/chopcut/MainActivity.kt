@@ -23,12 +23,16 @@ import com.chopcut.ui.screen.PreloadViewModel
 import com.chopcut.ui.screen.ThumbnailViewModel
 import com.chopcut.ui.theme.ChopCutTheme
 
+import timber.log.Timber
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
         Toast.makeText(this, "ChopCut v${BuildConfig.VERSION_NAME}", Toast.LENGTH_SHORT).show()
+        Timber.tag("ChopCutVersion").i("App Version: v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+        Timber.tag("MainActivity").d("MainActivity: onCreate called. App launching.")
         setContent {
             ChopCutTheme {
                 Surface(

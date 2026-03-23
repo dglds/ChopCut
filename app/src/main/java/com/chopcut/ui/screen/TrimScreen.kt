@@ -30,19 +30,21 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.data.pipeline.TrimProgress
 import com.chopcut.data.repository.VideoRepository
-import com.chopcut.ui.components.VideoFileInfo
-import com.chopcut.ui.components.trim.TrimControlPanel
-import com.chopcut.ui.components.trim.SaveDialogState
-import com.chopcut.ui.components.trim.TrimSaveDialog
-import com.chopcut.ui.components.feedback.ErrorState
+import com.chopcut.ui.components.timeline.VideoFileInfo
 import com.chopcut.ui.components.timeline.VideoTimeline
 import com.chopcut.ui.components.timeline.SeekbarProgress
 import com.chopcut.ui.components.timeline.CurrentTimeDisplay
 import com.chopcut.ui.components.timeline.VideoPreview
+import com.chopcut.ui.components.trim.TrimControlPanel
+import com.chopcut.ui.components.trim.SaveDialogState
+import com.chopcut.ui.components.trim.TrimSaveDialog
+import com.chopcut.ui.components.feedback.ErrorState
 import com.chopcut.ui.theme.ChopCutSpacing
 import com.chopcut.utils.FileNameUtils
 import com.chopcut.utils.RangeUtils
 import com.chopcut.utils.FormatUtils
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -226,7 +228,12 @@ fun TrimScreen(
                     Scaffold(
                         topBar = {
                             TopAppBar(
-                                title = { Text("Editor de Trim") },
+                                title = { Text("Editor", fontWeight = FontWeight.Bold) },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = Color.Black,
+                                    titleContentColor = Color.White,
+                                    navigationIconContentColor = Color.White
+                                ),
                                 navigationIcon = {
                                     IconButton(onClick = onNavigateBack) {
                                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
@@ -246,7 +253,8 @@ fun TrimScreen(
                                     ) {
                                         Icon(
                                             if (saveDialogState.isSaving) Icons.Default.Check else Icons.Default.Save,
-                                            contentDescription = "Salvar"
+                                            contentDescription = "Salvar",
+                                            tint = if (saveDialogState.isSaving) Color(0xFF00E5FF) else Color.White
                                         )
                                     }
                                 }
@@ -256,27 +264,27 @@ fun TrimScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .background(Color(0xFF0A0A0A)) // Fundo premium
                                 .padding(paddingValues)
                         ) {
-                            // Area do Video Player e Timelines
+                            // Area do Video Player
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(1f)
-                                    .background(Color(0xFF1A1A1A))
-                                    .padding(vertical = ChopCutSpacing.xs)
+                                    .weight(1.3f), // Dá mais peso ao player
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                com.chopcut.ui.components.VideoFileInfo(
+                                VideoFileInfo(
                                     fileInfo = FormatUtils.getFileInfo(context, videoUri, state.videoDurationMs)
                                 )
 
-                                com.chopcut.ui.components.timeline.VideoPreview(
+                                VideoPreview(
                                     exoPlayer = state.exoPlayer ?: return@Column,
                                     isPlaying = state.isPlaying,
                                     isInsideRange = state.isInsideRange,
                                     playerError = state.playerError,
                                     isSecurityError = state.isSecurityError,
-                                    onRequestNewMedia = { /* TODO: Implement media relocalization */ },
+                                    onRequestNewMedia = { },
                                     onRetry = { viewModel.retryPlayer() },
                                     onTogglePlayPause = {
                                         if (state.isPlaying) viewModel.pause() else viewModel.play()
@@ -286,25 +294,41 @@ fun TrimScreen(
 
                                 // Passive Seekbar
                                 val progress = if (state.videoDurationMs > 0) state.currentPosition.toFloat() / state.videoDurationMs.toFloat() else 0f
-                                com.chopcut.ui.components.timeline.SeekbarProgress(progress = progress)
+                                SeekbarProgress(progress = progress)
 
-                                // Current Time Display
-                                com.chopcut.ui.components.timeline.CurrentTimeDisplay(
+                                Spacer(modifier = Modifier.weight(0.1f))
+
+                                // Visor de Tempo Centralizado
+                                CurrentTimeDisplay(
                                     currentTimeMs = state.currentPosition,
                                     isInsideRange = state.isInsideRange
                                 )
+                                
+                                Spacer(modifier = Modifier.weight(0.1f))
+                            }
 
-                                Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(Modifier.height(16.dp))
 
-                                // Thumbnail Timeline
+                            // Timeline Area
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(0.75f) // Aumentado levemente o peso para "descer"
+                                    .background(Color.Black.copy(alpha = 0.3f))
+                                    .padding(vertical = 12.dp)
+                            ) {
                                 if (state.videoDurationMs > 0) {
                                     VideoTimeline(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().height(130.dp),
                                         videoUri = videoUri,
                                         durationMs = state.videoDurationMs,
                                         currentPositionMs = state.currentPosition,
                                         onSeek = { viewModel.setCurrentPosition(it) },
-                                        trimRanges = state.trimPosition.completeRanges
+                                        trimRanges = state.trimPosition.completeRanges,
+                                        audioAmplitudes = audioAmplitudes,
+                                        showWaveform = true,
+                                        videoWidth = state.videoWidth,
+                                        videoHeight = state.videoHeight
                                     )
                                 }
                             }
@@ -312,13 +336,12 @@ fun TrimScreen(
                             val isInsideRange = state.trimPosition.isPositionInRange(state.currentPosition)
 
                             TrimControlPanel(
+                                modifier = Modifier.padding(bottom = 24.dp),
                                 isDraftMode = state.trimPosition.isDraftMode,
                                 isInsideRange = isInsideRange,
                                 onAddPosition = { viewModel.addPosition(state.currentPosition) },
                                 onDelete = { viewModel.removeRangeAt(state.currentPosition) }
                             )
-
-                            Spacer(modifier = Modifier.height(ChopCutSpacing.xxl))
                         }
                     }
                 } // Fecha AnimatedVisibility

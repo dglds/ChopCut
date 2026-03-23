@@ -18,6 +18,10 @@ data class TrimEditorState(
     val audioWaveformsAmplitudes: List<Float> = emptyList(),
     val isAudioWaveformsLoading: Boolean = false,
     
+    // Dimensions
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
+
     // Player related states
     val exoPlayer: ExoPlayer? = null,
     val isPlaying: Boolean = false,

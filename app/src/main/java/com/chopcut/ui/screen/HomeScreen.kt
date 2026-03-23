@@ -395,7 +395,7 @@ private fun VideoPickerLoaded(
             horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
         ) {
             BadgeText(text = "${videoInfo.width}×${videoInfo.height}")
-            BadgeText(text = formatAspectRatio(videoInfo.aspectRatio))
+            BadgeText(text = com.chopcut.utils.FormatUtils.getAspectRatio(videoInfo.width, videoInfo.height))
             Spacer(modifier = Modifier.weight(1f))
             BadgeText(text = formatDuration(videoInfo.durationMs))
         }
@@ -703,15 +703,7 @@ private fun CacheFeatureCard(
     }
 }
 
-private fun formatAspectRatio(ratio: Float): String {
-    return when {
-        (ratio - 16f / 9f).let { kotlin.math.abs(it) } < 0.01f -> "16:9"
-        (ratio - 9f / 16f).let { kotlin.math.abs(it) } < 0.01f -> "9:16"
-        (ratio - 4f / 3f).let { kotlin.math.abs(it) } < 0.01f -> "4:3"
-        (ratio - 1f).let { kotlin.math.abs(it) } < 0.01f -> "1:1"
-        else -> "%.2f".format(ratio)
-    }
-}
+// formatAspectRatio removido (centralizado em FormatUtils)
 
 /**
  * Formata bytes em formato legível (KB, MB, GB)

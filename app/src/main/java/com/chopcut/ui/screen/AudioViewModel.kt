@@ -54,13 +54,14 @@ class AudioViewModel(
      * 
      * @param uri URI do vídeo
      * @param targetBarCount Número de barras de waveform (opcional)
+     * @param force Force reload ignoring cache
      */
-    fun loadWaveform(uri: Uri, targetBarCount: Int? = null) {
+    fun loadWaveform(uri: Uri, targetBarCount: Int? = null, force: Boolean = false) {
         if (activeUri != null && activeUri != uri) {
             clear()
         }
         
-        if (activeUri == uri && _uiState.value is AudioUiState.Ready) {
+        if (!force && activeUri == uri && _uiState.value is AudioUiState.Ready) {
             return
         }
         
@@ -69,13 +70,13 @@ class AudioViewModel(
             try {
                 _uiState.value = AudioUiState.Loading
                 
-                // Calcular número de barras se não fornecido
-                val barCount = targetBarCount ?: calculateBarCount(durationMs = 0, screenWidthDp = 400f)
-                
+                // OTIMIZAÇÃO: Densidade dinâmica (20 barras/seg) via extractor
+                val barCount = targetBarCount ?: -1
                 
                 // Extrair dados brutos de áudio
                 val rawData = audioDataExtractor.extractRawPcmData(uri, targetBarCount = barCount)
                 
+                timber.log.Timber.d("AudioViewModel: PCM extraído com ${rawData.pcmSamples.size} pontos para $uri")
                 
                 // Gerar waveform
                 val amplitudesList = WaveFormGenerator.generateWaveform(
@@ -86,6 +87,8 @@ class AudioViewModel(
                     threshold = 0.05f,
                     silenceHeight = null
                 )
+                
+                timber.log.Timber.d("AudioViewModel: Waveform gerada com ${amplitudesList.size} amplitudes")
                 
                 // Criar WaveformData
                 val waveformData = WaveformData(

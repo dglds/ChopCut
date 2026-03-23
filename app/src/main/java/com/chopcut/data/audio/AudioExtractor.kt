@@ -56,6 +56,7 @@ class AudioExtractor(
             var muxer: MediaMuxer? = null
 
             try {
+                android.os.Trace.beginSection("AudioExtractor.Setup")
                 val setupTimer = TimeTracker.start("audio_extract_setup")
 
                 extractor = MediaExtractor()
@@ -78,8 +79,10 @@ class AudioExtractor(
                 muxer.start()
 
                 setupTimer.end()
+                android.os.Trace.endSection()
 
                 // Copy audio samples
+                android.os.Trace.beginSection("AudioExtractor.CopyTrack")
                 val copyTimer = TimeTracker.start("audio_extract_copy")
                 val samplesCopied = copyTrack(
                     extractor = extractor,
@@ -88,6 +91,7 @@ class AudioExtractor(
                     outputTrackIndex = outputTrackIndex
                 )
                 copyTimer.end()
+                android.os.Trace.endSection()
 
                 muxer.stop()
 
@@ -137,13 +141,15 @@ class AudioExtractor(
         extractor.seekTo(0, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
 
         val buffer = MediaCodec.BufferInfo()
-        val byteBuffer = java.nio.ByteBuffer.allocate(1024 * 1024)
+        val byteBuffer = java.nio.ByteBuffer.allocateDirect(1024 * 1024)
 
         var sampleCount = 0
         var totalBytes = 0L
 
         while (true) {
+            android.os.Trace.beginSection("AudioExtractor.ReadSample")
             val sampleSize = extractor.readSampleData(byteBuffer, 0)
+            android.os.Trace.endSection()
             if (sampleSize < 0) break
 
             val sampleTime = extractor.sampleTime
@@ -154,12 +160,16 @@ class AudioExtractor(
             buffer.presentationTimeUs = sampleTime
             buffer.flags = extractor.sampleFlags
 
+            android.os.Trace.beginSection("AudioExtractor.WriteSample")
             muxer.writeSampleData(outputTrackIndex, byteBuffer, buffer)
+            android.os.Trace.endSection()
 
             totalBytes += sampleSize
             sampleCount++
 
+            android.os.Trace.beginSection("AudioExtractor.Advance")
             extractor.advance()
+            android.os.Trace.endSection()
         }
 
         return sampleCount

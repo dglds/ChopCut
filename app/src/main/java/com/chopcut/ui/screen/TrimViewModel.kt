@@ -90,6 +90,13 @@ class TrimViewModel(
 
             _state.update { it.copy(exoPlayer = playerManager?.exoPlayer) }
 
+            // Obter dimensões do vídeo para o Timeline
+            viewModelScope.launch {
+                videoRepository.getMetadata(videoUri)?.let { info ->
+                    _state.update { it.copy(videoWidth = info.width, videoHeight = info.height) }
+                }
+            }
+
             // Observe player states
             viewModelScope.launch {
                 playerManager?.isPlaying?.collectLatest { isPlaying ->
