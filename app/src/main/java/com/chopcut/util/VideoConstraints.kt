@@ -1,4 +1,4 @@
-package com.chopcut.utils
+package com.chopcut.util
 
 object VideoConstraints {
     const val MAX_DURATION_MS = 15 * 60 * 1000L // 15 minutos

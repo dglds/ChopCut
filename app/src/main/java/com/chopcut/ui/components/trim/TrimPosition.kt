@@ -1,4 +1,4 @@
-package com.chopcut.ui.components
+package com.chopcut.ui.components.trim
 
 data class TrimPosition(
     val positions: List<Long> = emptyList()

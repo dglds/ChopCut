@@ -1,4 +1,4 @@
-package com.chopcut.ui.components
+package com.chopcut.util
 
 import android.content.Context
 import android.graphics.Bitmap

@@ -28,7 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.chopcut.data.audio.WaveformConfig
 import com.chopcut.data.audio.WaveformPreset
-import com.chopcut.ui.components.WaveformData
+import com.chopcut.ui.components.waveform.WaveformData
 import com.chopcut.ui.theme.ChopCutSpacing
 
 @OptIn(ExperimentalMaterial3Api::class)

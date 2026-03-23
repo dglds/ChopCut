@@ -1,4 +1,4 @@
-package com.chopcut.ui.screen
+package com.chopcut.ui.viewmodel
 
 import android.app.Application
 import android.net.Uri
@@ -14,7 +14,7 @@ import com.chopcut.util.error.RecoveryStrategy
 import com.chopcut.util.error.safeExecuteSuspend
 import com.chopcut.data.thumbnail.ThumbnailCacheManager
 import com.chopcut.data.thumbnail.ThumbnailStripManager
-import com.chopcut.utils.VideoConstraints
+import com.chopcut.util.VideoConstraints
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

@@ -1,4 +1,4 @@
-package com.chopcut.ui.components
+package com.chopcut.ui.components.trim
 
 /**
  * Representa um intervalo de tempo para trim/recorte de vídeo

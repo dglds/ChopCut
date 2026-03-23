@@ -18,8 +18,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
-import com.chopcut.ui.screen.ExtractionStage
-import com.chopcut.ui.screen.PreloadProgress
+import com.chopcut.ui.viewmodel.ExtractionStage
+import com.chopcut.ui.viewmodel.PreloadProgress
 import com.chopcut.ui.theme.ChopCutAnimation
 
 /**

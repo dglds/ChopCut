@@ -1,4 +1,4 @@
-package com.chopcut.ui.components
+package com.chopcut.ui.components.timeline
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background

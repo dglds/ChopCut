@@ -1,4 +1,4 @@
-package com.chopcut.ui.screen
+package com.chopcut.ui.viewmodel
 
 import android.app.Application
 import android.net.Uri
@@ -9,7 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.data.audio.WaveFormGenerator
 import com.chopcut.data.audio.WaveformQuality
-import com.chopcut.ui.components.WaveformData
+import com.chopcut.ui.components.waveform.WaveformData
 import com.chopcut.util.DispatcherProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

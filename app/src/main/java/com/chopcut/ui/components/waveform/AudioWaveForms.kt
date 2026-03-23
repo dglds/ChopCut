@@ -1,4 +1,4 @@
-package com.chopcut.ui.components
+package com.chopcut.ui.components.waveform
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween

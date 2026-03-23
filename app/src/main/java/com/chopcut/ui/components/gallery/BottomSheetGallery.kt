@@ -242,7 +242,7 @@ fun VideoGridItem(video: GalleryVideo, imageLoader: ImageLoader, onClick: (Uri) 
         }
 
         // Ratio Badge (Bottom Start)
-        val ratio = com.chopcut.utils.FormatUtils.getAspectRatio(video.width, video.height)
+        val ratio = com.chopcut.util.FormatUtils.getAspectRatio(video.width, video.height)
         if (ratio != "N/A") {
             Box(
                 modifier = Modifier

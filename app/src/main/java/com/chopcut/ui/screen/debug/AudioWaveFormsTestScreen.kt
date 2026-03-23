@@ -33,9 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.chopcut.ui.components.AudioWaveForms
+import com.chopcut.ui.components.waveform.AudioWaveForms
 import com.chopcut.ui.components.feedback.DebugViewModel
-import com.chopcut.ui.components.AudioWaveFormsConfig
+import com.chopcut.ui.components.waveform.AudioWaveFormsConfig
 import com.chopcut.ui.theme.ChopCutSpacing
 
 /**

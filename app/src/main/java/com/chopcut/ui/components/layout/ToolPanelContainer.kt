@@ -1,4 +1,4 @@
-package com.chopcut.ui.components
+package com.chopcut.ui.components.layout
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform

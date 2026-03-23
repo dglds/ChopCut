@@ -1,4 +1,4 @@
-package com.chopcut.ui.components
+package com.chopcut.ui.components.waveform
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp

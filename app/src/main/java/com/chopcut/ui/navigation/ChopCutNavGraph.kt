@@ -23,11 +23,11 @@ import com.chopcut.ui.components.feedback.DebugToast
 import com.chopcut.ui.components.feedback.DebugViewModel
 import com.chopcut.ui.components.loading.LoadingConstants
 import com.chopcut.ui.onboarding.OnboardingScreen
-import com.chopcut.ui.screen.AudioViewModel
+import com.chopcut.ui.viewmodel.AudioViewModel
 import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.PreferencesScreen
-import com.chopcut.ui.screen.PreloadViewModel
-import com.chopcut.ui.screen.ThumbnailViewModel
+import com.chopcut.ui.viewmodel.PreloadViewModel
+import com.chopcut.ui.viewmodel.ThumbnailViewModel
 import com.chopcut.ui.screen.TrimScreen
 import com.chopcut.ui.screen.debug.AudioWaveFormsTestScreen
 

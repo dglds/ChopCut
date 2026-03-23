@@ -94,6 +94,11 @@ import com.chopcut.ui.theme.SurfaceVariant
 import com.chopcut.ui.theme.TextSecondary
 import com.chopcut.ui.theme.Warning
 import com.chopcut.ui.theme.Waveform
+import com.chopcut.ui.viewmodel.HomeViewModel
+import com.chopcut.ui.viewmodel.HomeViewModelFactory
+import com.chopcut.ui.viewmodel.PreloadViewModel
+import com.chopcut.ui.viewmodel.HomeUiState
+import com.chopcut.ui.viewmodel.ClearCacheState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -395,7 +400,7 @@ private fun VideoPickerLoaded(
             horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
         ) {
             BadgeText(text = "${videoInfo.width}×${videoInfo.height}")
-            BadgeText(text = com.chopcut.utils.FormatUtils.getAspectRatio(videoInfo.width, videoInfo.height))
+            BadgeText(text = com.chopcut.util.FormatUtils.getAspectRatio(videoInfo.width, videoInfo.height))
             Spacer(modifier = Modifier.weight(1f))
             BadgeText(text = formatDuration(videoInfo.durationMs))
         }

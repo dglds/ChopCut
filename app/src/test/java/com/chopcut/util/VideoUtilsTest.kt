@@ -1,4 +1,4 @@
-package com.chopcut.utils
+package com.chopcut.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

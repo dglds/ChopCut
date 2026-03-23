@@ -23,6 +23,8 @@ prompt.txt
 /perfetto
 /scripts
 /app/version.properties
+
+*perfetto-trace
 # ── GSD baseline (auto-generated) ──
 .gsd
 Thumbs.db
@@ -49,3 +51,4 @@ coverage/
 .cache/
 tmp/
 app/version.properties
+chopcut_startup_20260320_115447.perfetto-trace

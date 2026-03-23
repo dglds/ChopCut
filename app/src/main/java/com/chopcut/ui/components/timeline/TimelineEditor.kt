@@ -1,4 +1,4 @@
-package com.chopcut.ui.components
+package com.chopcut.ui.components.timeline
 
 import android.graphics.Bitmap
 import android.net.Uri
@@ -51,12 +51,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.chopcut.ui.components.AudioWaveForms
+import com.chopcut.ui.components.waveform.AudioWaveForms
 import com.chopcut.ui.components.timeline.VideoPreview
 import com.chopcut.ui.components.timeline.SeekbarProgress
 import com.chopcut.ui.components.timeline.CurrentTimeDisplay
 import com.chopcut.ui.components.timeline.VideoFileInfo
-import com.chopcut.utils.FormatUtils
+import com.chopcut.util.FormatUtils
 import com.chopcut.data.thumbnail.ThumbnailStripManager
 import com.chopcut.data.local.PreferencesManager
 import kotlinx.coroutines.NonCancellable
@@ -69,6 +69,9 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
+import com.chopcut.ui.components.trim.TrimPosition
+import com.chopcut.ui.components.waveform.WaveformData
+import com.chopcut.ui.components.waveform.WaveformStyle
 
 @Composable
 fun TimelineEditor(
@@ -82,7 +85,7 @@ fun TimelineEditor(
     audioWaveformsAmplitudes: List<Float> = emptyList(),
     isAudioWaveformsLoading: Boolean = false,
     preloadedStrips: Map<Int, Bitmap> = emptyMap(),
-    thumbnailViewModel: com.chopcut.ui.screen.ThumbnailViewModel? = null,
+    thumbnailViewModel: com.chopcut.ui.viewmodel.ThumbnailViewModel? = null,
     aspectRatio: Float = 16f / 9f,
     onPositionChange: (Long) -> Unit,
     onAddPosition: () -> Unit,

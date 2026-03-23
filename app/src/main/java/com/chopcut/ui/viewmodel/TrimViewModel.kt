@@ -1,4 +1,4 @@
-package com.chopcut.ui.screen
+package com.chopcut.ui.viewmodel
 
 import android.app.Application
 import android.graphics.Bitmap
@@ -9,8 +9,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.chopcut.data.audio.WaveformQuality
 import com.chopcut.data.repository.VideoRepository
-import com.chopcut.ui.components.TrimPosition
-import com.chopcut.ui.components.WaveformData
+import com.chopcut.ui.components.trim.TrimPosition
+import com.chopcut.ui.components.waveform.WaveformData
 import com.chopcut.ui.components.player.PlayerManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

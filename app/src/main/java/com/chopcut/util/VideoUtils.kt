@@ -1,4 +1,4 @@
-package com.chopcut.utils
+package com.chopcut.util
 
 import android.content.Context
 import android.net.Uri

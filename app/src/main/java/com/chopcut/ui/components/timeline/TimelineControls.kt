@@ -20,7 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chopcut.ui.theme.ChopCutMonoFont
-import com.chopcut.utils.TimeUtils
+import com.chopcut.util.TimeUtils
 
 @Composable
 fun SeekbarProgress(

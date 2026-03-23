@@ -1,4 +1,4 @@
-package com.chopcut.ui.screen
+package com.chopcut.ui.viewmodel
 
 import android.app.Application
 import android.net.Uri

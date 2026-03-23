@@ -7,7 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.chopcut.data.audio.AudioDataExtractor
 import com.chopcut.data.audio.WaveformConfig
 import com.chopcut.data.audio.WaveformPreset
-import com.chopcut.ui.components.WaveformData
+import com.chopcut.ui.components.waveform.WaveformData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

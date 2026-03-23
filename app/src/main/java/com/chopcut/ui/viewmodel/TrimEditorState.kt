@@ -1,8 +1,8 @@
-package com.chopcut.ui.screen
+package com.chopcut.ui.viewmodel
 
 import androidx.media3.exoplayer.ExoPlayer
-import com.chopcut.ui.components.TrimPosition
-import com.chopcut.ui.components.WaveformData
+import com.chopcut.ui.components.trim.TrimPosition
+import com.chopcut.ui.components.waveform.WaveformData
 
 /**
  * Estado do editor de trim

@@ -30,8 +30,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.chopcut.ui.screen.VideoTimelineViewModel
-import com.chopcut.utils.TimeUtils
+import com.chopcut.ui.viewmodel.VideoTimelineViewModel
+import com.chopcut.util.TimeUtils
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.gestures.Orientation

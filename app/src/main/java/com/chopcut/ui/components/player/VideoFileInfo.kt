@@ -1,4 +1,4 @@
-package com.chopcut.ui.components
+package com.chopcut.ui.components.player
 
 /**
  * Informações de arquivo de vídeo.
