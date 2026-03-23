@@ -47,6 +47,7 @@ fun VideoPreview(
     isInsideRange: Boolean,
     playerError: String?,
     isSecurityError: Boolean,
+    currentTimeMs: Long = 0L,
     onRequestNewMedia: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onRetry: () -> Unit = {},
@@ -55,7 +56,6 @@ fun VideoPreview(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(320.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
             .background(Color.Black)
@@ -86,6 +86,14 @@ fun VideoPreview(
 
             if (isInsideRange) {
                 TrimRangeOverlay()
+            }
+
+            // Timer Overlay (Garantido estar no topo do vídeo)
+            Box(modifier = Modifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.TopCenter) {
+                CurrentTimeDisplay(
+                    currentTimeMs = currentTimeMs,
+                    isInsideRange = isInsideRange
+                )
             }
 
             VideoControls(

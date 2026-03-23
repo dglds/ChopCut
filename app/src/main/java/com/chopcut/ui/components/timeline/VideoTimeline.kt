@@ -31,6 +31,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chopcut.ui.screen.VideoTimelineViewModel
+import com.chopcut.utils.TimeUtils
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.scrollable
 import timber.log.Timber
 
 @Composable
@@ -47,198 +52,183 @@ fun VideoTimeline(
     videoHeight: Int = 0
 ) {
     val context = LocalContext.current
-    val thumbHeight = 56
+    val density = androidx.compose.ui.platform.LocalDensity.current
     
-    // Calcular largura baseada na proporção real do vídeo (fallback 16:9)
+    // ESCALA: 60dp por segundo (referência da tela antiga)
+    val pxPerSecond = with(density) { 60.dp.toPx() }
+    val thumbHeightPx = with(density) { 56.dp.toPx() }
+    val rulerHeightPx = with(density) { 24.dp.toPx() }
+    val waveformHeightPx = with(density) { 40.dp.toPx() }
+    
+    // Calcular largura da thumbnail baseada na proporção real do vídeo
     val aspectRatio = if (videoWidth > 0 && videoHeight > 0) {
         videoWidth.toFloat() / videoHeight
     } else {
         16f / 9f
     }
-    val thumbWidth = (thumbHeight * aspectRatio).toInt()
-    val totalFrames = (durationMs / 1000).toInt().coerceAtLeast(1)
     
-    val totalHeightDp = thumbHeight + (if (showWaveform) 40 else 0) + 8
-    val amplitudesPerSecond = if (totalFrames > 0) (audioAmplitudes.size.toFloat() / totalFrames).coerceAtLeast(0f) else 0f
+    // Na escala de 60dp/s, cada segundo ocupa pxPerSecond. 
+    val thumbWidthPx = pxPerSecond 
 
     val viewModel: VideoTimelineViewModel = viewModel(
         factory = VideoTimelineViewModel.VideoTimelineViewModelFactory(context.applicationContext as android.app.Application)
     )
     val sprites by viewModel.sprites.collectAsStateWithLifecycle()
-    
-    val listState = rememberLazyListState()
 
-    LaunchedEffect(videoUri, durationMs, thumbWidth, thumbHeight) {
+    LaunchedEffect(videoUri, durationMs) {
         if (durationMs > 0) {
-            viewModel.loadSprites(videoUri, durationMs, thumbWidth, thumbHeight)
-        }
-    }
-
-    val isDragged by listState.interactionSource.collectIsDraggedAsState()
-    var lastTargetIndex by remember { mutableStateOf(-1) }
-
-    LaunchedEffect(currentPositionMs, durationMs, isDragged) {
-        if (isDragged) {
-            snapshotFlow { listState.firstVisibleItemIndex }
-                .collect { firstIndex ->
-                    if (durationMs > 0) {
-                        onSeek((firstIndex.toLong() * durationMs) / totalFrames)
-                    }
-                }
-        } else if (durationMs > 0 && !listState.isScrollInProgress) {
-            val target = ((currentPositionMs * totalFrames) / durationMs).toInt()
-                .coerceIn(0, (totalFrames - 1).coerceAtLeast(0))
-            if (target != lastTargetIndex) {
-                lastTargetIndex = target
-                listState.scrollToItem(target)
-            }
+            val h = with(density) { 56.dp.roundToPx() }
+            val w = (h * aspectRatio).toInt()
+            viewModel.loadSprites(videoUri, durationMs, w, h)
         }
     }
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(totalHeightDp.dp)
-            .padding(vertical = 4.dp)
+            .height((rulerHeightPx / density.density + thumbHeightPx / density.density + (if (showWaveform) waveformHeightPx / density.density else 0f) + 8f).dp)
+            .background(Color.Black.copy(alpha = 0.2f))
     ) {
-        val totalSprites = (totalFrames + 6) / 7
-        val spritesLoaded = sprites.size
+        val width = constraints.maxWidth.toFloat()
+        val centerOffset = width / 2f
+        val currentScrollPx = (currentPositionMs / 1000f) * pxPerSecond
         
-        Text(
-            text = "HD: $spritesLoaded/$totalSprites",
-            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.3f),
-            modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp)
-        )
-        
-        LazyRow(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(1.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp)
+        // Scroll manual
+        val scrollableState = androidx.compose.foundation.gestures.rememberScrollableState { delta ->
+            val deltaMs = (delta / pxPerSecond * 1000).toLong()
+            val newPos = (currentPositionMs - deltaMs).coerceIn(0, durationMs)
+            onSeek(newPos)
+            delta
+        }
+
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .scrollable(
+                    state = scrollableState,
+                    orientation = Orientation.Horizontal
+                )
         ) {
-            items(totalFrames) { frameIndex ->
-                val sprite = viewModel.getSprite(frameIndex)
-                val isFromCache = sprite != null && viewModel.isFrameFromCache(frameIndex)
+            val startX = centerOffset - currentScrollPx
+            val totalSeconds = (durationMs / 1000).toInt()
+            
+            // 1. DESENHAR RÉGUA (Ticks e Segundos)
+            for (sec in 0..totalSeconds) {
+                val tickX = startX + (sec * pxPerSecond)
+                if (tickX < -100 || tickX > width + 100) continue
                 
-                val alphaAnim = remember { Animatable(0f) }
-                LaunchedEffect(sprite != null) {
-                    if (sprite != null) alphaAnim.animateTo(1f, tween(500))
+                // Tick principal
+                drawLine(
+                    color = Color.White.copy(alpha = 0.4f),
+                    start = androidx.compose.ui.geometry.Offset(tickX, 0f),
+                    end = androidx.compose.ui.geometry.Offset(tickX, 8.dp.toPx()),
+                    strokeWidth = 1.dp.toPx()
+                )
+                
+                // Texto do tempo
+                if (sec % 5 == 0 || totalSeconds < 30) {
+                    drawIntoCanvas { canvas ->
+                        val paint = android.graphics.Paint().apply {
+                            color = android.graphics.Color.WHITE
+                            alpha = 100
+                            textSize = 10.dp.toPx()
+                            textAlign = android.graphics.Paint.Align.CENTER
+                        }
+                        canvas.nativeCanvas.drawText(
+                            TimeUtils.formatDuration(sec * 1000L),
+                            tickX,
+                            20.dp.toPx(),
+                            paint
+                        )
+                    }
+                }
+            }
+
+            // 2. DESENHAR THUMBNAILS (Strips)
+            val thumbTop = rulerHeightPx + 4.dp.toPx()
+            val totalFrames = kotlin.math.ceil(durationMs / 1000f).toInt()
+            val THUMBS_PER_SPRITE = 3
+            
+            for (f in 0 until totalFrames) {
+                val isLast = f == totalFrames - 1
+                val remainderMs = durationMs % 1000
+                val currentThumbWidth = if (isLast && remainderMs > 0) {
+                    pxPerSecond * (remainderMs / 1000f)
+                } else {
+                    pxPerSecond
                 }
 
-                Column(
-                    modifier = Modifier.width(thumbWidth.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(width = thumbWidth.dp, height = thumbHeight.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF121212))
-                            .border(
-                                width = 1.dp,
-                                color = if (isFromCache) Color.Cyan.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.05f),
-                                shape = RoundedCornerShape(6.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (sprite != null) {
-                            val thumbBitmap = remember(frameIndex, sprite) {
-                                val THUMBS_PER_SPRITE = 3
-                                val col = frameIndex % THUMBS_PER_SPRITE
-                                val sw = sprite.width / THUMBS_PER_SPRITE
-                                val sh = sprite.height
-                                val sx = (col * sw).coerceIn(0, (sprite.width - sw).coerceAtLeast(0))
-                                Bitmap.createBitmap(sprite, sx, 0, sw.coerceAtLeast(1), sh.coerceAtLeast(1))
-                            }
-                            Image(
-                                bitmap = thumbBitmap.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().graphicsLayer(alpha = alphaAnim.value)
-                            )
-                        } else {
-                            val shimmerAlpha by rememberInfiniteTransition(label = "").animateFloat(
-                                initialValue = 0.05f, targetValue = 0.12f,
-                                animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = ""
-                            )
-                            Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = shimmerAlpha)))
-                        }
-                    }
+                val x = startX + (f * pxPerSecond)
+                if (x + currentThumbWidth < 0 || x > width) continue
+                
+                val sprite = viewModel.getSprite(f)
+                if (sprite != null && !sprite.isRecycled) {
+                    val col = f % THUMBS_PER_SPRITE
+                    val sw = sprite.width / THUMBS_PER_SPRITE
+                    val sh = sprite.height
+                    val sx = col * sw
                     
-                    if (showWaveform) {
-                        if (audioAmplitudes.isNotEmpty()) {
-                            val startIndex = (frameIndex * amplitudesPerSecond).toInt().coerceIn(0, audioAmplitudes.size - 1)
-                            val endIndex = ((frameIndex + 1) * amplitudesPerSecond).toInt().coerceAtMost(audioAmplitudes.size)
-                            val frameAmps = if (startIndex < endIndex) audioAmplitudes.subList(startIndex, endIndex) else listOf(audioAmplitudes[startIndex])
-                            
-                            androidx.compose.foundation.Canvas(
-                                modifier = Modifier
-                                    .width(thumbWidth.dp)
-                                    .height(64.dp)
-                                    .padding(top = 2.dp)
-                                    .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
-                            ) {
-                                if (frameAmps.isNotEmpty()) {
-                                    val barSpacing = size.width / frameAmps.size.coerceAtLeast(1)
-                                    val midY = size.height / 2f
-                                    
-                                    frameAmps.forEachIndexed { idx, amp ->
-                                        val h = (amp * size.height).coerceIn(1f, size.height)
-                                        drawRoundRect(
-                                            color = Color(0xFF00E5FF),
-                                            topLeft = androidx.compose.ui.geometry.Offset(idx * barSpacing + barSpacing * 0.15f, midY - h / 2f),
-                                            size = androidx.compose.ui.geometry.Size((barSpacing * 0.7f).coerceAtLeast(1f), h),
-                                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f),
-                                            alpha = 0.8f
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            // PLACEHOLDER PULSANTE (SHIMMER) ENQUANTO EXTRAI
-                            val shimmerAlpha by rememberInfiniteTransition(label = "audio-shimmer").animateFloat(
-                                initialValue = 0.05f, targetValue = 0.15f,
-                                animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse), label = "audio-shimmer"
-                            )
-                            
-                            androidx.compose.foundation.Canvas(
-                                modifier = Modifier
-                                    .width(thumbWidth.dp)
-                                    .height(64.dp)
-                                    .padding(top = 2.dp)
-                                    .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
-                            ) {
-                                val barCount = 8
-                                val barWidth = size.width / barCount
-                                val midY = size.height / 2f
-                                val placeholderH = 8f // Barras baixinhas
-                                
-                                for (i in 0 until barCount) {
-                                    drawRoundRect(
-                                        color = Color.White,
-                                        topLeft = androidx.compose.ui.geometry.Offset(i * barWidth + barWidth * 0.2f, midY - placeholderH / 2f),
-                                        size = androidx.compose.ui.geometry.Size(barWidth * 0.6f, placeholderH),
-                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f, 1f),
-                                        alpha = shimmerAlpha
-                                    )
-                                }
-                            }
-                        }
+                    val sourceFactor = if (isLast && remainderMs > 0) remainderMs / 1000f else 1f
+                    val currentSourceWidth = (sw * sourceFactor).toInt().coerceAtLeast(1)
+
+                    val srcRect = android.graphics.Rect(sx, 0, sx + currentSourceWidth, sh)
+                    val dstRect = android.graphics.Rect(
+                        x.toInt(), thumbTop.toInt(),
+                        (x + currentThumbWidth).toInt(), (thumbTop + thumbHeightPx).toInt()
+                    )
+                    
+                    drawIntoCanvas { canvas ->
+                        canvas.nativeCanvas.drawBitmap(sprite, srcRect, dstRect, null)
                     }
+                } else {
+                    drawRect(
+                        color = Color.White.copy(alpha = 0.05f),
+                        topLeft = androidx.compose.ui.geometry.Offset(x, thumbTop),
+                        size = androidx.compose.ui.geometry.Size(currentThumbWidth, thumbHeightPx)
+                    )
+                }
+            }
+
+            // 3. DESENHAR WAVEFORM
+            if (showWaveform && audioAmplitudes.isNotEmpty()) {
+                val waveTop = thumbTop + thumbHeightPx + 4.dp.toPx()
+                val barWidth = 2.dp.toPx()
+                val samplesPerSecond = audioAmplitudes.size.toFloat() / (durationMs / 1000f)
+                
+                val startSecVisible = (currentScrollPx - centerOffset) / pxPerSecond
+                val endSecVisible = (currentScrollPx - centerOffset + width) / pxPerSecond
+                
+                val startSampleIdx = (startSecVisible * samplesPerSecond).toInt().coerceAtLeast(0)
+                val endSampleIdx = (endSecVisible * samplesPerSecond).toInt().coerceAtMost(audioAmplitudes.size - 1)
+                
+                for (i in startSampleIdx..endSampleIdx) {
+                    val sample = audioAmplitudes[i]
+                    val sampleTimeSec = i / samplesPerSecond
+                    val x = startX + (sampleTimeSec * pxPerSecond)
+                    
+                    val h = sample * waveformHeightPx
+                    drawRoundRect(
+                        color = Color(0xFF00E5FF),
+                        topLeft = androidx.compose.ui.geometry.Offset(x, waveTop + (waveformHeightPx - h) / 2f),
+                        size = androidx.compose.ui.geometry.Size(barWidth, h),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f),
+                        alpha = 0.8f
+                    )
                 }
             }
         }
 
-        if (durationMs > 0) {
-            val fraction = currentPositionMs.toFloat() / durationMs
-            Box(
-                Modifier
-                    .offset { IntOffset((fraction * constraints.maxWidth).toInt(), 0) }
-                    .fillMaxHeight()
-                    .width(2.dp)
-                    .background(Color.White)
-            )
-        }
+        // PLAYHEAD FIXO NO CENTRO
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .width(2.dp)
+                .fillMaxHeight()
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.White, Color.Transparent)
+                    )
+                )
+        )
     }
 }

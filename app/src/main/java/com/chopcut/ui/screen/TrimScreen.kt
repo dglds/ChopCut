@@ -284,27 +284,18 @@ fun TrimScreen(
                                     isInsideRange = state.isInsideRange,
                                     playerError = state.playerError,
                                     isSecurityError = state.isSecurityError,
+                                    currentTimeMs = state.currentPosition,
                                     onRequestNewMedia = { },
                                     onRetry = { viewModel.retryPlayer() },
                                     onTogglePlayPause = {
                                         if (state.isPlaying) viewModel.pause() else viewModel.play()
                                     },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth().weight(1f)
                                 )
 
                                 // Passive Seekbar
                                 val progress = if (state.videoDurationMs > 0) state.currentPosition.toFloat() / state.videoDurationMs.toFloat() else 0f
-                                SeekbarProgress(progress = progress)
-
-                                Spacer(modifier = Modifier.weight(0.1f))
-
-                                // Visor de Tempo Centralizado
-                                CurrentTimeDisplay(
-                                    currentTimeMs = state.currentPosition,
-                                    isInsideRange = state.isInsideRange
-                                )
-                                
-                                Spacer(modifier = Modifier.weight(0.1f))
+                                SeekbarProgress(progress = progress, modifier = Modifier.padding(vertical = 8.dp))
                             }
 
                             Spacer(Modifier.height(16.dp))
@@ -313,13 +304,12 @@ fun TrimScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(0.75f) // Aumentado levemente o peso para "descer"
                                     .background(Color.Black.copy(alpha = 0.3f))
                                     .padding(vertical = 12.dp)
                             ) {
                                 if (state.videoDurationMs > 0) {
                                     VideoTimeline(
-                                        modifier = Modifier.fillMaxWidth().height(130.dp),
+                                        modifier = Modifier.fillMaxWidth(),
                                         videoUri = videoUri,
                                         durationMs = state.videoDurationMs,
                                         currentPositionMs = state.currentPosition,

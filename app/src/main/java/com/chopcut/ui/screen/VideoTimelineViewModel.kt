@@ -44,7 +44,7 @@ class VideoTimelineViewModel(
         const val SPRITE_COLS = 3
         const val SPRITE_ROWS = 1
         const val THUMBS_PER_SPRITE = SPRITE_COLS * SPRITE_ROWS  // 3
-        const val FRAME_INTERVAL_US = 500_000L  // 2 FPS (1 frame a cada 500ms)
+        const val FRAME_INTERVAL_US = 1_000_000L  // 1 FPS (1 frame a cada 1000ms)
         const val CACHE_PERCENTAGE = 0.10f  // 10% do total
         const val MAX_CACHE_SPRITES = 900
         const val BATCH_SIZE = 3
@@ -122,7 +122,7 @@ class VideoTimelineViewModel(
                 _extractionProgress.value = 0f
                 
                 // Inicializar cache
-                val totalFrames = (durationMs / 1000).toInt().coerceAtLeast(1)
+                val totalFrames = kotlin.math.ceil(durationMs / 1000f).toInt()
                 val totalSprites = (totalFrames + THUMBS_PER_SPRITE - 1) / THUMBS_PER_SPRITE
                 // Cache size: se poucos sprites (<10), mantém todos; senão, 10% com max 900
                 val cacheSize = if (totalSprites < 10) {
