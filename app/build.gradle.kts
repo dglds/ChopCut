@@ -1,4 +1,5 @@
 import java.io.ByteArrayOutputStream
+import java.util.Properties
 import org.gradle.kotlin.dsl.support.serviceOf
 
 fun gitCommitCount(): Int {
@@ -31,9 +32,33 @@ android {
         applicationId = "com.chopcut"
         minSdk = 24
         targetSdk = 36
+        
         val commitCount = gitCommitCount()
-        versionCode = commitCount
-        versionName = "1.0.$commitCount"
+        
+        // Lógica de Versão por Build (Auto-incremento)
+        val buildNumber: Int = run {
+            val propsFile = file("version.properties")
+            val props = Properties()
+            if (propsFile.exists()) {
+                propsFile.inputStream().use { props.load(it) }
+            }
+            
+            val lastCommit = props.getProperty("lastCommit", "0").toInt()
+            var currentBuild = props.getProperty("buildNumber", "0").toInt()
+            
+            if (lastCommit != commitCount) {
+                currentBuild = 0 
+            }
+            currentBuild++
+            
+            props.setProperty("lastCommit", commitCount.toString())
+            props.setProperty("buildNumber", currentBuild.toString())
+            propsFile.outputStream().use { props.store(it, null) }
+            currentBuild
+        }
+
+        versionCode = commitCount * 1000 + buildNumber
+        versionName = "1.0.$commitCount.$buildNumber"
 
         // Log da versão no console do Gradle
         logger.warn("⚙️  Compilando ChopCut v$versionName ($versionCode)")
