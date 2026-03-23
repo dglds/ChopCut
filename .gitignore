@@ -22,7 +22,7 @@ prompt.txt
 .carl
 /perfetto
 /scripts
-
+/app/version.properties
 # ── GSD baseline (auto-generated) ──
 .gsd
 Thumbs.db
@@ -48,3 +48,4 @@ vendor/
 coverage/
 .cache/
 tmp/
+app/version.properties
