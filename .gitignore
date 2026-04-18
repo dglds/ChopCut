@@ -52,3 +52,4 @@ coverage/
 tmp/
 app/version.properties
 chopcut_startup_20260320_115447.perfetto-trace
+*.perfetto-trace
