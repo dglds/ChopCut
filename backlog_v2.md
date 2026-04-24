@@ -2,113 +2,72 @@
 
 ---
 
-## [BUG] Barra de progresso dessincronizada durante scroll
+## [BUG] ~~Barra de progresso dessincronizada durante scroll~~ ✅
 
-**Arquivos:** `ui/screen/TrimScreen.kt:306`, `ui/components/timeline/VideoTimeline.kt:99`, `ui/viewmodel/TrimViewModel.kt:117`, `ui/components/player/PlayerManager.kt:51`
-
-**Causa raiz:** `_state.currentPosition` é escrito por duas fontes simultâneas em conflito: o `currentPositionFlow` do `PlayerManager` (poll de 100ms sobre `exoPlayer.currentPosition`) e o `setCurrentPosition()` chamado pelo scroll. Durante o arraste, o poll do ExoPlayer sobrescreve a posição calculada pelo delta, causando saltos visuais na seekbar e na timeline.
-
-### Fluxo de dados atual
-
-```
-PlayerManager.currentPositionFlow   →  emit(exoPlayer.currentPosition) a cada 100ms
-        ↓ collectLatest (TrimViewModel.kt:117)
-TrimViewModel._state.currentPosition  ←─────────────────────────────────────┐
-        ↓                                                                     │
-TrimScreen: state.currentPosition                                             │
-        ├── SeekbarProgress(progress = currentPosition / duration)            │
-        ├── VideoTimeline(currentPositionMs = currentPosition)                │
-        │       └── onSeek(newPos) → viewModel.setCurrentPosition(newPos)    │
-        └── VideoPreview(currentTimeMs = currentPosition)                     │
-                                                                              │
-setCurrentPosition(pos):                                                      │
-    _state.currentPosition = pos  (imediato)                                  │
-    exoPlayer.seekTo(pos)  (assíncrono) ──────────────────────────────────►─┘
-```
-
-### Pontos críticos identificados
-
-**PC1 — Race condition entre dois escritores** (`TrimViewModel.kt:117` vs `:149`): `collectLatest` não para durante o scroll — continua emitindo a cada 100ms e sobrescreve a posição calculada pelo delta imediatamente.
-
-**PC2 — ExoPlayer não reporta posição do seek imediatamente**: `seekTo()` é assíncrono. Por alguns frames após a chamada, `exoPlayer.currentPosition` retorna a posição anterior. O poll captura esse valor intermediário e o escreve no estado, causando o "snap" visual.
-
-**PC3 — Delta calculado sobre valor instável** (`VideoTimeline.kt:99`): O `rememberScrollableState` calcula `newPos = (currentPositionMs - deltaMs)`. Como `currentPositionMs` vem de `state.currentPosition` — que pode ser sobrescrito pelo poll durante o gesto — o próximo delta é calculado relativo à posição errada, fazendo a timeline pular ao invés de seguir o dedo de forma linear.
-
-**PC4 — Flood de seeks**: Em um scroll de 1s a 60fps, `exoPlayer.seekTo()` é chamado ~60 vezes. O ExoPlayer descarta seeks intermediários, e a interação entre a fila descartada e o poll de 100ms gera posições imprevisíveis visíveis na seekbar.
-
-### Solução recomendada — flag `isScrubbing`
-
-Adicionar `isScrubbing: Boolean = false` ao `TrimEditorState` e suspender o observer do ExoPlayer enquanto o usuário arrasta:
-
-```kotlin
-// TrimViewModel — suspender poll durante scroll
-playerManager?.currentPositionFlow?.collectLatest { position ->
-    if (!_state.value.isScrubbing) {
-        _state.update { it.copy(currentPosition = position) }
-    }
-}
-
-fun startScrubbing() = _state.update { it.copy(isScrubbing = true) }
-
-fun stopScrubbing(finalPos: Long) {
-    playerManager?.seekTo(finalPos)   // seek único ao soltar
-    _state.update { it.copy(isScrubbing = false) }
-}
-```
-
-`VideoTimeline` expõe `onScrubStart` / `onScrubStop` além do `onSeek` existente. `SeekbarProgress` e `CurrentTimeDisplay` continuam lendo `state.currentPosition` — que agora é estável durante o scroll porque o poll está suspenso.
-
-### Steps
-
-- [ ] Adicionar `isScrubbing: Boolean = false` a `TrimEditorState`
-- [ ] Em `TrimViewModel`, condicionar o `collectLatest` de `currentPositionFlow` ao flag `!isScrubbing`
-- [ ] Criar `startScrubbing()` e `stopScrubbing(finalPos)` no `TrimViewModel`
-- [ ] Em `VideoTimeline`, adicionar parâmetros `onScrubStart: () -> Unit` e `onScrubStop: (Long) -> Unit`; chamar no início e fim do gesto no `rememberScrollableState`
-- [ ] Em `TrimScreen:325`, passar os novos callbacks para `VideoTimeline`
-- [ ] Manter um state local em `VideoTimeline` para posição de scroll durante o arraste, evitando dependência de `currentPositionMs` externo nos cálculos de delta (resolve PC3)
-- [ ] Fazer seek único em `stopScrubbing` — remover o `seekTo` do `setCurrentPosition` ou guardá-lo atrás do flag
+**Implementado:** flag `isScrubbing` no `TrimEditorState`, `startScrubbing()`/`stopScrubbing()` no `TrimViewModel`, `localPositionMs` local no `VideoTimeline`, callbacks `onScrubStart`/`onScrubStop` no `TrimScreen`. Poll do ExoPlayer suspenso durante arraste; seek único ao soltar.
 
 ---
 
-## [UX] Scroll da timeline precisa ser mais suave
+## [UX] ~~Scroll da timeline precisa ser mais suave~~ ✅
 
-**Arquivo principal:** `ui/components/timeline/VideoTimeline.kt:95-101`
-
-**Causa raiz:** O `rememberScrollableState` entrega deltas crus sem fling/momentum. Cada delta chama `onSeek` diretamente acionando seeks no ExoPlayer a cada evento de toque.
-
-**Steps:**
-- [ ] Introduzir um `MutableState<Long>` local para posição de scroll visual, desacoplado do ExoPlayer
-- [ ] Usar `detectHorizontalDragGestures` com `VelocityTracker` para capturar velocidade do gesto
-- [ ] Implementar fling com `Animatable` para continuar o movimento após soltar o dedo
-- [ ] Limitar seeks ao ExoPlayer com debounce, ou apenas ao final do fling
-- [ ] Testar com vídeos curtos (<30s) e longos (>5min)
+**Implementado:** `rememberScrollableState` com fling nativo (`ScrollableDefaults.flingBehavior()`), desacoplado do ExoPlayer. Objetos pre-alocados com `remember` (`Paint`, `Rect`) para eliminar alocações por frame no draw scope.
 
 ---
 
-## [UX] Skeleton no carregamento das thumbnails
+## [UX] ~~Skeleton no carregamento das thumbnails~~ ✅
 
-**Arquivo principal:** `ui/components/timeline/VideoTimeline.kt:155-165`
-
-**Causa raiz:** Quando o sprite ainda não foi extraído (`sprite == null`), é desenhado um retângulo quase invisível (`Color.White.copy(alpha = 0.05f)`), dando impressão de timeline vazia ou quebrada.
-
-**Steps:**
-- [ ] Criar animação shimmer com `InfiniteTransition` + `Brush.linearGradient` com offset animado
-- [ ] Substituir o `drawRect` atual pelo skeleton no bloco `else` da checagem de sprite
-- [ ] O skeleton deve respeitar as mesmas dimensões do thumb (`thumbHeightPx` × `pxPerSecond`)
-- [ ] Adicionar transição de fade ao exibir o sprite real substituindo o placeholder
-- [ ] Opcional: expor `extractionProgress` do `VideoTimelineViewModel` para mostrar progresso geral abaixo da timeline
+**Implementado:** `isReady` coletado do `VideoTimelineViewModel`, `InfiniteTransition` com `shimmerAlpha` oscilando entre 0.04f e 0.18f (800ms). Placeholder invisível quando todos os sprites estão carregados.
 
 ---
 
-## [UX] Barras de som (waveform) estão feias
+## [UX] ~~Barras de som (waveform) estão feias~~ ✅
 
-**Arquivo principal:** `ui/components/timeline/VideoTimeline.kt:178-225`
+**Implementado:** barras 3dp com gap 1dp, espelhamento vertical (barra inferior a 60% de alpha), alpha dinâmico por amplitude (0.4–1.0), normalização pelo pico da janela visível, iteração por posição em pixels para densidade uniforme independente da duração do vídeo.
 
-**Causa raiz:** Waveform renderizado inline com `drawRoundRect` simples — barras de 2dp fixas, cor ciano sólida sem variação de intensidade, sem gradiente e sem espelhamento. O componente `WaveForm.kt` com suporte a mirrored/smoothed/gradiente existe mas não é usado na timeline.
+---
+
+## [PERF] Setup do AudioDataExtractor acima do KPI
+
+**Arquivo:** `data/audio/AudioDataExtractor.kt`
+
+**Contexto:** Medição via Perfetto mostrou setup em **104ms**, acima do KPI definido de < 80ms. O setup inclui instanciação e configuração do MediaCodec.
+
+**Hipóteses:**
+- Instanciar o codec a cada extração tem overhead fixo elevado
+- Configuração do `MediaFormat` pode estar aguardando negociação com o hardware
 
 **Steps:**
-- [ ] Aumentar largura das barras de 2dp para ~3dp com espaçamento de 1dp entre elas
-- [ ] Aplicar gradiente vertical por barra: amplitude alta → ciano saturado (`#00E5FF`), amplitude baixa → ciano escuro com mais transparência
-- [ ] Adicionar espelhamento vertical (desenhar barra também abaixo do centro), criando forma simétrica estilo osciloscópio
-- [ ] Normalizar altura das barras pelo pico real da janela visível, não pelo pico global
-- [ ] Avaliar substituir o rendering inline pelo componente `WaveForm.kt` que já tem smoothed, mirrored e animação de entrada
+- [ ] Capturar trace detalhado do setup para identificar onde os 104ms são gastos (negociação de formato vs. alocação de buffers)
+- [ ] Avaliar pool de codecs reutilizáveis entre extrações
+- [ ] Avaliar lazy init diferido: configurar codec enquanto a UI ainda carrega
+
+---
+
+## [PERF] DecodeLoop não testado com vídeos longos
+
+**Arquivo:** `data/audio/AudioDataExtractor.kt`
+
+**Contexto:** O DecodeLoop levou 1.26s com `step 4` (processa 1 a cada 4 amostras). Vídeo testado tinha duração desconhecida. Para vídeos de 5–15 minutos, o tempo pode escalar para 10s+, bloqueando a entrada no editor.
+
+**Referência:** `sample15min.mp4` existe em `app/src/androidTest/assets/` e pode ser usado para medir.
+
+**Steps:**
+- [ ] Capturar trace Perfetto com `sample15min.mp4` e registrar tempo do DecodeLoop
+- [ ] Se > 5s: aumentar `step` dinamicamente por duração (ex: step 4 < 2min, step 8 2–10min, step 16 > 10min)
+- [ ] Avaliar reduzir sample rate no `MediaFormat` para vídeos longos (menor fidelidade, menor volume de dados)
+- [ ] Definir KPI: tempo máximo aceitável de extração de waveform por duração de vídeo
+
+---
+
+## [PERF] AudioExtractor (remux) ausente nas medições Perfetto
+
+**Arquivo:** `data/audio/AudioExtractor.kt`
+
+**Contexto:** O `AudioExtractor` faz remuxing do áudio para um arquivo temporário antes da decodificação pelo `AudioDataExtractor`. Esse passo **não apareceu** nos resultados do trace — ou o trace foi capturado sem cobrir essa etapa, ou os blocos de instrumentação não estão sendo emitidos corretamente.
+
+Se o remux for um gargalo oculto, o tempo real de "abertura do editor" é maior do que os 1.4s medidos.
+
+**Steps:**
+- [ ] Verificar se os traces `AudioExtractor.Setup` e `AudioExtractor.CopyTrack` estão sendo emitidos no Perfetto
+- [ ] Capturar trace cobrindo todo o fluxo desde a seleção do vídeo até o editor aberto
+- [ ] Se remux > 200ms: avaliar eliminar o passo e passar o URI original diretamente ao `AudioDataExtractor`

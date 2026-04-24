@@ -82,6 +82,60 @@ All magic numbers must use the centralized constants system at `app/src/main/jav
 | `ui/components/gallery/BottomSheetGallery.kt` | Video picker (MediaStore query) |
 | `util/debug/DebugConfig.kt` | All debug flags |
 
+## Padrões críticos de performance
+
+Três padrões aprendidos com bugs reais neste projeto. Violar qualquer um deles causa jank visível em dispositivos mid-range.
+
+### 1. Nunca alocar objetos dentro do draw scope de Canvas
+
+Qualquer objeto criado dentro do lambda de `Canvas { }` ou `drawBehind { }` é alocado a cada frame (60x/s). O GC coleta essas alocações e causa jank durante scroll.
+
+**Proibido dentro do draw scope:**
+- `Paint()`, `Rect()`, `CornerRadius()`, `Path()`
+- `Color.copy(alpha = ...)` — cria novo objeto `Color`
+- `.subList(...).max()` — aloca uma `List`
+- Qualquer `String` ou objeto que não seja primitivo
+
+**Padrão correto:** pre-alocar com `remember` no escopo composable e capturar por referência no lambda:
+```kotlin
+val myPaint = remember { Paint().apply { ... } }
+val myRect = remember { Rect() }
+Canvas(...) {
+    myRect.set(...)  // reutiliza, sem alocação
+    drawIntoCanvas { it.nativeCanvas.drawBitmap(..., myRect, myPaint) }
+}
+```
+
+### 2. Flag `isScrubbing` para gestos sobre estado observado continuamente
+
+Quando um flow contínuo (poll de ExoPlayer, sensor, timer) e um gesto do usuário escrevem no mesmo campo de State, há race condition — o flow sobrescreve a posição calculada pelo gesto a cada 100ms.
+
+**Padrão correto:** flag no State que silencia o observer durante o gesto:
+```kotlin
+// ViewModel
+flow.collectLatest { value ->
+    if (!_state.value.isScrubbing) _state.update { it.copy(field = value) }
+}
+fun startScrubbing() = _state.update { it.copy(isScrubbing = true) }
+fun stopScrubbing(final: T) {
+    applyFinal(final)  // ação única ao soltar
+    _state.update { it.copy(isScrubbing = false) }
+}
+```
+O componente mantém um `localState` próprio durante o gesto e só propaga o valor final via `onGestureEnd`.
+
+### 3. Isolar animações de Canvas com muito trabalho de rendering
+
+Ler um `State` animado (ex: `InfiniteTransition`, `Animatable`) dentro de um Canvas que já faz loops de rendering (régua, thumbnails, waveform) invalida **todo** o Canvas a cada frame da animação — mesmo que a animação afete apenas uma pequena parte.
+
+**Padrão correto:** colocar a animação em um `Canvas` separado sobreposto via `Box`, para que apenas esse Canvas seja invalidado pela animação:
+```kotlin
+BoxWithConstraints {
+    Canvas(Modifier.fillMaxSize()) { /* rendering pesado sem state animado */ }
+    Canvas(Modifier.fillMaxSize()) { /* só a animação: skeleton, highlight, etc */ }
+}
+```
+
 ## Testing
 
 Instrumented tests live in `app/src/androidTest/`. Test assets (`sample.mp4`, `sample15min.mp4`) are in `app/src/androidTest/assets/`. `TimelineTestHelper.copyTestVideo()` copies assets to `cacheDir` for use in tests. Custom test runner: `ChopCutTestRunner`.

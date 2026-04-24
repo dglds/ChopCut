@@ -5,8 +5,3 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
 }
-
-// Executar som.sh ao final de qualquer build
-gradle.buildFinished {
-    Runtime.getRuntime().exec("som.sh")
-}
