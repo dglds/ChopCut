@@ -115,7 +115,9 @@ class TrimViewModel(
             }
             viewModelScope.launch {
                 playerManager?.currentPositionFlow?.collectLatest { position: Long ->
-                    _state.update { it.copy(currentPosition = position) }
+                    if (!_state.value.isScrubbing) {
+                        _state.update { it.copy(currentPosition = position) }
+                    }
                 }
             }
         }
@@ -146,7 +148,18 @@ class TrimViewModel(
 
     fun setCurrentPosition(pos: Long) {
         _state.update { it.copy(currentPosition = pos) }
-        playerManager?.seekTo(pos)
+        if (!_state.value.isScrubbing) {
+            playerManager?.seekTo(pos)
+        }
+    }
+
+    fun startScrubbing() {
+        _state.update { it.copy(isScrubbing = true) }
+    }
+
+    fun stopScrubbing(finalPos: Long) {
+        playerManager?.seekTo(finalPos)
+        _state.update { it.copy(isScrubbing = false, currentPosition = finalPos) }
     }
 
     fun setVideoDuration(duration: Long) {

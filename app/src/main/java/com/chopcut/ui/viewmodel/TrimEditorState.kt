@@ -26,7 +26,10 @@ data class TrimEditorState(
     val exoPlayer: ExoPlayer? = null,
     val isPlaying: Boolean = false,
     val playerError: String? = null,
-    val isSecurityError: Boolean = false
+    val isSecurityError: Boolean = false,
+
+    // Scrubbing: true enquanto o usuário está arrastando a timeline
+    val isScrubbing: Boolean = false
 ) {
     val totalTrimmedMs: Long
         get() = trimPosition.completeRanges.sumOf { it.second - it.first }

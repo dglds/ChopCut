@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.runtime.mutableLongStateOf
 import timber.log.Timber
 
 @Composable
@@ -45,6 +46,8 @@ fun VideoTimeline(
     durationMs: Long,
     currentPositionMs: Long,
     onSeek: (Long) -> Unit,
+    onScrubStart: () -> Unit = {},
+    onScrubStop: (Long) -> Unit = {},
     trimRanges: List<Pair<Long, Long>> = emptyList(),
     audioAmplitudes: List<Float> = emptyList(),
     showWaveform: Boolean = true,
@@ -83,6 +86,18 @@ fun VideoTimeline(
         }
     }
 
+    // Posição local usada durante o arraste — evita depender do parâmetro externo
+    // (que pode ser sobrescrito pelo poll do ExoPlayer a cada 100ms)
+    var localPositionMs by remember { mutableLongStateOf(currentPositionMs) }
+    var isScrubbing by remember { mutableStateOf(false) }
+
+    // Sincronizar posição externa apenas quando não estiver arrastando
+    LaunchedEffect(currentPositionMs) {
+        if (!isScrubbing) {
+            localPositionMs = currentPositionMs
+        }
+    }
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
@@ -91,14 +106,30 @@ fun VideoTimeline(
     ) {
         val width = constraints.maxWidth.toFloat()
         val centerOffset = width / 2f
-        val currentScrollPx = (currentPositionMs / 1000f) * pxPerSecond
-        
-        // Scroll manual
+        val currentScrollPx = (localPositionMs / 1000f) * pxPerSecond
+
+        // Scroll manual com estado local — desacoplado do ExoPlayer durante o arraste
         val scrollableState = androidx.compose.foundation.gestures.rememberScrollableState { delta ->
+            if (!isScrubbing) {
+                isScrubbing = true
+                onScrubStart()
+            }
             val deltaMs = (delta / pxPerSecond * 1000).toLong()
-            val newPos = (currentPositionMs - deltaMs).coerceIn(0, durationMs)
+            val newPos = (localPositionMs - deltaMs).coerceIn(0, durationMs)
+            localPositionMs = newPos
             onSeek(newPos)
             delta
+        }
+
+        // Detectar fim do gesto: quando isScrollInProgress vira false, disparar onScrubStop
+        LaunchedEffect(scrollableState) {
+            snapshotFlow { scrollableState.isScrollInProgress }
+                .collect { isScrolling ->
+                    if (!isScrolling && isScrubbing) {
+                        isScrubbing = false
+                        onScrubStop(localPositionMs)
+                    }
+                }
         }
 
         androidx.compose.foundation.Canvas(

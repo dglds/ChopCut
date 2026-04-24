@@ -323,6 +323,8 @@ fun TrimScreen(
                                         durationMs = state.videoDurationMs,
                                         currentPositionMs = state.currentPosition,
                                         onSeek = { viewModel.setCurrentPosition(it) },
+                                        onScrubStart = { viewModel.startScrubbing() },
+                                        onScrubStop = { finalPos -> viewModel.stopScrubbing(finalPos) },
                                         trimRanges = state.trimPosition.completeRanges,
                                         audioAmplitudes = audioAmplitudes,
                                         showWaveform = true,
