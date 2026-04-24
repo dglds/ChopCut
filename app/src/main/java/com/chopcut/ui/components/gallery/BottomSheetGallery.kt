@@ -3,6 +3,7 @@ package com.chopcut.ui.components.gallery
 
 import android.content.ContentUris
 import android.net.Uri
+import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -110,11 +111,16 @@ fun BottomSheetGallery(
             )
             val sortOrder = currentSort.toSortClause()
 
+            // DEBUG: restringir galeria ao diretório de vídeos de teste
+            val testDir = "${Environment.getExternalStorageDirectory().absolutePath}/Movies/ChopCut/teste"
+            val selection = "${MediaStore.Video.Media.DATA} LIKE ?"
+            val selectionArgs = arrayOf("$testDir/%")
+
             val query = context.contentResolver.query(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                 projection,
-                null,
-                null,
+                selection,
+                selectionArgs,
                 sortOrder
             )
 
