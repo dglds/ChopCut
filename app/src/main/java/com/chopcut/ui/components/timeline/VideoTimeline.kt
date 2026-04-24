@@ -86,6 +86,20 @@ fun VideoTimeline(
         }
     }
 
+    // Objetos reutilizáveis entre frames — evitam alocação por frame no draw scope
+    val textSizePx = with(density) { 10.dp.toPx() }
+    val rulerTextY  = with(density) { 20.dp.toPx() }
+    val rulePaint = remember(textSizePx) {
+        android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            alpha = 100
+            textSize = textSizePx
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+    val srcRect = remember { android.graphics.Rect() }
+    val dstRect = remember { android.graphics.Rect() }
+
     // Posição local usada durante o arraste — evita depender do parâmetro externo
     // (que pode ser sobrescrito pelo poll do ExoPlayer a cada 100ms)
     var localPositionMs by remember { mutableLongStateOf(currentPositionMs) }
@@ -108,7 +122,9 @@ fun VideoTimeline(
         val centerOffset = width / 2f
         val currentScrollPx = (localPositionMs / 1000f) * pxPerSecond
 
-        // Scroll manual com estado local — desacoplado do ExoPlayer durante o arraste
+        // Scroll manual com estado local — desacoplado do ExoPlayer durante o arraste.
+        // onSeek é omitido aqui: atualizar o ViewModel a cada frame causaria recomposição
+        // em cascata no TrimScreen. A posição é propagada uma única vez via onScrubStop.
         val scrollableState = androidx.compose.foundation.gestures.rememberScrollableState { delta ->
             if (!isScrubbing) {
                 isScrubbing = true
@@ -117,7 +133,6 @@ fun VideoTimeline(
             val deltaMs = (delta / pxPerSecond * 1000).toLong()
             val newPos = (localPositionMs - deltaMs).coerceIn(0, durationMs)
             localPositionMs = newPos
-            onSeek(newPos)
             delta
         }
 
@@ -159,17 +174,11 @@ fun VideoTimeline(
                 // Texto do tempo
                 if (sec % 5 == 0 || totalSeconds < 30) {
                     drawIntoCanvas { canvas ->
-                        val paint = android.graphics.Paint().apply {
-                            color = android.graphics.Color.WHITE
-                            alpha = 100
-                            textSize = 10.dp.toPx()
-                            textAlign = android.graphics.Paint.Align.CENTER
-                        }
                         canvas.nativeCanvas.drawText(
                             TimeUtils.formatDuration(sec * 1000L),
                             tickX,
-                            20.dp.toPx(),
-                            paint
+                            rulerTextY,
+                            rulePaint
                         )
                     }
                 }
@@ -198,16 +207,16 @@ fun VideoTimeline(
                     val sw = sprite.width / THUMBS_PER_SPRITE
                     val sh = sprite.height
                     val sx = col * sw
-                    
+
                     val sourceFactor = if (isLast && remainderMs > 0) remainderMs / 1000f else 1f
                     val currentSourceWidth = (sw * sourceFactor).toInt().coerceAtLeast(1)
 
-                    val srcRect = android.graphics.Rect(sx, 0, sx + currentSourceWidth, sh)
-                    val dstRect = android.graphics.Rect(
+                    srcRect.set(sx, 0, sx + currentSourceWidth, sh)
+                    dstRect.set(
                         x.toInt(), thumbTop.toInt(),
                         (x + currentThumbWidth).toInt(), (thumbTop + thumbHeightPx).toInt()
                     )
-                    
+
                     drawIntoCanvas { canvas ->
                         canvas.nativeCanvas.drawBitmap(sprite, srcRect, dstRect, null)
                     }
