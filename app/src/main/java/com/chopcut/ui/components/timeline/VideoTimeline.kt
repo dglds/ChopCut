@@ -1,32 +1,18 @@
 package com.chopcut.ui.components.timeline
 
-import android.graphics.Bitmap
 import android.net.Uri
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -37,7 +23,6 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.runtime.mutableLongStateOf
-import timber.log.Timber
 
 @Composable
 fun VideoTimeline(
@@ -77,6 +62,18 @@ fun VideoTimeline(
         factory = VideoTimelineViewModel.VideoTimelineViewModelFactory(context.applicationContext as android.app.Application)
     )
     val sprites by viewModel.sprites.collectAsStateWithLifecycle()
+    val isReady by viewModel.isReady.collectAsStateWithLifecycle()
+
+    val shimmerTransition = rememberInfiniteTransition(label = "skeleton")
+    val shimmerAlpha by shimmerTransition.animateFloat(
+        initialValue = 0.04f,
+        targetValue = 0.18f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmerAlpha"
+    )
 
     LaunchedEffect(videoUri, durationMs) {
         if (durationMs > 0) {
@@ -99,6 +96,7 @@ fun VideoTimeline(
     }
     val srcRect = remember { android.graphics.Rect() }
     val dstRect = remember { android.graphics.Rect() }
+    val waveCornerRadius = remember { androidx.compose.ui.geometry.CornerRadius(2f, 2f) }
 
     // Posição local usada durante o arraste — evita depender do parâmetro externo
     // (que pode ser sobrescrito pelo poll do ExoPlayer a cada 100ms)
@@ -221,39 +219,72 @@ fun VideoTimeline(
                         canvas.nativeCanvas.drawBitmap(sprite, srcRect, dstRect, null)
                     }
                 } else {
-                    drawRect(
-                        color = Color.White.copy(alpha = 0.05f),
-                        topLeft = androidx.compose.ui.geometry.Offset(x, thumbTop),
-                        size = androidx.compose.ui.geometry.Size(currentThumbWidth, thumbHeightPx)
-                    )
+                    val alpha = if (isReady) 0f else shimmerAlpha
+                    if (alpha > 0f) {
+                        drawRect(
+                            color = Color.White.copy(alpha = alpha),
+                            topLeft = androidx.compose.ui.geometry.Offset(x, thumbTop),
+                            size = androidx.compose.ui.geometry.Size(currentThumbWidth, thumbHeightPx)
+                        )
+                    }
                 }
             }
 
             // 3. DESENHAR WAVEFORM
             if (showWaveform && audioAmplitudes.isNotEmpty()) {
                 val waveTop = thumbTop + thumbHeightPx + 4.dp.toPx()
-                val barWidth = 2.dp.toPx()
+                val barWidth = 3.dp.toPx()
+                val barStep = barWidth + 1.dp.toPx()
                 val samplesPerSecond = audioAmplitudes.size.toFloat() / (durationMs / 1000f)
-                
+                val waveCenter = waveTop + waveformHeightPx / 2f
+                val halfMax = waveformHeightPx / 2f
+
                 val startSecVisible = (currentScrollPx - centerOffset) / pxPerSecond
                 val endSecVisible = (currentScrollPx - centerOffset + width) / pxPerSecond
-                
+
                 val startSampleIdx = (startSecVisible * samplesPerSecond).toInt().coerceAtLeast(0)
                 val endSampleIdx = (endSecVisible * samplesPerSecond).toInt().coerceAtMost(audioAmplitudes.size - 1)
-                
-                for (i in startSampleIdx..endSampleIdx) {
-                    val sample = audioAmplitudes[i]
-                    val sampleTimeSec = i / samplesPerSecond
-                    val x = startX + (sampleTimeSec * pxPerSecond)
-                    
-                    val h = sample * waveformHeightPx
+
+                // Normalizar pelo pico da janela visível — loop manual sem alocação de List
+                var windowPeak = 0f
+                for (idx in startSampleIdx..endSampleIdx) {
+                    val v = audioAmplitudes[idx]
+                    if (v > windowPeak) windowPeak = v
+                }
+                val normFactor = if (windowPeak > 0.05f) windowPeak else 1f
+
+                // Iterar por posição em pixels (passo fixo) — densidade visual constante
+                // independente de quantos samples/s o áudio tem
+                val xStart = startX + (startSampleIdx / samplesPerSecond) * pxPerSecond
+                val xEnd = startX + (endSampleIdx / samplesPerSecond) * pxPerSecond
+                var x = xStart
+                while (x <= xEnd) {
+                    val timeSec = (x - startX) / pxPerSecond
+                    val sampleIdx = (timeSec * samplesPerSecond).toInt().coerceIn(0, audioAmplitudes.size - 1)
+                    val sample = audioAmplitudes[sampleIdx]
+                    val normalizedSample = (sample / normFactor).coerceIn(0f, 1f)
+
+                    val h = (normalizedSample * halfMax).coerceAtLeast(1.dp.toPx())
+                    val barAlpha = 0.4f + normalizedSample * 0.6f
+
+                    // Barra superior
                     drawRoundRect(
                         color = Color(0xFF00E5FF),
-                        topLeft = androidx.compose.ui.geometry.Offset(x, waveTop + (waveformHeightPx - h) / 2f),
+                        topLeft = androidx.compose.ui.geometry.Offset(x, waveCenter - h),
                         size = androidx.compose.ui.geometry.Size(barWidth, h),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f),
-                        alpha = 0.8f
+                        cornerRadius = waveCornerRadius,
+                        alpha = barAlpha
                     )
+                    // Barra inferior (espelho)
+                    drawRoundRect(
+                        color = Color(0xFF00E5FF),
+                        topLeft = androidx.compose.ui.geometry.Offset(x, waveCenter),
+                        size = androidx.compose.ui.geometry.Size(barWidth, h),
+                        cornerRadius = waveCornerRadius,
+                        alpha = barAlpha * 0.6f
+                    )
+
+                    x += barStep
                 }
             }
         }
