@@ -3,11 +3,16 @@ package com.chopcut.ui.viewmodel
 import androidx.media3.exoplayer.ExoPlayer
 import com.chopcut.ui.components.trim.TrimPosition
 import com.chopcut.ui.components.waveform.WaveformData
+import com.chopcut.ui.state.EditorTool
+import com.chopcut.ui.state.CompressionLevel
 
 /**
- * Estado do editor de trim
+ * Estado global do Editor Unificado
  */
-data class TrimEditorState(
+data class EditorState(
+    val activeTool: EditorTool = EditorTool.NONE,
+    val aspectRatio: Float? = null,
+    val compressionLevel: CompressionLevel = CompressionLevel.ORIGINAL,
     val trimPosition: TrimPosition = TrimPosition.Empty,
     val currentPosition: Long = 0L,
     val videoDurationMs: Long = 0L,

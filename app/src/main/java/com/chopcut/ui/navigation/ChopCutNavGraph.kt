@@ -28,7 +28,7 @@ import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.PreferencesScreen
 import com.chopcut.ui.viewmodel.PreloadViewModel
 import com.chopcut.ui.viewmodel.ThumbnailViewModel
-import com.chopcut.ui.screen.TrimScreen
+import com.chopcut.ui.screen.EditorScreen
 import com.chopcut.ui.screen.debug.AudioWaveFormsTestScreen
 
 @Composable
@@ -137,7 +137,7 @@ fun ChopCutNavGraph(
                 val videoUriString = backStackEntry.arguments?.getString("videoUri")
                 val videoUri = videoUriString?.let { Uri.parse(it) }
 
-                TrimScreen(
+                EditorScreen(
                     videoUri = videoUri ?: Uri.EMPTY,
                     preloadViewModel = preloadViewModel,
                     thumbnailViewModel = thumbnailViewModel,

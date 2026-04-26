@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
  * - Reportar estado de carregamento
  * - Calcular número de barras de waveform baseado na qualidade
  * 
- * Escopo: Activity (compartilhada entre HomeScreen e TrimScreen)
+ * Escopo: Activity (compartilhada entre HomeScreen e EditorScreen)
  */
 class AudioViewModel(
     application: Application

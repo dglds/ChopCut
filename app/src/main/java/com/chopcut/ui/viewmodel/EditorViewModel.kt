@@ -12,6 +12,8 @@ import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.trim.TrimPosition
 import com.chopcut.ui.components.waveform.WaveformData
 import com.chopcut.ui.components.player.PlayerManager
+import com.chopcut.ui.state.EditorTool
+import com.chopcut.ui.state.CompressionLevel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +23,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.flow.collectLatest
 
 /**
- * ViewModel para TrimScreen.
+ * ViewModel para EditorScreen.
  *
  * Responsabilidades:
  * - Gerenciar estado do editor de trim (posições, duração, trim ranges)
@@ -32,19 +34,19 @@ import kotlinx.coroutines.flow.collectLatest
  * NOTA: O pré-carregamento de thumbnails e áudio é gerenciado
  * pela PreloadViewModel (Activity-scoped), não por esta ViewModel.
  */
-class TrimViewModel(
+class EditorViewModel(
     application: Application,
     private val videoUri: Uri?,
     private val initialAudioAmplitudes: List<Float>? = null,
     private val initialPreloadedStrips: Map<Int, Bitmap>? = null
 ) : AndroidViewModel(application) {
 
-    class TrimViewModelFactory(
+    class EditorViewModelFactory(
         private val videoUri: Uri?
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(TrimViewModel::class.java)) {
+            if (modelClass.isAssignableFrom(EditorViewModel::class.java)) {
                 @Suppress("DEPRECATION")
                 val app = modelClass.classLoader?.let {
                     try {
@@ -57,7 +59,7 @@ class TrimViewModel(
                 }
 
                 if (app != null) {
-                    return TrimViewModel(
+                    return EditorViewModel(
                         application = app,
                         videoUri = videoUri,
                         initialAudioAmplitudes = null,
@@ -69,8 +71,8 @@ class TrimViewModel(
         }
     }
 
-    private val _state = MutableStateFlow(TrimEditorState())
-    val state: StateFlow<TrimEditorState> = _state.asStateFlow()
+    private val _state = MutableStateFlow(EditorState())
+    val state: StateFlow<EditorState> = _state.asStateFlow()
 
     private var waveformQuality: WaveformQuality = WaveformQuality.Medium
     private val videoRepository = VideoRepository(application)
@@ -125,6 +127,22 @@ class TrimViewModel(
 
     fun setWaveformQuality(quality: WaveformQuality) {
         waveformQuality = quality
+    }
+
+    fun setActiveTool(tool: EditorTool) {
+        _state.update { it.copy(activeTool = tool) }
+    }
+
+    fun applyToolChangesAndClose() {
+        _state.update { it.copy(activeTool = EditorTool.NONE) }
+    }
+
+    fun setAspectRatio(ratio: Float?) {
+        _state.update { it.copy(aspectRatio = ratio) }
+    }
+
+    fun setCompressionLevel(level: CompressionLevel) {
+        _state.update { it.copy(compressionLevel = level) }
     }
 
     /**
@@ -187,7 +205,7 @@ class TrimViewModel(
     }
 
     fun clear() {
-        _state.value = TrimEditorState()
+        _state.value = EditorState()
     }
 
     fun getCompleteRanges(): List<Pair<Long, Long>> {

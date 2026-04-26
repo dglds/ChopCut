@@ -20,12 +20,12 @@ import com.chopcut.ui.theme.ChopCutAnimation
 import com.chopcut.ui.theme.ChopCutEasing
 
 /**
- * Overlay de loading simplificado exibido durante o carregamento inicial da TrimScreen.
+ * Overlay de loading simplificado exibido durante o carregamento inicial da EditorScreen.
  *
  * Features:
  * - Animação Lottie (apenas spinner)
  * - Mensagem de status
- * - Transição suave com TrimScreen
+ * - Transição suave com EditorScreen
  */
 
 @Composable

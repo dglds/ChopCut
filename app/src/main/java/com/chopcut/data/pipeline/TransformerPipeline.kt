@@ -12,7 +12,12 @@ import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
+import androidx.media3.common.Effect
+import androidx.media3.effect.Presentation
+import androidx.media3.common.Format
+import androidx.media3.transformer.DefaultEncoderFactory
 import com.chopcut.data.model.TimeRange
+import com.chopcut.ui.state.CompressionLevel
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.util.logging.ActivityLogger
 import com.chopcut.util.logging.AppActivity
@@ -30,7 +35,8 @@ class TransformerPipeline(
      *
      * Cada range é adicionado como um clip separado na composição
      */
-    fun trim(uri: Uri, ranges: List<TimeRange>): Flow<TrimProgress> = callbackFlow {
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    fun trim(uri: Uri, ranges: List<TimeRange>, aspectRatio: Float? = null, compressionLevel: CompressionLevel = CompressionLevel.ORIGINAL): Flow<TrimProgress> = callbackFlow {
         val outputFile = videoRepository.createTempFile(".mp4")
 
         ActivityLogger.started(AppActivity.Trim, "ranges" to ranges.size)
@@ -53,7 +59,13 @@ class TransformerPipeline(
                     .setClippingConfiguration(clippingConfig)
                     .build()
 
+                val videoEffects = mutableListOf<Effect>()
+                if (aspectRatio != null) {
+                    videoEffects.add(Presentation.createForAspectRatio(aspectRatio, Presentation.LAYOUT_SCALE_TO_FIT))
+                }
+
                 val editedItem = EditedMediaItem.Builder(mediaItem)
+                    .setEffects(androidx.media3.transformer.Effects(emptyList(), videoEffects))
                     .build()
 
                 sequenceBuilder.addItem(editedItem)
@@ -107,9 +119,25 @@ class TransformerPipeline(
 
             mainHandler.post {
                 try {
-                    val transformer = Transformer.Builder(context)
+                    val transformerBuilder = Transformer.Builder(context)
                         .addListener(transformerListener)
-                        .build()
+
+                    // Aplicar compressão se selecionado
+                    if (compressionLevel != CompressionLevel.ORIGINAL) {
+                        val targetBitrate = when (compressionLevel) {
+                            CompressionLevel.MEDIUM -> 3_000_000 // 3 Mbps
+                            CompressionLevel.LOW -> 1_000_000    // 1 Mbps
+                            else -> Format.NO_VALUE
+                        }
+                        
+                        val encoderFactory = DefaultEncoderFactory.Builder(context)
+                            .setRequestedVideoBitrate(targetBitrate)
+                            .build()
+                            
+                        transformerBuilder.setEncoderFactory(encoderFactory)
+                    }
+
+                    val transformer = transformerBuilder.build()
 
                     transformerRef = transformer
                     transformer.start(composition, outputFile.absolutePath)

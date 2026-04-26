@@ -31,8 +31,8 @@ object LoadingConstants {
     const val OVERLAY_FADE_OUT_DURATION_MS = 500     // Fade out do overlay (reduzido de 700ms)
     const val OVERLAY_SCALE_OUT_TARGET = 0.95f        // Scale final do overlay
 
-    // Animações - TrimScreen (sincronizado com overlay)
-    const val TRIM_FADE_IN_DURATION_MS = 500          // Fade in da TrimScreen (reduzido de 700ms)
+    // Animações - EditorScreen (sincronizado com overlay)
+    const val TRIM_FADE_IN_DURATION_MS = 500          // Fade in da EditorScreen (reduzido de 700ms)
     const val TRIM_SCALE_IN_START = 0.98f             // Scale inicial suave
     const val TRIM_SCALE_IN_END = 1.0f               // Scale final
 

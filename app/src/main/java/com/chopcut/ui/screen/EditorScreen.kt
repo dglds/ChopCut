@@ -35,7 +35,7 @@ import com.chopcut.ui.components.timeline.VideoTimeline
 import com.chopcut.ui.components.timeline.SeekbarProgress
 import com.chopcut.ui.components.timeline.CurrentTimeDisplay
 import com.chopcut.ui.components.timeline.VideoPreview
-import com.chopcut.ui.components.trim.TrimControlPanel
+
 import com.chopcut.ui.components.trim.SaveDialogState
 import com.chopcut.ui.components.trim.TrimSaveDialog
 import com.chopcut.ui.components.feedback.ErrorState
@@ -43,8 +43,8 @@ import com.chopcut.ui.theme.ChopCutSpacing
 import com.chopcut.util.FileNameUtils
 import com.chopcut.util.RangeUtils
 import com.chopcut.util.FormatUtils
-import com.chopcut.ui.viewmodel.TrimViewModel
-import com.chopcut.ui.viewmodel.TrimEditorState
+import com.chopcut.ui.viewmodel.EditorViewModel
+import com.chopcut.ui.viewmodel.EditorState
 import com.chopcut.ui.viewmodel.AudioViewModel
 import com.chopcut.ui.viewmodel.PreloadViewModel
 import com.chopcut.ui.viewmodel.PreloadUiState
@@ -59,7 +59,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TrimScreen(
+fun EditorScreen(
     videoUri: Uri,
     preloadViewModel: PreloadViewModel,
     thumbnailViewModel: ThumbnailViewModel,
@@ -78,16 +78,16 @@ fun TrimScreen(
 
     // Observar AudioViewModel com lifecycle awareness
     val audioAmplitudes by audioViewModel.amplitudes.collectAsStateWithLifecycle()
-    // Criar TrimViewModel
-    val viewModel: TrimViewModel = viewModel(
-        factory = TrimViewModel.TrimViewModelFactory(videoUri)
+    // Criar EditorViewModel
+    val viewModel: EditorViewModel = viewModel(
+        factory = EditorViewModel.EditorViewModelFactory(videoUri)
     )
     val state by viewModel.state.collectAsState()
 
     var saveDialogState by remember { mutableStateOf(SaveDialogState()) }
     var showSaveDialog by remember { mutableStateOf(false) }
 
-    // Sincronizar dados das ViewModels para TrimViewModel
+    // Sincronizar dados das ViewModels para EditorViewModel
     LaunchedEffect(audioAmplitudes) {
         if (audioAmplitudes.isNotEmpty()) {
             viewModel.updateAudioAmplitudes(audioAmplitudes)
@@ -189,6 +189,15 @@ fun TrimScreen(
         onNavigateBack()
     }
 
+    // Se estiver usando uma ferramenta, o botão voltar cancela a ferramenta em vez de sair do editor
+    BackHandler(enabled = !showLoadingOverlay) {
+        if (state.activeTool != com.chopcut.ui.state.EditorTool.NONE) {
+            viewModel.setActiveTool(com.chopcut.ui.state.EditorTool.NONE)
+        } else {
+            onNavigateBack()
+        }
+    }
+
     val videoRepository = remember { VideoRepository(context) }
     val transformerPipeline = remember { TransformerPipeline(context, videoRepository) }
     
@@ -212,7 +221,7 @@ fun TrimScreen(
         else -> {
             // Box wrapper para permitir overlay
             Box(modifier = Modifier.fillMaxSize()) {
-                // Animação de entrada suave para TrimScreen
+                // Animação de entrada suave para EditorScreen
                 AnimatedVisibility(
                     visible = !showLoadingOverlay,
                     enter = fadeIn(
@@ -334,15 +343,52 @@ fun TrimScreen(
                                 }
                             }
 
-                            val isInsideRange = state.trimPosition.isPositionInRange(state.currentPosition)
-
-                            TrimControlPanel(
-                                modifier = Modifier.padding(bottom = 24.dp),
-                                isDraftMode = state.trimPosition.isDraftMode,
-                                isInsideRange = isInsideRange,
-                                onAddPosition = { viewModel.addPosition(state.currentPosition) },
-                                onDelete = { viewModel.removeRangeAt(state.currentPosition) }
-                            )
+                            AnimatedContent(
+                                targetState = state.activeTool,
+                                label = "ToolSwapAnimation",
+                                modifier = Modifier.padding(bottom = 24.dp)
+                            ) { tool ->
+                                when (tool) {
+                                    com.chopcut.ui.state.EditorTool.NONE -> {
+                                        com.chopcut.ui.components.editor.tools.MainToolBar(
+                                            onToolSelected = { viewModel.setActiveTool(it) }
+                                        )
+                                    }
+                                    com.chopcut.ui.state.EditorTool.TRIM -> {
+                                        val isInsideRange = state.trimPosition.isPositionInRange(state.currentPosition)
+                                        com.chopcut.ui.components.editor.tools.TrimToolPanel(
+                                            isDraftMode = state.trimPosition.isDraftMode,
+                                            isInsideRange = isInsideRange,
+                                            onAddPosition = { viewModel.addPosition(state.currentPosition) },
+                                            onDelete = { viewModel.removeRangeAt(state.currentPosition) },
+                                            onClose = { viewModel.applyToolChangesAndClose() }
+                                        )
+                                    }
+                                    com.chopcut.ui.state.EditorTool.FORMAT -> {
+                                        com.chopcut.ui.components.editor.tools.FormatToolPanel(
+                                            currentRatio = state.aspectRatio,
+                                            onRatioSelected = { viewModel.setAspectRatio(it) },
+                                            onClose = { viewModel.applyToolChangesAndClose() }
+                                        )
+                                    }
+                                    com.chopcut.ui.state.EditorTool.ADD_MEDIA -> {
+                                        ToolPlaceholder("Galeria abrirá aqui...", onClose = { viewModel.applyToolChangesAndClose() })
+                                    }
+                                    com.chopcut.ui.state.EditorTool.CROP -> {
+                                        ToolPlaceholder("Ferramenta de Recorte de Área", onClose = { viewModel.applyToolChangesAndClose() })
+                                    }
+                                    com.chopcut.ui.state.EditorTool.COMPRESS -> {
+                                        com.chopcut.ui.components.editor.tools.CompressToolPanel(
+                                            currentLevel = state.compressionLevel,
+                                            onLevelSelected = { viewModel.setCompressionLevel(it) },
+                                            onClose = { viewModel.applyToolChangesAndClose() }
+                                        )
+                                    }
+                                    com.chopcut.ui.state.EditorTool.AUDIO -> {
+                                        ToolPlaceholder("Ajustes de Trilha Sonora", onClose = { viewModel.applyToolChangesAndClose() })
+                                    }
+                                }
+                            }
                         }
                     }
                 } // Fecha AnimatedVisibility
@@ -385,7 +431,12 @@ fun TrimScreen(
                             throw Exception("No ranges to save - video is empty")
                         }
 
-                        transformerPipeline.trim(videoUri, rangesToSave)
+                        transformerPipeline.trim(
+                            uri = videoUri, 
+                            ranges = rangesToSave, 
+                            aspectRatio = state.aspectRatio,
+                            compressionLevel = state.compressionLevel
+                        )
                             .collect { progress ->
                                 when (progress) {
                                     is TrimProgress.InProgress -> {
@@ -420,6 +471,22 @@ fun TrimScreen(
             },
             onNavigateBack = onNavigateBack
         )
+    }
+}
+
+@Composable
+private fun ToolPlaceholder(title: String, onClose: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, color = Color.White, fontWeight = FontWeight.Bold)
+        IconButton(onClick = onClose) {
+            Icon(Icons.Default.Check, contentDescription = "OK", tint = Color(0xFF00E5FF))
+        }
     }
 }
 

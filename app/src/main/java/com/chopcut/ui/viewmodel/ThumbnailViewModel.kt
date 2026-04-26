@@ -31,7 +31,7 @@ import kotlinx.coroutines.ensureActive
  * - Reportar progresso de extração
  * - Gerenciar memória (eviction)
  * 
- * Escopo: Activity (compartilhada entre HomeScreen e TrimScreen)
+ * Escopo: Activity (compartilhada entre HomeScreen e EditorScreen)
  */
 class ThumbnailViewModel(
     application: Application,

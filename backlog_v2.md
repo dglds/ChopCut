@@ -4,7 +4,7 @@
 
 ## [BUG] ~~Barra de progresso dessincronizada durante scroll~~ ✅
 
-**Implementado:** flag `isScrubbing` no `TrimEditorState`, `startScrubbing()`/`stopScrubbing()` no `TrimViewModel`, `localPositionMs` local no `VideoTimeline`, callbacks `onScrubStart`/`onScrubStop` no `TrimScreen`. Poll do ExoPlayer suspenso durante arraste; seek único ao soltar.
+**Implementado:** flag `isScrubbing` no `EditorState`, `startScrubbing()`/`stopScrubbing()` no `EditorViewModel`, `localPositionMs` local no `VideoTimeline`, callbacks `onScrubStart`/`onScrubStop` no `EditorScreen`. Poll do ExoPlayer suspenso durante arraste; seek único ao soltar.
 
 ---
 

@@ -122,7 +122,7 @@ fun VideoTimeline(
 
         // Scroll manual com estado local — desacoplado do ExoPlayer durante o arraste.
         // onSeek é omitido aqui: atualizar o ViewModel a cada frame causaria recomposição
-        // em cascata no TrimScreen. A posição é propagada uma única vez via onScrubStop.
+        // em cascata no EditorScreen. A posição é propagada uma única vez via onScrubStop.
         val scrollableState = androidx.compose.foundation.gestures.rememberScrollableState { delta ->
             if (!isScrubbing) {
                 isScrubbing = true

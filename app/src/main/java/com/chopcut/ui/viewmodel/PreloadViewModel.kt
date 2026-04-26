@@ -29,13 +29,13 @@ import kotlinx.coroutines.launch
  * - Gerenciar estado geral (Loading/Ready/Error)
  * - Fornecer métodos para verificar se o vídeo está pronto
  * 
- * Escopo: Activity (compartilhada entre HomeScreen e TrimScreen)
+ * Escopo: Activity (compartilhada entre HomeScreen e EditorScreen)
  * 
  * Estratégia On-Demand:
  * - Thumbnails são carregadas apenas quando o usuário rola a timeline
  * - Preload está DESATIVADO para maximizar performance de abertura
  * - ThumbnailViewModel.handleOnDemand() carrega strips conforme necessário
- * - AudioViewModel não é usado atualmente (áudio carregado sob demanda no TrimScreen)
+ * - AudioViewModel não é usado atualmente (áudio carregado sob demanda no EditorScreen)
  */
 class PreloadViewModel(
     application: Application,
@@ -77,7 +77,7 @@ class PreloadViewModel(
      * - Apenas obtém metadados do vídeo (duração, dimensões, segmentos)
      * - Configura ThumbnailViewModel para carregamento on-demand
      * - Thumbnails são carregadas apenas quando o usuário rola a timeline
-     * - Áudio não é pré-carregado (carregado sob demanda no TrimScreen)
+     * - Áudio não é pré-carregado (carregado sob demanda no EditorScreen)
      * 
      * Benefícios:
      * - Abertura do editor é quase instantânea
@@ -119,7 +119,7 @@ class PreloadViewModel(
                 }
 
                 /* 
-                // Áudio não é pré-carregado (on-demand no TrimScreen)
+                // Áudio não é pré-carregado (on-demand no EditorScreen)
                 // Isso maximiza performance de abertura do editor
                 */
 

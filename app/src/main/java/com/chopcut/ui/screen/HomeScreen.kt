@@ -207,10 +207,18 @@ fun HomeScreen(
                 }
         
                 item {
-                    FeatureGrid(
-                        cacheSizeBytes = cacheSizeBytes,
+                    Text(
+                        text = "Sistema",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = OnSurface
+                    )
+                    Spacer(Modifier.height(ChopCutSpacing.sm))
+                    CacheFeatureCard(
+                        diskCacheSize = cacheSizeBytes,
                         clearCacheState = clearCacheState,
-                        onClearCache = { viewModel.clearCache() }
+                        onClearCache = { viewModel.clearCache() },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
 
@@ -510,153 +518,6 @@ private fun VideoPickerLoaded(
     }
 }
 
-private data class FeatureInfo(
-    val icon: ImageVector,
-    val title: String,
-    val description: String,
-    val accentColor: Color,
-    val isCacheFeature: Boolean = false
-)
-
-@Composable
-private fun FeatureGrid(
-    cacheSizeBytes: Long,
-    clearCacheState: ClearCacheState,
-    onClearCache: () -> Unit
-) {
-    val features = remember {
-        listOf(
-            FeatureInfo(Icons.Default.Settings, "Cache", "", Color(0xFF6B7280), isCacheFeature = true),
-            FeatureInfo(Icons.Default.ContentCut, "Trim", "Cortar trechos", Primary),
-            FeatureInfo(Icons.AutoMirrored.Filled.CallMerge, "Join", "Concatenar vídeos", Waveform),
-            FeatureInfo(Icons.Default.Compress, "Compress", "Reduzir tamanho", Warning),
-            FeatureInfo(Icons.Default.AspectRatio, "Resize", "Alterar resolução", Info),
-            FeatureInfo(Icons.Default.Crop, "Crop", "Recortar área", Success),
-            FeatureInfo(Icons.Default.MusicNote, "Áudio", "Extrair trilha sonora", Color(0xFFEC4899))
-        )
-    }
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Recursos",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = OnSurface
-            )
-            Text(
-                text = "${features.size} disponíveis",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
-            )
-        }
-
-        features.chunked(2).forEachIndexed { rowIndex, rowFeatures ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xs)
-            ) {
-                rowFeatures.forEachIndexed { colIndex, feature ->
-                    if (feature.isCacheFeature && rowIndex == 0) {
-                        CacheFeatureCard(
-                            diskCacheSize = cacheSizeBytes,
-                            clearCacheState = clearCacheState,
-                            onClearCache = onClearCache,
-                            modifier = Modifier.weight(1f)
-                        )
-                    } else {
-                        FeatureCard(
-                            feature = feature,
-                            onClearCache = null,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-                if (rowFeatures.size < 2) {
-                    Spacer(Modifier.weight(1f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeatureCard(
-    feature: FeatureInfo,
-    modifier: Modifier = Modifier,
-    onClearCache: (() -> Unit)? = null
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Surface)
-            .clickable { } // TODO: Implement feature navigation
-            .padding(ChopCutSpacing.sm)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp)
-                .background(
-                    feature.accentColor.copy(alpha = 0.1f),
-                    RoundedCornerShape(10.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = feature.icon,
-                contentDescription = null,
-                tint = feature.accentColor,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-        Spacer(Modifier.height(ChopCutSpacing.xs))
-        Text(
-            text = feature.title,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-            color = OnSurface
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = feature.description,
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        
-        // Botão de limpar cache no card Trim
-        if (feature.isCacheFeature && onClearCache != null) {
-            Spacer(Modifier.height(ChopCutSpacing.xs))
-            ChopCutSecondaryButton(
-                onClick = onClearCache,
-                text = "Limpar"
-            )
-        }
-    }
-}
-
-@Composable
-private fun BadgeText(text: String) {
-    Text(
-        text = text,
-        style = DurationTextStyle.copy(color = Color.White),
-        modifier = Modifier
-            .background(
-                Color.Black.copy(alpha = 0.6f),
-                RoundedCornerShape(6.dp)
-            )
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    )
-}
-
 /**
  * Card de Cache de Thumbnails nos recursos
  * Mostra os bytes de cache e botão para limpar
@@ -720,4 +581,23 @@ private fun formatBytes(bytes: Long): String {
         bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
         else -> "${bytes / (1024 * 1024 * 1024)} GB"
     }
+}
+
+@Composable
+private fun BadgeText(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Medium,
+        color = Color.White,
+        modifier = modifier
+            .background(
+                color = Color.Black.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(4.dp)
+            )
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    )
 }

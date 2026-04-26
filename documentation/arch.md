@@ -110,7 +110,7 @@ com.cropsnap/
 
 ## 3. EditorViewModel Unificado (MVI)
 
-Um único ViewModel substitui `TrimViewModel`, `AudioViewModel`, `PreloadViewModel`.
+Um único ViewModel substitui `EditorViewModel`, `AudioViewModel`, `PreloadViewModel`.
 
 ### State
 

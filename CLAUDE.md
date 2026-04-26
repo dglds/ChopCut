@@ -35,7 +35,7 @@ All commands use the Gradle wrapper. ADB is at `~/Android/Sdk/platform-tools/adb
 ### Navigation & ViewModel Scoping
 Navigation is handled by `ChopCutNavGraph` (single `NavHost`). Start destination is determined in `MainActivity` based on `isFirstRun` and `ACTION_VIEW` intent (supports launching directly into editor with a video URI).
 
-ViewModels are **Activity-scoped** by design: `PreloadViewModel`, `ThumbnailViewModel`, and `AudioViewModel` are created in `MainActivity` and passed down through the nav graph as parameters. This is intentional — they must survive navigation between `HomeScreen` and `TrimScreen`.
+ViewModels are **Activity-scoped** by design: `PreloadViewModel`, `ThumbnailViewModel`, and `AudioViewModel` are created in `MainActivity` and passed down through the nav graph as parameters. This is intentional — they must survive navigation between `HomeScreen` and `EditorScreen`.
 
 Routes: `onboarding` → `home` → `editor?videoUri={uri}` | `preferences` | `audio_waveforms_test`
 
@@ -52,7 +52,7 @@ Two pipelines exist for trim operations:
 `FastFrameExtractor` uses `MediaCodec` in ByteBuffer mode with hardware-accurate YUV layout metadata (stride/slice-height read from `getOutputFormat()`). Thumbnails are loaded **on-demand** as the user scrolls the timeline — preload is intentionally disabled. Cache lives at `context.cacheDir/thumbnail_strips/` and is cleared on app start.
 
 ### State Management Pattern
-`TrimViewModel` owns `TrimEditorState` (trim ranges, playback position, waveform, ExoPlayer instance) via `MutableStateFlow`. No MVI framework — direct method calls on the ViewModel. `TrimPosition` is the core model for managing multiple non-overlapping trim ranges.
+`EditorViewModel` owns `EditorState` (trim ranges, playback position, waveform, ExoPlayer instance) via `MutableStateFlow`. No MVI framework — direct method calls on the ViewModel. `TrimPosition` is the core model for managing multiple non-overlapping trim ranges.
 
 `PreloadViewModel` coordinates between `ThumbnailViewModel` and `AudioViewModel`, exposing `isReadyFlow` which gates navigation into the editor.
 
@@ -73,8 +73,8 @@ All magic numbers must use the centralized constants system at `app/src/main/jav
 | File | Purpose |
 |------|---------|
 | `ui/navigation/ChopCutNavGraph.kt` | All routes and nav logic |
-| `ui/screen/TrimScreen.kt` | Main editor screen |
-| `ui/viewmodel/TrimViewModel.kt` | Editor state + ExoPlayer |
+| `ui/screen/EditorScreen.kt` | Main editor screen |
+| `ui/viewmodel/EditorViewModel.kt` | Editor state + ExoPlayer |
 | `ui/viewmodel/PreloadViewModel.kt` | Coordinates thumbnail/audio preload |
 | `data/pipeline/TransformerPipeline.kt` | Multi-range trim via Media3 |
 | `data/pipeline/CopyPipeline.kt` | Lossless trim via MediaCodec |
