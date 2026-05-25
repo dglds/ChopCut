@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.flow.collectLatest
+import timber.log.Timber
 
 /**
  * ViewModel para EditorScreen.
@@ -37,7 +38,7 @@ import kotlinx.coroutines.flow.collectLatest
 class EditorViewModel(
     application: Application,
     private val videoUri: Uri?,
-    private val initialAudioAmplitudes: List<Float>? = null,
+    private val initialAudioAmplitudes: FloatArray? = null,
     private val initialPreloadedStrips: Map<Int, Bitmap>? = null
 ) : AndroidViewModel(application) {
 
@@ -149,11 +150,12 @@ class EditorViewModel(
      * Atualiza as amplitudes de áudio.
      * Usado para sincronizar dados do AudioViewModel.
      */
-    fun updateAudioAmplitudes(amplitudes: List<Float>) {
-
+    fun updateAudioAmplitudes(amplitudes: FloatArray) {
+        Timber.d("EditorViewModel: updateAudioAmplitudes called with ${amplitudes.size} amplitudes")
         _state.update { it.copy(
             audioWaveformsAmplitudes = amplitudes
         ) }
+        Timber.d("EditorViewModel: state updated, audioWaveformsAmplitudes size = ${_state.value.audioWaveformsAmplitudes.size}")
     }
 
     fun addPosition(pos: Long) {

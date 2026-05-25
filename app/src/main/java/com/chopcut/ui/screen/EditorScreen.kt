@@ -89,8 +89,10 @@ fun EditorScreen(
 
     // Sincronizar dados das ViewModels para EditorViewModel
     LaunchedEffect(audioAmplitudes) {
+        timber.log.Timber.d("EditorScreen: LaunchedEffect audioAmplitudes - size=${audioAmplitudes.size}")
         if (audioAmplitudes.isNotEmpty()) {
             viewModel.updateAudioAmplitudes(audioAmplitudes)
+            timber.log.Timber.d("EditorScreen: updated EditorViewModel with ${audioAmplitudes.size} amplitudes")
         }
     }
 
@@ -335,7 +337,7 @@ fun EditorScreen(
                                         onScrubStart = { viewModel.startScrubbing() },
                                         onScrubStop = { finalPos -> viewModel.stopScrubbing(finalPos) },
                                         trimRanges = state.trimPosition.completeRanges,
-                                        audioAmplitudes = audioAmplitudes,
+                                        audioAmplitudes = state.audioWaveformsAmplitudes.toList(),
                                         showWaveform = true,
                                         videoWidth = state.videoWidth,
                                         videoHeight = state.videoHeight

@@ -773,10 +773,11 @@ fun TimelineEditor(
                        // ═══════════════════════════════════════════════════════════════
                       drawContext.canvas.restore()
 
-                     // DRAW AUDIO WAVEFORMS (sincronizado com thumbnails)
-                     // ⚠️ TEMPORARIAMENTE DESATIVADO para testes de thumbnail
-                     if (showWaveform && audioWaveformsAmplitudes.isNotEmpty()) {
-                         val waveformWidth = (videoDurationMs / 1000f) * pxPerSecond
+                      // DRAW AUDIO WAVEFORMS (sincronizado com thumbnails)
+                      // ⚠️ TEMPORARIAMENTE DESATIVADO para testes de thumbnail
+                      if (showWaveform && audioWaveformsAmplitudes.isNotEmpty()) {
+                          timber.log.Timber.d("TimelineEditor: Drawing waveform with ${audioWaveformsAmplitudes.size} amplitudes")
+                          val waveformWidth = (videoDurationMs / 1000f) * pxPerSecond
                          val waveformStartX = centerOffset - currentScroll
                          val waveformHeightPx = waveformHeightDp.toPx()
                          val waveformTopY = thumbnailTop + thumbnailHeightPx // Logo abaixo das thumbnails
@@ -827,9 +828,13 @@ fun TimelineEditor(
                        val frameTimeMs = (System.nanoTime() - frameStartTime) / 1_000_000
                        val currentTime = System.currentTimeMillis()
 
-                     }
+                      } else {
+                          if (showWaveform) {
+                              timber.log.Timber.w("TimelineEditor: Waveform not drawn - audioWaveformsAmplitudes.size=${audioWaveformsAmplitudes.size}")
+                          }
+                      }
 
-                        // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.
+                         // Dimming removed to ensure vibrant colors and because elements are now stacked non-overlapping.
 
                    // Layout da régua: texto no topo, ticks embaixo apontando para as thumbs
                         val tickZoneTop = 20.dp.toPx()

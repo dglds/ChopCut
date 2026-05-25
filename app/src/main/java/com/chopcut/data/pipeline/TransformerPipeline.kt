@@ -16,11 +16,13 @@ import androidx.media3.common.Effect
 import androidx.media3.effect.Presentation
 import androidx.media3.common.Format
 import androidx.media3.transformer.DefaultEncoderFactory
+import androidx.media3.transformer.VideoEncoderSettings
 import com.chopcut.data.model.TimeRange
 import com.chopcut.ui.state.CompressionLevel
 import com.chopcut.data.repository.VideoRepository
-import com.chopcut.util.logging.ActivityLogger
-import com.chopcut.util.logging.AppActivity
+import com.chopcut.data.audio.model.AudioFormat
+import com.chopcut.util.TimeTracker
+import timber.log.Timber
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -39,7 +41,7 @@ class TransformerPipeline(
     fun trim(uri: Uri, ranges: List<TimeRange>, aspectRatio: Float? = null, compressionLevel: CompressionLevel = CompressionLevel.ORIGINAL): Flow<TrimProgress> = callbackFlow {
         val outputFile = videoRepository.createTempFile(".mp4")
 
-        ActivityLogger.started(AppActivity.Trim, "ranges" to ranges.size)
+        Timber.d("TransformerPipeline: trim started - ${ranges.size} ranges")
 
         var isFinished = false
         var transformerRef: Transformer? = null
@@ -96,7 +98,7 @@ class TransformerPipeline(
                 override fun onCompleted(composition: Composition, result: ExportResult) {
                     isFinished = true
                     mainHandler.removeCallbacks(progressRunnable)
-                    ActivityLogger.finished(AppActivity.Trim, "arquivo" to outputFile.name, "tamanho" to outputFile.length())
+                    Timber.d("TransformerPipeline: trim completed - ${outputFile.name} (${outputFile.length()} bytes)")
                     trySend(TrimProgress.Completed(outputFile))
                     channel.close()
                 }
@@ -108,7 +110,7 @@ class TransformerPipeline(
                 ) {
                     isFinished = true
                     mainHandler.removeCallbacks(progressRunnable)
-                    ActivityLogger.failed(AppActivity.Trim, "motivo" to exception.message)
+                    Timber.e("TransformerPipeline: trim failed - ${exception.message}")
                     trySend(TrimProgress.Failed(exception))
                     channel.close()
                 }
@@ -131,7 +133,11 @@ class TransformerPipeline(
                         }
                         
                         val encoderFactory = DefaultEncoderFactory.Builder(context)
-                            .setRequestedVideoBitrate(targetBitrate)
+                            .setRequestedVideoEncoderSettings(
+                                VideoEncoderSettings.Builder()
+                                    .setBitrate(targetBitrate)
+                                    .build()
+                            )
                             .build()
                             
                         transformerBuilder.setEncoderFactory(encoderFactory)
@@ -233,6 +239,83 @@ class TransformerPipeline(
             }
 
         } catch (e: Exception) {
+            trySend(Result.failure(e))
+            channel.close()
+
+            if (outputFile.exists()) {
+                outputFile.delete()
+            }
+        }
+    }
+
+    /**
+     * Extract audio track from video using Media3 Transformer.
+     * Removes video track and keeps only audio.
+     *
+     * @param uri Source video URI
+     * @param format Output audio format (default: AAC)
+     * @return Flow<Result<File>> Result with extracted audio file
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    fun extractAudio(
+        uri: Uri,
+        format: AudioFormat = AudioFormat.AAC
+    ): Flow<Result<File>> = callbackFlow {
+        val outputFile = videoRepository.createTempFile(format.extension)
+
+        Timber.d("TransformerPipeline: extractAudio started - format=${format.name}")
+        val timer = TimeTracker.start("audio_export")
+
+        try {
+            val mediaItem = MediaItem.fromUri(uri)
+
+            // Create transformer that removes video
+            val transformerListener = object : Transformer.Listener {
+                override fun onCompleted(composition: Composition, result: ExportResult) {
+                    val elapsedMs = timer.end()
+                    Timber.d("TransformerPipeline: extractAudio completed - ${outputFile.name} (${elapsedMs}ms, ${outputFile.length()} bytes)")
+                    trySend(Result.success(outputFile))
+                    channel.close()
+                }
+
+                override fun onError(
+                    composition: Composition,
+                    result: ExportResult,
+                    exception: ExportException
+                ) {
+                    val elapsedMs = timer.end()
+                    Timber.e("TransformerPipeline: extractAudio failed - ${exception.message} (${elapsedMs}ms)")
+                    trySend(Result.failure(exception))
+                    channel.close()
+                }
+            }
+
+            val mainHandler = Handler(Looper.getMainLooper())
+
+            mainHandler.post {
+                try {
+                    val transformer = Transformer.Builder(context)
+                        .addListener(transformerListener)
+                        .setRemoveVideo(true)  // Remove video, keep audio
+                        .setAudioMimeType(format.mimeType)
+                        .build()
+
+                    transformer.start(mediaItem, outputFile.absolutePath)
+                } catch (e: Exception) {
+                    timer.end()
+                    Timber.e("TransformerPipeline: extractAudio exception - ${e.message}")
+                    trySend(Result.failure(e))
+                    channel.close()
+                }
+            }
+
+            awaitClose {
+                // Transformer cleanup if needed
+            }
+
+        } catch (e: Exception) {
+            timer.end()
+            Timber.e("TransformerPipeline: extractAudio catch - ${e.message}")
             trySend(Result.failure(e))
             channel.close()
 

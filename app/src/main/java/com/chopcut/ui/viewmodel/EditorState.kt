@@ -20,7 +20,7 @@ data class EditorState(
     val isWaveformLoading: Boolean = false,
     val waveformError: String? = null,
     // Novos campos para AudioWaveForms
-    val audioWaveformsAmplitudes: List<Float> = emptyList(),
+    val audioWaveformsAmplitudes: FloatArray = floatArrayOf(),
     val isAudioWaveformsLoading: Boolean = false,
     
     // Dimensions

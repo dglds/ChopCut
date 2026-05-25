@@ -21,4 +21,5 @@ sealed class AppActivity(val label: String) {
     object ThumbnailExtraction : AppActivity("ThumbnailExtraction")
     object StripAssembly : AppActivity("StripAssembly")
     object Trim : AppActivity("Trim")
+    object AudioExport : AppActivity("AudioExport")
 }

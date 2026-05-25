@@ -16,7 +16,7 @@ Este documento resume as otimizações e o plano de instrumentação implementad
 *   **JNI Optimization**: Alterado `ByteBuffer.allocate` para `ByteBuffer.allocateDirect`. Isso evita cópias desnecessárias entre a Heap do Java e a memória nativa durante a extração via `MediaExtractor`.
 *   **Trace por Amostra**: Marcações detalhadas em `ReadSample`, `WriteSample` e `Advance` para medir latência de I/O de disco.
 
-### 2. `AudioDataExtractor` (Waveform Ultra-Rápido)
+### 2. `WaveformExtractor` (Waveform Ultra-Rápido)
 *   **Qualidade Degradada**: Implementado `step 4` no processamento de amostras PCM. Agora o extrator pula 75% das amostras, processando apenas 1 a cada 4 frames.
 *   **Ganho de CPU**: Redução drástica no tempo de processamento matemático de normalização e boost de voz.
 *   **Traces**: Marcações em `Setup`, `DecodeLoop` (decodificação MediaCodec) e `ThresholdPhase` (pós-processamento).
@@ -37,7 +37,7 @@ Na raiz do projeto, execute o script automatizado que limpa o cache, inicia o Pe
 ./run_perfetto_trace.sh
 ```
 
-### Passo 2: Analisar no Perfetto UI
+### Passo 2: Analisar no Perfetto UIººººººººº]]]]]ºººººº]]]]]ººº}}}
 1.  Acesse [ui.perfetto.dev](https://ui.perfetto.dev/).
 2.  Arraste o arquivo `.perfetto-trace` gerado para a página.
 3.  Use as queries SQL abaixo na aba **Query (SQL)** para extrair métricas precisas.
@@ -58,7 +58,7 @@ SELECT
   ROUND(SUM(dur)/1000000.0, 3) as Tempo_Total_Gasto_ms,
   CASE 
     WHEN name LIKE 'AudioExtractor.%' THEN 'Áudio (Arquivo)'
-    WHEN name LIKE 'AudioDataExtractor.%' THEN 'Áudio (Waveform)'
+    WHEN name LIKE 'WaveformExtractor.%' THEN 'Áudio (Waveform)'
     WHEN name LIKE 'TSM.%' THEN 'Thumbnails'
     ELSE 'Outros'
   END as Categoria
@@ -72,10 +72,10 @@ ORDER BY Tempo_Total_Gasto_ms DESC;
 
 | Operacao | Total_Chamadas | Min_ms | Max_ms | Media_ms | Tempo_Total_Gasto_ms | Categoria |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| AudioDataExtractor.extractRawPcmData | 1 | 1431.311 | 1431.311 | 1431.311 | 1431.311 | Áudio (Waveform) |
-| AudioDataExtractor.DecodeLoop | 1 | 1259.793 | 1259.793 | 1259.793 | 1259.793 | Áudio (Waveform) |
-| AudioDataExtractor.Setup | 1 | 104.222 | 104.222 | 104.222 | 104.222 | Áudio (Waveform) |
-| AudioDataExtractor.ThresholdPhase | 1 | 66.782 | 66.782 | 66.782 | 66.782 | Áudio (Waveform) |
+| WaveformExtractor.extractRawPcmData | 1 | 1431.311 | 1431.311 | 1431.311 | 1431.311 | Áudio (Waveform) |
+| WaveformExtractor.DecodeLoop | 1 | 1259.793 | 1259.793 | 1259.793 | 1259.793 | Áudio (Waveform) |
+| WaveformExtractor.Setup | 1 | 104.222 | 104.222 | 104.222 | 104.222 | Áudio (Waveform) |
+| WaveformExtractor.ThresholdPhase | 1 | 66.782 | 66.782 | 66.782 | 66.782 | Áudio (Waveform) |
 
 **Análise:** Uma redução massiva de **8.2s** para **1.4s** (~83% de ganho de performance). O `seekTo` permitiu que o MediaCodec processasse apenas os frames necessários, eliminando o gargalo de decodificação linear. 🚀
 
@@ -89,7 +89,7 @@ ORDER BY Tempo_Total_Gasto_ms DESC;
 
 | Operacao | Total_Chamadas | Min_ms | Max_ms | Media_ms | Tempo_Total_Gasto_ms | Categoria |
 | --- | --- | --- | --- | --- | --- | --- |
-| AudioDataExtractor.extractRawPcmData | 1 | 1431.311 | 1431.311 | 1431.311 | 1431.311 | Áudio (Waveform) |
-| AudioDataExtractor.DecodeLoop | 1 | 1259.793 | 1259.793 | 1259.793 | 1259.793 | Áudio (Waveform) |
-| AudioDataExtractor.Setup | 1 | 104.222 | 104.222 | 104.222 | 104.222 | Áudio (Waveform) |
-| AudioDataExtractor.ThresholdPhase | 1 | 66.782 | 66.782 | 66.782 | 66.782 | Áudio (Waveform) |
+| WaveformExtractor.extractRawPcmData | 1 | 1431.311 | 1431.311 | 1431.311 | 1431.311 | Áudio (Waveform) |
+| WaveformExtractor.DecodeLoop | 1 | 1259.793 | 1259.793 | 1259.793 | 1259.793 | Áudio (Waveform) |
+| WaveformExtractor.Setup | 1 | 104.222 | 104.222 | 104.222 | 104.222 | Áudio (Waveform) |
+| WaveformExtractor.ThresholdPhase | 1 | 66.782 | 66.782 | 66.782 | 66.782 | Áudio (Waveform) |

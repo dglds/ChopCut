@@ -26,9 +26,9 @@
 
 ---
 
-## [PERF] Setup do AudioDataExtractor acima do KPI
+## [PERF] Setup do WaveformExtractor acima do KPI
 
-**Arquivo:** `data/audio/AudioDataExtractor.kt`
+**Arquivo:** `data/audio/WaveformExtractor.kt`
 
 **Contexto:** Medição via Perfetto mostrou setup em **104ms**, acima do KPI definido de < 80ms. O setup inclui instanciação e configuração do MediaCodec.
 
@@ -45,7 +45,7 @@
 
 ## [PERF] DecodeLoop não testado com vídeos longos
 
-**Arquivo:** `data/audio/AudioDataExtractor.kt`
+**Arquivo:** `data/audio/WaveformExtractor.kt`
 
 **Contexto:** O DecodeLoop levou 1.26s com `step 4` (processa 1 a cada 4 amostras). Vídeo testado tinha duração desconhecida. Para vídeos de 5–15 minutos, o tempo pode escalar para 10s+, bloqueando a entrada no editor.
 
@@ -63,11 +63,11 @@
 
 **Arquivo:** `data/audio/AudioExtractor.kt`
 
-**Contexto:** O `AudioExtractor` faz remuxing do áudio para um arquivo temporário antes da decodificação pelo `AudioDataExtractor`. Esse passo **não apareceu** nos resultados do trace — ou o trace foi capturado sem cobrir essa etapa, ou os blocos de instrumentação não estão sendo emitidos corretamente.
+**Contexto:** O `AudioExtractor` faz remuxing do áudio para um arquivo temporário antes da decodificação pelo `WaveformExtractor`. Esse passo **não apareceu** nos resultados do trace — ou o trace foi capturado sem cobrir essa etapa, ou os blocos de instrumentação não estão sendo emitidos corretamente.
 
 Se o remux for um gargalo oculto, o tempo real de "abertura do editor" é maior do que os 1.4s medidos.
 
 **Steps:**
 - [ ] Verificar se os traces `AudioExtractor.Setup` e `AudioExtractor.CopyTrack` estão sendo emitidos no Perfetto
 - [ ] Capturar trace cobrindo todo o fluxo desde a seleção do vídeo até o editor aberto
-- [ ] Se remux > 200ms: avaliar eliminar o passo e passar o URI original diretamente ao `AudioDataExtractor`
+- [ ] Se remux > 200ms: avaliar eliminar o passo e passar o URI original diretamente ao `WaveformExtractor`

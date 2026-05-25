@@ -4,7 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.chopcut.data.audio.AudioDataExtractor
+import com.chopcut.data.audio.WaveformExtractor
 import com.chopcut.data.audio.WaveformQuality
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +23,7 @@ class AudioWaveFormsViewModel(application: Application) : AndroidViewModel(appli
     private val _uiState = MutableStateFlow<AudioWaveFormsUiState>(AudioWaveFormsUiState.Idle)
     val uiState: StateFlow<AudioWaveFormsUiState> = _uiState.asStateFlow()
 
-    private val audioDataExtractor = AudioDataExtractor(application)
+    private val waveformExtractor = WaveformExtractor(application)
 
     /**
      * Carrega o waveform do vídeo
@@ -40,7 +40,7 @@ class AudioWaveFormsViewModel(application: Application) : AndroidViewModel(appli
 
             try {
 
-                val rawData = audioDataExtractor.extractRawPcmData(
+                val rawData = waveformExtractor.extractRawPcmData(
                     uri = uri,
                     targetBarCount = targetBarCount
                 )

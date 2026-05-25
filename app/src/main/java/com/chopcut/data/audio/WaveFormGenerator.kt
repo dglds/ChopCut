@@ -43,12 +43,16 @@ object WaveFormGenerator {
         quality: WaveformQuality = WaveformQuality.Medium,
         threshold: Float = 0.03f,
         silenceHeight: Float? = null
-    ): List<Float> {
-        if (pcmSamples.isEmpty()) return emptyList()
+    ): FloatArray {
+        if (pcmSamples.isEmpty()) {
+            timber.log.Timber.w("WaveFormGenerator: pcmSamples is empty, returning empty array")
+            return floatArrayOf()
+        }
 
         val maxBars = barCount.coerceIn(10, quality.calculateBarCount(Long.MAX_VALUE, 1000f))
         val samplesPerBar = maxOf(1, pcmSamples.size / maxBars)
-        val downsampled = mutableListOf<Float>()
+        val downsampled = FloatArray(maxBars)
+        var barsAdded = 0
 
         val dynamicSilenceHeight = calculateDynamicSilenceHeight(pcmSamples, threshold)
 
@@ -67,11 +71,11 @@ object WaveFormGenerator {
             
             samplesInChunk++
 
-            if (samplesInChunk >= samplesPerBar) {
-                if (chunkHasPico) {
-                    downsampled.add(currentChunkMax)
+            if (samplesInChunk >= samplesPerBar && barsAdded < maxBars) {
+                downsampled[barsAdded++] = if (chunkHasPico) {
+                    currentChunkMax
                 } else {
-                    downsampled.add(silenceHeight ?: dynamicSilenceHeight)
+                    silenceHeight ?: dynamicSilenceHeight
                 }
                 currentChunkMax = 0f
                 samplesInChunk = 0
@@ -79,14 +83,16 @@ object WaveFormGenerator {
             }
         }
 
-        if (samplesInChunk > 0) {
-            if (chunkHasPico) {
-                downsampled.add(currentChunkMax)
+        // Preencher o restante se sobrar algo
+        if (samplesInChunk > 0 && barsAdded < maxBars) {
+            downsampled[barsAdded++] = if (chunkHasPico) {
+                currentChunkMax
             } else {
-                downsampled.add(silenceHeight ?: dynamicSilenceHeight)
+                silenceHeight ?: dynamicSilenceHeight
             }
         }
 
+        timber.log.Timber.d("WaveFormGenerator: Generated $barsAdded bars from ${pcmSamples.size} samples")
         return downsampled
     }
 
@@ -107,7 +113,7 @@ object WaveFormGenerator {
         screenWidthDp: Float = 400f,
         threshold: Float = 0.03f,
         silenceHeight: Float? = null
-    ): List<Float> {
+    ): FloatArray {
         val barCount = quality.calculateBarCount(durationMs, screenWidthDp)
         return generateWaveform(pcmSamples, barCount, quality, threshold, silenceHeight)
     }

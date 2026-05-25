@@ -1,5 +1,6 @@
 package com.chopcut.util
 
+import timber.log.Timber
 
 object TimeTracker {
     fun start(operation: String): TimeToken = TimeToken(operation)
@@ -7,9 +8,10 @@ object TimeTracker {
     class TimeToken(private val operation: String) {
         private val startMs = System.currentTimeMillis()
 
-        fun end() {
+        fun end(): Long {
             val elapsedMs = System.currentTimeMillis() - startMs
-            val elapsedSec = elapsedMs / 1000.0
+            Timber.d("⏱ %s: %dms (%.2fs)", operation, elapsedMs, elapsedMs / 1000.0)
+            return elapsedMs
         }
     }
 }

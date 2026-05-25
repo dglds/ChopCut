@@ -14,9 +14,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chopcut.ui.viewmodel.VideoTimelineViewModel
+import com.chopcut.ui.components.waveform.WaveformRenderer
 import com.chopcut.util.TimeUtils
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -41,6 +43,8 @@ fun VideoTimeline(
 ) {
     val context = LocalContext.current
     val density = androidx.compose.ui.platform.LocalDensity.current
+
+    timber.log.Timber.d("VideoTimeline: received ${audioAmplitudes.size} audio amplitudes, showWaveform=$showWaveform, durationMs=$durationMs")
     
     // ESCALA: 60dp por segundo (referência da tela antiga)
     val pxPerSecond = with(density) { 60.dp.toPx() }
@@ -96,7 +100,17 @@ fun VideoTimeline(
     }
     val srcRect = remember { android.graphics.Rect() }
     val dstRect = remember { android.graphics.Rect() }
-    val waveCornerRadius = remember { androidx.compose.ui.geometry.CornerRadius(2f, 2f) }
+
+    // Waveform — estilo CapCut/InShot: barras finas espelhadas, cor única neutra,
+    // só a altura comunica amplitude (sem variação de alpha).
+    val waveBarWidthPx = with(density) { 2.5.dp.toPx() }
+    val waveBarGapPx = with(density) { 2.dp.toPx() }
+    val waveBarStepPx = waveBarWidthPx + waveBarGapPx
+    val waveMinHeightPx = with(density) { 1.5.dp.toPx() }
+    val waveColor = remember { Color.White.copy(alpha = 0.55f) }
+    val waveCornerRadius = remember(waveBarWidthPx) {
+        androidx.compose.ui.geometry.CornerRadius(waveBarWidthPx / 2f, waveBarWidthPx / 2f)
+    }
 
     // Posição local usada durante o arraste — evita depender do parâmetro externo
     // (que pode ser sobrescrito pelo poll do ExoPlayer a cada 100ms)
@@ -108,6 +122,15 @@ fun VideoTimeline(
         if (!isScrubbing) {
             localPositionMs = currentPositionMs
         }
+    }
+
+    // O cálculo de windowPeak deve ser estável. 
+    val globalPeak = remember(audioAmplitudes) {
+        var max = 0.01f
+        for (i in audioAmplitudes.indices) {
+            if (audioAmplitudes[i] > max) max = audioAmplitudes[i]
+        }
+        max
     }
 
     BoxWithConstraints(
@@ -145,6 +168,7 @@ fun VideoTimeline(
                 }
         }
 
+        // Thumbnails + Ruler Canvas
         androidx.compose.foundation.Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -230,63 +254,7 @@ fun VideoTimeline(
                 }
             }
 
-            // 3. DESENHAR WAVEFORM
-            if (showWaveform && audioAmplitudes.isNotEmpty()) {
-                val waveTop = thumbTop + thumbHeightPx + 4.dp.toPx()
-                val barWidth = 3.dp.toPx()
-                val barStep = barWidth + 1.dp.toPx()
-                val samplesPerSecond = audioAmplitudes.size.toFloat() / (durationMs / 1000f)
-                val waveCenter = waveTop + waveformHeightPx / 2f
-                val halfMax = waveformHeightPx / 2f
-
-                val startSecVisible = (currentScrollPx - centerOffset) / pxPerSecond
-                val endSecVisible = (currentScrollPx - centerOffset + width) / pxPerSecond
-
-                val startSampleIdx = (startSecVisible * samplesPerSecond).toInt().coerceAtLeast(0)
-                val endSampleIdx = (endSecVisible * samplesPerSecond).toInt().coerceAtMost(audioAmplitudes.size - 1)
-
-                // Normalizar pelo pico da janela visível — loop manual sem alocação de List
-                var windowPeak = 0f
-                for (idx in startSampleIdx..endSampleIdx) {
-                    val v = audioAmplitudes[idx]
-                    if (v > windowPeak) windowPeak = v
-                }
-                val normFactor = if (windowPeak > 0.05f) windowPeak else 1f
-
-                // Iterar por posição em pixels (passo fixo) — densidade visual constante
-                // independente de quantos samples/s o áudio tem
-                val xStart = startX + (startSampleIdx / samplesPerSecond) * pxPerSecond
-                val xEnd = startX + (endSampleIdx / samplesPerSecond) * pxPerSecond
-                var x = xStart
-                while (x <= xEnd) {
-                    val timeSec = (x - startX) / pxPerSecond
-                    val sampleIdx = (timeSec * samplesPerSecond).toInt().coerceIn(0, audioAmplitudes.size - 1)
-                    val sample = audioAmplitudes[sampleIdx]
-                    val normalizedSample = (sample / normFactor).coerceIn(0f, 1f)
-
-                    val h = (normalizedSample * halfMax).coerceAtLeast(1.dp.toPx())
-                    val barAlpha = 0.4f + normalizedSample * 0.6f
-
-                    // Barra superior
-                    drawRoundRect(
-                        color = Color(0xFF00E5FF),
-                        topLeft = androidx.compose.ui.geometry.Offset(x, waveCenter - h),
-                        size = androidx.compose.ui.geometry.Size(barWidth, h),
-                        cornerRadius = waveCornerRadius,
-                        alpha = barAlpha
-                    )
-                    // Barra inferior (espelho)
-                    drawRoundRect(
-                        color = Color(0xFF00E5FF),
-                        topLeft = androidx.compose.ui.geometry.Offset(x, waveCenter),
-                        size = androidx.compose.ui.geometry.Size(barWidth, h),
-                        cornerRadius = waveCornerRadius,
-                        alpha = barAlpha * 0.6f
-                    )
-
-                    x += barStep
-                }
-            }
+            // Waveform agora é renderizado externamente via WaveformRenderer
         }
 
         // PLAYHEAD FIXO NO CENTRO
@@ -301,5 +269,40 @@ fun VideoTimeline(
                     )
                 )
         )
+
+        // Waveform como overlay acima das thumbnails
+        if (showWaveform && audioAmplitudes.isNotEmpty()) {
+            timber.log.Timber.d("VideoTimeline: rendering waveform with ${audioAmplitudes.size} amplitudes")
+            TimelineWaveform(
+                amplitudes = audioAmplitudes,
+                durationMs = durationMs,
+                height = with(density) { waveformHeightPx.toDp() }
+            )
+        }
     }
+}
+
+@Composable
+private fun TimelineWaveform(
+    amplitudes: List<Float>,
+    durationMs: Long,
+    height: Dp
+) {
+    if (amplitudes.isEmpty()) return
+
+    val floatArray = remember(amplitudes) {
+        FloatArray(amplitudes.size) { amplitudes[it] }
+    }
+
+    WaveformRenderer(
+        amplitudes = floatArray,
+        modifier = Modifier.height(height),
+        barWidth = 2.5.dp,
+        barGap = 1.dp,
+        minHeight = 1.5.dp,
+        color = Color.White.copy(alpha = 0.55f),
+        mirrored = true,
+        baseline = com.chopcut.ui.components.waveform.WaveformBaseline.Center,
+        animate = false
+    )
 }

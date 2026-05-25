@@ -4,7 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.chopcut.data.audio.AudioDataExtractor
+import com.chopcut.data.audio.WaveformExtractor
 import com.chopcut.data.audio.WaveformConfig
 import com.chopcut.data.audio.WaveformPreset
 import com.chopcut.ui.components.waveform.WaveformData
@@ -40,7 +40,7 @@ class WaveformTestViewModel(application: Application) : AndroidViewModel(applica
     private val _state = MutableStateFlow(WaveformTestUiState())
     val state: StateFlow<WaveformTestUiState> = _state.asStateFlow()
 
-    private val audioDataExtractor = AudioDataExtractor(application)
+    private val waveformExtractor = WaveformExtractor(application)
     
     private var baselineUri: Uri? = null
     private var baselineConfig: WaveformConfig? = null
@@ -70,13 +70,13 @@ class WaveformTestViewModel(application: Application) : AndroidViewModel(applica
             try {
                 val startTime = System.currentTimeMillis()
                 
-                val rawData = audioDataExtractor.extractRawPcmData(uri)
+                val rawData = waveformExtractor.extractRawPcmData(uri)
                 
                 val endTime = System.currentTimeMillis()
                 val extractionTimeMs = endTime - startTime
                 
                 val waveformData = WaveformData(
-                    amplitudes = rawData.pcmSamples.toList(),
+                    amplitudes = rawData.pcmSamples,
                     sampleRate = rawData.sampleRate,
                     durationMs = rawData.durationMs
                 )

@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun WaveForm(
-    amplitudes: List<Float>,
+    amplitudes: FloatArray,
     maxAmp: Float = 0.5f,
     avgAmp: Float = 0.1f,
     style: WaveformStyle = WaveformStyle(),
@@ -215,13 +215,30 @@ fun WaveForm(
  * Modelo de dados do Waveform
  */
 data class WaveformData(
-    val amplitudes: List<Float>,
+    val amplitudes: FloatArray,
     val sampleRate: Int,
     val durationMs: Long
 ) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as WaveformData
+        if (!amplitudes.contentEquals(other.amplitudes)) return false
+        if (sampleRate != other.sampleRate) return false
+        if (durationMs != other.durationMs) return false
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = amplitudes.contentHashCode()
+        result = 31 * result + sampleRate
+        result = 31 * result + durationMs.hashCode()
+        return result
+    }
+
     companion object {
         fun empty() = WaveformData(
-            amplitudes = emptyList(),
+            amplitudes = floatArrayOf(),
             sampleRate = 44100,
             durationMs = 0
         )

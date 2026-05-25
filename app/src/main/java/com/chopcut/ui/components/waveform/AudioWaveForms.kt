@@ -15,7 +15,7 @@ import androidx.compose.ui.geometry.CornerRadius
 /**
  * Componente de visualização de áudio com barras verticais
  *
- * Utiliza os dados extraídos pelo AudioDataExtractor para renderizar
+ * Utiliza os dados extraídos pelo WaveformExtractor para renderizar
  * uma representação visual do áudio em forma de barras verticais.
  *
  * @param amplitudes Lista de amplitudes normalizadas (0.0 a 1.0)

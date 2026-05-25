@@ -6,7 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.chopcut.data.audio.AudioDataExtractor
+
 import com.chopcut.util.DispatcherProvider
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import timber.log.Timber
 
 /**
  * ViewModel coordenadora para preparação de vídeo.
@@ -65,9 +67,7 @@ class PreloadViewModel(
     private var thumbnailJob: Job? = null
     
     // ========== DEPENDÊNCIAS ==========
-    
-    private val audioDataExtractor = AudioDataExtractor(application)
-    
+
     // ========== MÉTODOS PÚBLICOS ==========
     
     /**
@@ -112,26 +112,29 @@ class PreloadViewModel(
                     thumbnailsTotal = 0
                 ))
                 
-                // Configurar ThumbnailViewModel (obter metadados, carregar strips on-demand)
+// Configurar ThumbnailViewModel (obter metadados, carregar strips on-demand)
                 val thumbnailSetupJob = launch {
                     thumbnailVM.preload(uri)
                     thumbnailVM.uiState.first { it is ThumbnailViewModel.ThumbnailUiState.Ready }
                 }
 
-                /* 
-                // Áudio não é pré-carregado (on-demand no EditorScreen)
-                // Isso maximiza performance de abertura do editor
-                */
+                // Áudio é pré-carregado em paralelo com thumbnails (background)
+                // Isso reduce ~17s para ~2s quando o editor abre
+                val audioJob = launch {
+                    audioVM.loadWaveform(uri)
+                }
 
-                // Observar progresso de thumbnails para UI
+                // Observar progresso de thumbnails para UI + áudio
                 thumbnailJob = launch {
                     thumbnailVM.thumbnailProgress.collect { progress ->
-                        val percent = (progress * 100).toInt()
                         _uiState.update { currentState ->
                              if (currentState is PreloadUiState.Loading) {
+                                 // Verificar se áudio está pronto
+                                 val audioPercent = if (audioVM.amplitudes.value.isNotEmpty()) 100 else 0
                                  currentState.copy(progress = currentState.progress.copy(
-                                     stage = ExtractionStage.ExtractingThumbnails,
-                                     thumbnailPercent = percent,
+                                     stage = if (audioPercent < 100) ExtractionStage.ExtractingAudio else ExtractionStage.ExtractingThumbnails,
+                                     audioPercent = audioPercent,
+                                     thumbnailPercent = (progress * 100).toInt(),
                                      thumbnailsExtracted = thumbnailVM.strips.value.size,
                                      thumbnailsTotal = thumbnailVM.totalSegments.value
                                  ))
@@ -143,8 +146,17 @@ class PreloadViewModel(
                 // AGUARDAR: Liberamos o acesso assim que o thumbnailSetupJob terminar (apenas metadados)
                 // Thumbnails são carregadas on-demand quando o usuário rola a timeline
                 thumbnailSetupJob.join()
-                
-                // Marcar como Ready (apenas metadados, strips vazias para on-demand)
+
+                // AGUARDAR áudio também (até 5s ou até estar pronto)
+                val audioAmplitudes = withTimeoutOrNull(5000) {
+                    audioVM.amplitudes.first { it.isNotEmpty() }
+                }
+
+                // Áudio carregado está em audioVM.amplitudes
+                val amplitudesList = audioAmplitudes?.toList() ?: emptyList()
+
+                // Áudio carregado está em audioVM.amplitudes
+                // Marcar como Ready
                 val preloadedData = PreloadedData(
                     videoInfo = com.chopcut.data.model.VideoInfo(
                         uri = uri,
@@ -158,10 +170,10 @@ class PreloadViewModel(
                         frameRate = 30,
                         videoCodec = null,
                         audioCodec = null,
-                        hasAudio = true, // Assumimos que tem áudio para não bloquear
+                        hasAudio = true,
                         sizeBytes = 0
                     ),
-                    audioAmplitudes = emptyList(),
+                    audioAmplitudes = amplitudesList,
                     preloadedStrips = emptyMap(),
                     totalSegments = thumbnailVM.totalSegments.value,
                     preloadPercentage = 1f
