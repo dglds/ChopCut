@@ -93,3 +93,15 @@ ORDER BY Tempo_Total_Gasto_ms DESC;
 | WaveformExtractor.DecodeLoop | 1 | 1259.793 | 1259.793 | 1259.793 | 1259.793 | Áudio (Waveform) |
 | WaveformExtractor.Setup | 1 | 104.222 | 104.222 | 104.222 | 104.222 | Áudio (Waveform) |
 | WaveformExtractor.ThresholdPhase | 1 | 66.782 | 66.782 | 66.782 | 66.782 | Áudio (Waveform) |
+
+---
+
+## ⚠️ Requisitos e Restrições de Projeto / Teste
+
+> [!IMPORTANT]
+> **Manter o Cache de Áudio Desativado (`cacheEnabled = false`)**:
+> Por diretriz estrita do projeto (definida pelo Chefe/Liderança), o cache de áudio em disco em `AudioViewModel.kt` **deve permanecer obrigatoriamente desativado**.
+> 
+> * **Motivo**: Garantir que as sessões de perfilamento, testes de performance e instrumentação via Perfetto meçam a latência real e crua da extração e decodificação de mídia de forma íntegra, evitando "falsos positivos" ou medições distorcidas por cache hits.
+> * **Ação**: Esta configuração é imutável e não deve ser alterada ou ativada sob nenhuma hipótese durante esta fase de homologação.
+

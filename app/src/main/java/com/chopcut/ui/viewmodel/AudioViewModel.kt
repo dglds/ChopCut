@@ -77,8 +77,9 @@ class AudioViewModel(
                 // OTIMIZAÇÃO: Densidade dinâmica (20 barras/seg) via extractor
                 val barCount = targetBarCount ?: -1
 
-                // TEMP: cache desativado para medir extração crua no logcat.
-                // Reativar mudando para true quando quiser revalidar o cache HIT.
+                // RESTRIÇÃO ARQUITETURAL CRÍTICA: O cache deve permanecer OBRIGATORIAMENTE desativado (cacheEnabled = false).
+                // Requisito oficial do projeto para evitar "falsos positivos" durante os testes e perfilamento
+                // da performance crua de extração da mídia. NÃO alterar para true.
                 val cacheEnabled = false
                 val cacheFile = if (cacheEnabled) WaveformCache.fileFor(getApplication(), uri) else null
                 val cached = cacheFile?.let { WaveformCache.read(it) }
