@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -57,9 +58,9 @@ fun VideoPreview(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+            .clip(androidx.compose.foundation.shape.RectangleShape)
             .background(Color.Black)
-            .border(0.5.dp, Color.White.copy(alpha = 0.1f), androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+            .border(0.5.dp, Color.White.copy(alpha = 0.1f), androidx.compose.foundation.shape.RectangleShape)
     ) {
         if (playerError != null) {
             VideoErrorState(
@@ -207,7 +208,7 @@ private fun VideoControls(
             IconButton(
                 onClick = onTogglePlayPause,
                 modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
+                    .background(Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.RectangleShape)
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,

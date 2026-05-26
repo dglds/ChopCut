@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.ui.theme.ChopCutSpacing
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,7 +30,7 @@ fun WaveformConfigPanel(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+        shape = androidx.compose.foundation.shape.RectangleShape
     ) {
         Row(
             modifier = Modifier

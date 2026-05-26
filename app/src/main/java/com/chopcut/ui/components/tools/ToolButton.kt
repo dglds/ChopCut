@@ -6,8 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.FilterList
@@ -26,6 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.ui.theme.Primary
 
 /**
@@ -58,7 +58,7 @@ fun ToolButton(
                 .size(48.dp)
                 .then(
                     if (isActive) {
-                        Modifier.clip(CircleShape)
+                        Modifier.clip(RectangleShape)
                             .background(MaterialTheme.colorScheme.primaryContainer)
                     } else {
                         Modifier
@@ -84,7 +84,7 @@ fun ToolButton(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .size(8.dp)
-                    .clip(CircleShape)
+                    .clip(RectangleShape)
                     .background(Primary)
             )
         }

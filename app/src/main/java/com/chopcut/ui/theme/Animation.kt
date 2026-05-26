@@ -13,9 +13,9 @@ import androidx.compose.runtime.Composable
  * Baseado em Material Motion com ajustes para editor de vídeo
  */
 object ChopCutAnimation {
-    const val Fast = 150      // Micro-interações (hover, press)
-    const val Normal = 250    // Transições padrão (abrir/fechar)
-    const val Slow = 350      // Transições complexas (mudança de tela)
+    const val Fast = 50       // Micro-interações instantâneas
+    const val Normal = 100    // Transições padrão
+    const val Slow = 150      // Transições de tela
 }
 
 /**
@@ -23,19 +23,17 @@ object ChopCutAnimation {
  */
 object ChopCutEasing {
     /**
-     * Padrão para a maioria das animações
-     * Entra rápido, sai devagar
+     * Padrão agora é linear para sensação brutalista e seca
      */
-    val Standard = FastOutSlowInEasing
+    val Standard = LinearEasing
 
     /**
-     * Para transições de entrada (emphasized)
-     * Movimento mais dramático
+     * Transições diretas
      */
-    val Emphasized = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
+    val Emphasized = LinearEasing
 
     /**
-     * Para animações que não devem desacelerar
+     * Linear puro
      */
     val Linear = LinearEasing
 

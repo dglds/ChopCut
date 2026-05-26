@@ -7,7 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCut
@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.RectangleShape
 
 enum class TrimActionState {
     CUT,
@@ -99,7 +100,7 @@ private fun TrimActionIconButton(
                 modifier = Modifier
                     .size(64.dp)
                     .scale(pulseScale)
-                    .background(config.backgroundColor.copy(alpha = 0.4f), CircleShape)
+                    .background(config.backgroundColor.copy(alpha = 0.4f), RectangleShape)
             )
         }
 
@@ -107,10 +108,10 @@ private fun TrimActionIconButton(
             onClick = onClick,
             modifier = modifier
                 .size(64.dp)
-                .background(animatedBgColor, CircleShape)
+                .background(animatedBgColor, RectangleShape)
                 .then(
                     if (actionState == TrimActionState.CONFIRM) {
-                        Modifier.border(2.dp, Color.White.copy(alpha = borderAlpha), CircleShape)
+                        Modifier.border(2.dp, Color.White.copy(alpha = borderAlpha), RectangleShape)
                     } else Modifier
                 ),
             colors = IconButtonDefaults.iconButtonColors(

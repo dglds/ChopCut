@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -14,6 +13,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.ui.theme.ChopCutSpacing
 import com.chopcut.ui.theme.Playhead
 import com.chopcut.ui.theme.TimelineBackground
@@ -42,7 +42,7 @@ fun WaveformView(
         modifier = modifier
             .fillMaxWidth()
             .height(ChopCutSpacing.waveformHeight)
-            .background(backgroundColor, RoundedCornerShape(4.dp))
+            .background(backgroundColor, RectangleShape)
     ) {
         val width = size.width
         val height = size.height
@@ -124,7 +124,7 @@ fun SimpleWaveformView(
         modifier = modifier
             .fillMaxWidth()
             .height(ChopCutSpacing.waveformHeight)
-            .background(backgroundColor, RoundedCornerShape(4.dp))
+            .background(backgroundColor, RectangleShape)
     ) {
         val width = size.width
         val height = size.height

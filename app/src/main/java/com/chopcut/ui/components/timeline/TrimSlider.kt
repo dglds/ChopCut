@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.ui.theme.ChopCutSpacing
 import com.chopcut.ui.theme.OnSurface
 import com.chopcut.ui.theme.Playhead
@@ -173,20 +174,20 @@ private fun TrimHandle(
                 .size(ChopCutSpacing.trimHandleSize)
                 .background(
                     if (isDragging) Playhead else Surface,
-                    CircleShape
+                    RectangleShape
                 )
                 .then(
                     if (isDragging) {
                         Modifier.border(
                             2.dp,
                             OnSurface,
-                            CircleShape
+                            RectangleShape
                         )
                     } else {
                         Modifier.border(
                             2.dp,
                             Playhead.copy(alpha = 0.5f),
-                            CircleShape
+                            RectangleShape
                         )
                     }
                 )
@@ -261,12 +262,12 @@ fun PositionSlider(
                     .size(20.dp)
                     .background(
                         if (isDragging) Playhead else Surface,
-                        CircleShape
+                        RectangleShape
                     )
                     .border(
                         2.dp,
                         Playhead,
-                        CircleShape
+                        RectangleShape
                     )
             )
         }

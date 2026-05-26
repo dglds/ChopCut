@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -21,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.graphics.RectangleShape
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -140,7 +140,7 @@ fun ThemeEditorDialog(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
                 .fillMaxHeight(0.7f),
-            shape = RoundedCornerShape(16.dp),
+            shape = RectangleShape,
             color = Color(0xFF1E1E1E),
             border = androidx.compose.foundation.BorderStroke(
                 1.dp,
@@ -301,7 +301,7 @@ private fun SettingRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF2A2A2A), RoundedCornerShape(8.dp))
+            .background(Color(0xFF2A2A2A), RectangleShape)
             .padding(16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -316,11 +316,11 @@ private fun SettingRow(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(value, RoundedCornerShape(8.dp))
+                .background(value, RectangleShape)
                 .border(
                     1.dp,
                     Color(0xFF444444),
-                    RoundedCornerShape(8.dp)
+                    RectangleShape
                 )
                 .clickable {
                 }
@@ -337,7 +337,7 @@ private fun FontSizeSetting(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF2A2A2A), RoundedCornerShape(8.dp))
+            .background(Color(0xFF2A2A2A), RectangleShape)
             .padding(16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -379,7 +379,7 @@ private fun ToggleSetting(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF2A2A2A), RoundedCornerShape(8.dp))
+            .background(Color(0xFF2A2A2A), RectangleShape)
             .padding(16.dp)
             .clickable { onValueChange(!value) },
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -414,7 +414,7 @@ private fun GlowIntensitySetting(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF2A2A2A), RoundedCornerShape(8.dp))
+            .background(Color(0xFF2A2A2A), RectangleShape)
             .padding(16.dp)
     ) {
         Row(

@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMerge
 import androidx.compose.material.icons.filled.AspectRatio
@@ -78,6 +77,7 @@ import com.chopcut.ui.components.buttons.ChopCutPrimaryButton
 import com.chopcut.ui.components.buttons.ChopCutSecondaryButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.ui.components.feedback.ErrorState
 import com.chopcut.ui.components.gallery.BottomSheetGallery
 import com.chopcut.ui.theme.Border
@@ -256,7 +256,7 @@ private fun VideoPickerEmpty(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .height(280.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RectangleShape)
             .background(SurfaceVariant)
             .clickable(onClick = onClick)
             .padding(ChopCutSpacing.md),
@@ -268,7 +268,7 @@ private fun VideoPickerEmpty(onClick: () -> Unit) {
                 .size(72.dp)
                 .background(
                     Primary.copy(alpha = 0.12f),
-                    RoundedCornerShape(16.dp)
+                    RectangleShape
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -298,7 +298,7 @@ private fun VideoPickerEmpty(onClick: () -> Unit) {
                 .padding(horizontal = ChopCutSpacing.lg)
                 .fillMaxWidth()
                 .height(40.dp)
-                .background(Primary, RoundedCornerShape(12.dp)),
+                .background(Primary, RectangleShape),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -328,7 +328,7 @@ private fun VideoPickerLoading() {
         modifier = Modifier
             .fillMaxWidth()
             .height(280.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RectangleShape)
             .background(SurfaceVariant),
         contentAlignment = Alignment.Center
     ) {
@@ -370,7 +370,7 @@ private fun VideoPickerLoaded(
         modifier = Modifier
             .fillMaxWidth()
             .height(280.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RectangleShape)
             .background(SurfaceVariant)
     ) {
         Image(
@@ -447,7 +447,7 @@ private fun VideoPickerLoaded(
                     modifier = Modifier
                         .weight(1f)
                         .height(40.dp)
-                        .background(Primary, RoundedCornerShape(12.dp))
+                        .background(Primary, RectangleShape)
                         .clickable(onClick = onOpenEditor),
                     contentAlignment = Alignment.Center
                 ) {
@@ -483,7 +483,7 @@ private fun VideoPickerLoaded(
                         .width(80.dp)
                         .background(
                             Color.White.copy(alpha = 0.2f),
-                            RoundedCornerShape(12.dp)
+                            RectangleShape
                         )
                         .clickable(onClick = onChangeVideo),
                     contentAlignment = Alignment.Center
@@ -501,7 +501,7 @@ private fun VideoPickerLoaded(
                         .width(50.dp)
                         .background(
                             Color.Red.copy(alpha = 0.8f),
-                            RoundedCornerShape(12.dp)
+                            RectangleShape
                         )
                         .clickable(onClick = onRemoveVideo),
                     contentAlignment = Alignment.Center
@@ -531,7 +531,7 @@ private fun CacheFeatureCard(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RectangleShape)
             .background(Surface)
             .padding(ChopCutSpacing.sm),
         horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm),
@@ -596,7 +596,7 @@ private fun BadgeText(
         modifier = modifier
             .background(
                 color = Color.Black.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(4.dp)
+                shape = RectangleShape
             )
             .padding(horizontal = 6.dp, vertical = 2.dp)
     )

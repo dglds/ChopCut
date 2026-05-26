@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.util.debug.LogLevel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -117,14 +118,14 @@ fun ConsoleLine(
             modifier = containerModifier
                 .background(
                     color = theme.backgroundColor.copy(alpha = 0.9f),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                    shape = androidx.compose.foundation.shape.RectangleShape
                 )
                 .border(
                     width = 1.dp,
                     color = theme.textColor.copy(alpha = 0.2f),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                    shape = androidx.compose.foundation.shape.RectangleShape
                 )
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                .clip(androidx.compose.foundation.shape.RectangleShape)
                 .pointerInput(Unit) {
                     detectDragGestures { _, dragAmount ->
                         val verticalDrag = dragAmount.y
@@ -287,7 +288,7 @@ fun ConsoleLine(
                             .alpha(alpha)
                             .background(
                                 color = theme.textColor,
-                                shape = CircleShape
+                                shape = RectangleShape
                             )
                             .align(androidx.compose.ui.Alignment.TopEnd)
                     )

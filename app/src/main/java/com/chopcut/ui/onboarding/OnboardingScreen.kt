@@ -5,8 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -20,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.RectangleShape
 import kotlinx.coroutines.launch
 
 data class OnboardingPage(
@@ -102,7 +102,7 @@ fun OnboardingScreen(
                 Box(
                     modifier = Modifier
                         .size(if (isSelected) 12.dp else 8.dp)
-                        .clip(CircleShape)
+                        .clip(RectangleShape)
                         .background(
                             if (isSelected) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.surfaceVariant
@@ -166,7 +166,7 @@ fun OnboardingPageContent(page: OnboardingPage) {
         Box(
             modifier = Modifier
                 .size(200.dp)
-                .clip(CircleShape)
+                .clip(RectangleShape)
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {

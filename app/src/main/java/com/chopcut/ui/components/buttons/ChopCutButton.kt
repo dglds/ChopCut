@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.ui.theme.ChopCutTypography
 import com.chopcut.ui.theme.PressedAlpha
 import com.chopcut.ui.theme.primaryColor
@@ -66,7 +67,7 @@ fun ChopCutPrimaryButton(
             horizontal = 24.dp,
             vertical = 12.dp
         ),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+        shape = androidx.compose.foundation.shape.RectangleShape
     ) {
         if (icon != null) {
             Icon(
@@ -112,7 +113,7 @@ fun ChopCutSecondaryButton(
             horizontal = 16.dp,
             vertical = 10.dp
         ),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+        shape = androidx.compose.foundation.shape.RectangleShape,
         border = ButtonDefaults.outlinedButtonBorder
     ) {
         if (icon != null) {

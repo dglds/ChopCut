@@ -8,61 +8,61 @@ import androidx.compose.ui.graphics.Color
 // ============================================
 
 // -----------------------
-// Primary (Play Red)
+// Primary (Accent Blue)
 // -----------------------
-val Primary = Color(0xFFE11D48)           // CTA, Play button
+val Primary = Color(0xFF0000FF)            // CTA, Play button
 val OnPrimary = Color(0xFFFFFFFF)          // Texto sobre Primary
-val PrimaryContainer = Color(0xFFFFDDE5)   // BG de botão secundário
-val OnPrimaryContainer = Color(0xFF9F1239) // Texto sobre container
+val PrimaryContainer = Color(0xFF0000FF)   // BG de botão secundário
+val OnPrimaryContainer = Color(0xFFFFFFFF) // Texto sobre container
 
 // -----------------------
-// Background (Cinema Dark)
+// Background (Pure Black)
 // -----------------------
-val Background = Color(0xFF0F0F23)         // Fundo principal (Dark)
-val OnBackground = Color(0xFFF8FAFC)       // Texto sobre fundo
+val Background = Color(0xFF000000)         // Fundo principal (Dark)
+val OnBackground = Color(0xFFFFFFFF)       // Texto sobre fundo
 val BackgroundLight = Color(0xFFFFFFFF)    // Fundo (Light)
-val OnBackgroundLight = Color(0xFF0F172A)  // Texto sobre fundo (Light)
+val OnBackgroundLight = Color(0xFF000000)  // Texto sobre fundo (Light)
 
 // -----------------------
-// Surface (Cards/Panels)
+// Surface (Pure Black)
 // -----------------------
-val Surface = Color(0xFF1E1B4B)            // Cards/Paneis (Dark)
-val OnSurface = Color(0xFFF8FAFC)          // Texto sobre surface (Dark)
-val SurfaceVariant = Color(0xFF2D2B55)     // Elevação (Dark)
-val SurfaceLight = Color(0xFFF8FAFC)       // Cards (Light)
-val OnSurfaceLight = Color(0xFF475569)     // Texto sobre surface (Light)
+val Surface = Color(0xFF000000)            // Cards/Paneis (Dark)
+val OnSurface = Color(0xFFFFFFFF)          // Texto sobre surface (Dark)
+val SurfaceVariant = Color(0xFF000000)     // Elevação (Dark)
+val SurfaceLight = Color(0xFFFFFFFF)       // Cards (Light)
+val OnSurfaceLight = Color(0xFF000000)     // Texto sobre surface (Light)
 
 // -----------------------
-// Functional Colors
+// Functional Colors (Mapped to Black/White/Blue to keep it simple)
 // -----------------------
-val Success = Color(0xFF10B981)            // Export OK
-val SuccessDark = Color(0xFF059669)        // Export OK (Dark mode)
-val Warning = Color(0xFFF59E0B)            // Alertas
-val WarningDark = Color(0xFFD97706)        // Alertas (Dark mode)
-val Error = Color(0xFFEF4444)              // Erros
-val ErrorDark = Color(0xFFDC2626)          // Erros (Dark mode)
-val Info = Color(0xFF3B82F6)               // Informações
-val InfoDark = Color(0xFF2563EB)           // Informações (Dark mode)
+val Success = Color(0xFF0000FF)            // Export OK
+val SuccessDark = Color(0xFF0000FF)        // Export OK (Dark mode)
+val Warning = Color(0xFFFFFFFF)            // Alertas
+val WarningDark = Color(0xFFFFFFFF)        // Alertas (Dark mode)
+val Error = Color(0xFF0000FF)              // Erros (mapped to blue or white for extreme simplicity)
+val ErrorDark = Color(0xFF0000FF)          // Erros (Dark mode)
+val Info = Color(0xFF0000FF)               // Informações
+val InfoDark = Color(0xFF0000FF)           // Informações (Dark mode)
 
 // -----------------------
 // Text States
 // -----------------------
-val TextPrimary = Color(0xFFF8FAFC)        // Texto principal (Dark)
-val TextSecondary = Color(0xFF94A3B8)      // Texto secundário (Dark)
-val TextDisabled = Color(0xFF475569)       // Texto desabilitado (Dark)
-val TextPrimaryLight = Color(0xFF0F172A)   // Texto principal (Light)
-val TextSecondaryLight = Color(0xFF475569) // Texto secundário (Light)
-val TextDisabledLight = Color(0xFFCBD5E1)  // Texto desabilitado (Light)
+val TextPrimary = Color(0xFFFFFFFF)        // Texto principal (Dark)
+val TextSecondary = Color(0xFFFFFFFF)      // Texto secundário (Dark)
+val TextDisabled = Color(0xFF888888)       // Texto desabilitado (Dark)
+val TextPrimaryLight = Color(0xFF000000)   // Texto principal (Light)
+val TextSecondaryLight = Color(0xFF000000) // Texto secundário (Light)
+val TextDisabledLight = Color(0xFF888888)  // Texto desabilitado (Light)
 
 // -----------------------
-// Timeline Colors (Dark)
+// Timeline Colors (Dark/Flat)
 // -----------------------
-val TimelineBackground = Color(0xFF0A0A1A) // Fundo da timeline
-val TimelineTrack = Color(0xFF2A2A4A)      // Trilha de vídeo
-val Playhead = Color(0xFFE11D48)           // Indicador de play
-val SelectionOverlay = Color(0xE11D48)      // Seleção ativa (com alpha)
+val TimelineBackground = Color(0xFF000000) // Fundo da timeline
+val TimelineTrack = Color(0xFF000000)      // Trilha de vídeo
+val Playhead = Color(0xFF0000FF)           // Indicador de play
+val SelectionOverlay = Color(0x660000FF)   // Seleção ativa (com alpha)
 val TrimHandle = Color(0xFFFFFFFF)         // Alças de corte
-val Waveform = Color(0xFF6366F1)           // Forma de onda
+val Waveform = Color(0xFFFFFFFF)           // Forma de onda
 
 // -----------------------
 // Overlay & Elevation
@@ -75,10 +75,10 @@ val GradientTransparent = Color(0x00000000) // Transparente para gradient
 // -----------------------
 // Border & Divider
 // -----------------------
-val Border = Color(0xFF2D2B55)             // Bordas (Dark)
-val BorderLight = Color(0xFFE2E8F0)        // Bordas (Light)
-val Divider = Color(0xFF1E1B4B)            // Divisores (Dark)
-val DividerLight = Color(0xFFE2E8F0)       // Divisores (Light)
+val Border = Color(0xFFFFFFFF)             // Bordas (Dark)
+val BorderLight = Color(0xFF000000)        // Bordas (Light)
+val Divider = Color(0xFFFFFFFF)            // Divisores (Dark)
+val DividerLight = Color(0xFF000000)       // Divisores (Light)
 
 // -----------------------
 // Extension functions para alpha

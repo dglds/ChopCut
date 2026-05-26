@@ -3,8 +3,7 @@ package com.chopcut.ui.components.timeline
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.ui.theme.ChopCutMonoFont
 import com.chopcut.util.TimeUtils
 
@@ -33,7 +33,7 @@ fun SeekbarProgress(
             .fillMaxWidth()
             .height(6.dp)
             .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(3.dp))
+            .clip(RectangleShape)
             .background(Color.White.copy(alpha = 0.05f))
     ) {
         Box(
@@ -49,7 +49,7 @@ fun SeekbarProgress(
                     )
                 )
                 .then(
-                    Modifier.border(0.5.dp, Color(0xFF00E5FF).copy(alpha = 0.3f), RoundedCornerShape(3.dp))
+                    Modifier.border(0.5.dp, Color(0xFF00E5FF).copy(alpha = 0.3f), RectangleShape)
                 )
         )
     }
@@ -66,9 +66,9 @@ fun CurrentTimeDisplay(
     Box(
         modifier = modifier
             .padding(vertical = 8.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RectangleShape)
             .background(Color.Black.copy(alpha = 0.4f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+            .border(0.5.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
             .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         Text(
@@ -97,12 +97,12 @@ fun VideoFileInfo(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RectangleShape)
             .background(Color.White.copy(alpha = 0.03f))
             .border(
                 width = 0.5.dp, 
                 color = Color.White.copy(alpha = 0.08f), 
-                shape = RoundedCornerShape(12.dp)
+                shape = RectangleShape
             )
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
@@ -112,7 +112,7 @@ fun VideoFileInfo(
             Box(
                 modifier = Modifier
                     .size(8.dp)
-                    .clip(CircleShape)
+                    .clip(RectangleShape)
                     .background(Color(0xFF00E5FF).copy(alpha = 0.4f))
             )
             Spacer(modifier = Modifier.width(8.dp))

@@ -3,7 +3,6 @@ package com.chopcut.ui.components.loading
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +17,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.ui.viewmodel.ExtractionStage
 import com.chopcut.ui.viewmodel.PreloadProgress
 import com.chopcut.ui.theme.ChopCutAnimation
@@ -228,7 +228,7 @@ fun FakeProgressBar(progress: PreloadProgress, elapsedTimeMs: Long, isReadyToHid
         modifier = Modifier
             .fillMaxWidth()
             .height(4.dp)
-            .clip(RoundedCornerShape(2.dp))
+            .clip(RectangleShape)
             .graphicsLayer {
                 alpha = if (animatedProgress < 1f) glowAlpha else 1f
             },

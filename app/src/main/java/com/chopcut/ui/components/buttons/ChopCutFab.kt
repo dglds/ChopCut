@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.ui.theme.primaryColor
 
 /**
@@ -40,7 +41,7 @@ fun ChopCutFab(
             hoveredElevation = 10.dp,
             focusedElevation = 8.dp
         ),
-        shape = androidx.compose.foundation.shape.CircleShape
+        shape = androidx.compose.foundation.shape.RectangleShape
     ) {
         Icon(
             imageVector = icon,
@@ -76,7 +77,7 @@ fun ChopCutSmallFab(
             hoveredElevation = 6.dp,
             focusedElevation = 6.dp
         ),
-        shape = androidx.compose.foundation.shape.CircleShape
+        shape = androidx.compose.foundation.shape.RectangleShape
     ) {
         Icon(
             imageVector = icon,

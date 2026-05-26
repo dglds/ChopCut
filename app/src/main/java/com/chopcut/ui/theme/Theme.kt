@@ -66,13 +66,13 @@ private val ChopCutLightColorScheme = lightColorScheme(
     // Surface
     surface = SurfaceLight,
     onSurface = OnSurfaceLight,
-    surfaceVariant = Color(0xFFF1F5F9),
+    surfaceVariant = SurfaceLight,
 
     // Error states
     error = Error,
     onError = Color.White,
-    errorContainer = Color(0xFFDAE5FF),
-    onErrorContainer = Color(0xFF001F3F),
+    errorContainer = Color.White,
+    onErrorContainer = Color.Black,
 
     // Outros
     outline = BorderLight,

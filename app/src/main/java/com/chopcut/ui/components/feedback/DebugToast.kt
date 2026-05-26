@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.BuildConfig
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -66,7 +66,7 @@ fun DebugToast(
 ) {
     if (!BuildConfig.DEBUG || entries.isEmpty()) return
 
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RectangleShape
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 

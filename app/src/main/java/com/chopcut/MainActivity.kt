@@ -70,7 +70,6 @@ class MainActivity : ComponentActivity() {
                             val encoded = Uri.encode(intentVideoUri.toString())
                             "editor?videoUri=$encoded"
                         }
-                        preferencesManager.isFirstRun -> "onboarding"
                         else -> "home"
                     }
 

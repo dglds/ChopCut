@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.RectangleShape
 import com.chopcut.ui.theme.ChopCutTypography
 import com.chopcut.ui.theme.DurationTextStyle
 import com.chopcut.ui.theme.OnSurface
@@ -54,7 +54,7 @@ fun VideoCard(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RectangleShape)
             .background(Surface)
             .clickable(onClick = onClick)
     ) {
@@ -95,7 +95,7 @@ fun VideoCard(
                     .padding(8.dp)
                     .background(
                         color = Color.Black.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(4.dp)
+                        shape = RectangleShape
                     )
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             )
@@ -158,13 +158,13 @@ fun ChopCutCard(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RectangleShape)
             .background(Surface)
             .then(
                 if (showShadow) {
                     Modifier.shadow(
                         elevation = 2.dp,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RectangleShape,
                         spotColor = Color.Black.copy(alpha = 0.1f)
                     )
                 } else {

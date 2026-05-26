@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -43,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.RectangleShape
 import coil.ImageLoader
 import coil.compose.rememberAsyncImagePainter
 import coil.decode.VideoFrameDecoder
@@ -237,7 +237,7 @@ fun VideoGridItem(video: GalleryVideo, imageLoader: ImageLoader, onClick: (Uri) 
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(4.dp)
-                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
+                .background(Color.Black.copy(alpha = 0.7f), RectangleShape)
                 .padding(horizontal = 4.dp, vertical = 2.dp)
         ) {
             Text(
@@ -254,7 +254,7 @@ fun VideoGridItem(video: GalleryVideo, imageLoader: ImageLoader, onClick: (Uri) 
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(4.dp)
-                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
+                    .background(Color.Black.copy(alpha = 0.7f), RectangleShape)
                     .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
                 Text(
@@ -270,7 +270,7 @@ fun VideoGridItem(video: GalleryVideo, imageLoader: ImageLoader, onClick: (Uri) 
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(4.dp)
-                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
+                .background(Color.Black.copy(alpha = 0.7f), RectangleShape)
                 .padding(horizontal = 4.dp, vertical = 2.dp)
         ) {
             Text(
