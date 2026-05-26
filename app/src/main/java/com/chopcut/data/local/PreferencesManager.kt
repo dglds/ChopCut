@@ -2,6 +2,9 @@ package com.chopcut.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Gerenciador de preferências do usuário (SharedPreferences)
@@ -9,6 +12,7 @@ import android.content.SharedPreferences
 class PreferencesManager(context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
 
     companion object {
         private const val PREFS_NAME = "chopcut_prefs"
@@ -19,6 +23,19 @@ class PreferencesManager(context: Context) {
         private const val KEY_DEBUG_ENABLED = "debug_enabled" // Debugger toast
         private const val KEY_THUMBS_PER_STRIP = "thumbs_per_strip" // Thumbs por strip (padrão: 10)
         private const val KEY_CLEAR_CACHE_ON_STARTUP = "clear_cache_on_startup" // Limpar cache ao iniciar
+    }
+
+    private val _themeModeFlow = MutableStateFlow(prefs.getInt(KEY_THEME_MODE, 0))
+    val themeModeFlow: StateFlow<Int> = _themeModeFlow.asStateFlow()
+
+    private val preferenceChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == KEY_THEME_MODE) {
+            _themeModeFlow.value = themeMode
+        }
+    }
+
+    init {
+        prefs.registerOnSharedPreferenceChangeListener(preferenceChangeListener)
     }
 
     /**

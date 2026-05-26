@@ -38,6 +38,10 @@ class PreferencesViewModel(
     /** Estado do debugger (reactivo) */
     private val _isDebugEnabled = MutableStateFlow(prefsManager.debugEnabled)
     val isDebugEnabled: StateFlow<Boolean> = _isDebugEnabled.asStateFlow()
+    
+    /** Estado do modo do tema (0=System, 1=Light, 2=Dark) */
+    private val _themeMode = MutableStateFlow(prefsManager.themeMode)
+    val themeMode: StateFlow<Int> = _themeMode.asStateFlow()
 
     fun setCacheEnabled(enabled: Boolean) {
         prefsManager.thumbnailCacheEnabled = enabled
@@ -47,6 +51,11 @@ class PreferencesViewModel(
     fun setDebugEnabled(enabled: Boolean) {
         prefsManager.debugEnabled = enabled
         _isDebugEnabled.value = enabled
+    }
+
+    fun setThemeMode(mode: Int) {
+        prefsManager.themeMode = mode
+        _themeMode.value = mode
     }
 
     fun deleteSavedVideos() {

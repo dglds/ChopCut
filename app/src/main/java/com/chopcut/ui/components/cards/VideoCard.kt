@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -54,8 +56,10 @@ fun VideoCard(
 ) {
     Column(
         modifier = modifier
+            .shadow(4.dp, RectangleShape)
             .clip(RectangleShape)
             .background(Surface)
+            .border(2.dp, MaterialTheme.colorScheme.outline, RectangleShape)
             .clickable(onClick = onClick)
     ) {
         // Thumbnail com overlay gradiente
@@ -158,19 +162,10 @@ fun ChopCutCard(
 ) {
     Column(
         modifier = modifier
+            .shadow(4.dp, RectangleShape)
             .clip(RectangleShape)
             .background(Surface)
-            .then(
-                if (showShadow) {
-                    Modifier.shadow(
-                        elevation = 2.dp,
-                        shape = RectangleShape,
-                        spotColor = Color.Black.copy(alpha = 0.1f)
-                    )
-                } else {
-                    Modifier
-                }
-            )
+            .border(2.dp, MaterialTheme.colorScheme.outline, RectangleShape)
             .padding(16.dp),
         content = content
     )

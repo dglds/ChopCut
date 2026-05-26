@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.border
 import com.chopcut.ui.state.CompressionLevel
 
 @Composable
@@ -29,6 +31,9 @@ fun CompressToolPanel(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .shadow(4.dp, RectangleShape)
+            .border(2.dp, MaterialTheme.colorScheme.outline, RectangleShape)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -56,7 +61,7 @@ fun CompressToolPanel(
         }
         
         IconButton(onClick = onClose, modifier = Modifier.padding(start = 16.dp)) {
-            Icon(Icons.Default.Check, contentDescription = "OK", tint = Color(0xFF00E5FF))
+            Icon(Icons.Default.Check, contentDescription = "OK", tint = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -70,14 +75,14 @@ private fun CompressionButton(
     Box(
         modifier = Modifier
             .clip(RectangleShape)
-            .background(if (isSelected) Color(0xFF00E5FF).copy(alpha = 0.2f) else Color.Transparent)
+            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.Transparent)
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = level.label,
-            color = if (isSelected) Color(0xFF00E5FF) else Color.White,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )

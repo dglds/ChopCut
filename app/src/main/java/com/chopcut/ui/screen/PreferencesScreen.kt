@@ -56,6 +56,8 @@ fun PreferencesScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isCacheEnabled by viewModel.isCacheEnabled.collectAsStateWithLifecycle()
     val isDebugEnabled by viewModel.isDebugEnabled.collectAsStateWithLifecycle()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var cacheSizeMB by remember { mutableStateOf(0.0) }
@@ -97,6 +99,55 @@ fun PreferencesScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.md)
         ) {
+            Text(
+                text = "Aparência",
+                style = MaterialTheme.typography.headlineMedium
+            )
+
+            Spacer(Modifier.height(ChopCutSpacing.lg))
+
+            // Tema Dark/Light
+            com.chopcut.ui.components.cards.ChopCutCard(
+                modifier = Modifier.fillMaxWidth(),
+                showShadow = true
+            ) {
+                Column(
+                    modifier = Modifier.padding(ChopCutSpacing.md),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Modo de Cor",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.height(ChopCutSpacing.md))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ChopCutSecondaryButton(
+                            text = "Sistema",
+                            onClick = { viewModel.setThemeMode(0) },
+                            modifier = Modifier.weight(1f),
+                            enabled = themeMode != 0
+                        )
+                        ChopCutSecondaryButton(
+                            text = "Claro",
+                            onClick = { viewModel.setThemeMode(1) },
+                            modifier = Modifier.weight(1f),
+                            enabled = themeMode != 1
+                        )
+                        ChopCutSecondaryButton(
+                            text = "Escuro",
+                            onClick = { viewModel.setThemeMode(2) },
+                            modifier = Modifier.weight(1f),
+                            enabled = themeMode != 2
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(ChopCutSpacing.md))
+
             Text(
                 text = "Gerenciar Armazenamento",
                 style = MaterialTheme.typography.headlineMedium
