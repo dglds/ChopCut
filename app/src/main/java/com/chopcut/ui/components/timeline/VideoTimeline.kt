@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.runtime.mutableLongStateOf
+import com.chopcut.util.TimelineLogger
 
 @Composable
 fun VideoTimeline(
@@ -83,6 +84,8 @@ fun VideoTimeline(
     )
 
     LaunchedEffect(videoUri, durationMs) {
+        // Inicializa o logger de telemetria assíncrono para esta sessão
+        TimelineLogger.init(context)
         if (durationMs > 0) {
             val h = with(density) { 56.dp.roundToPx() }
             val w = (h * aspectRatio).toInt()
@@ -102,6 +105,13 @@ fun VideoTimeline(
         if (!isScrubbingLocal) {
             smoothPositionMs.floatValue = currentPositionMs.toFloat()
             localPositionMs = currentPositionMs
+            
+            // Registra telemetria de reprodução automática (ExoPlayer)
+            TimelineLogger.logMovement(
+                mode = "AUTO",
+                positionMs = currentPositionMs,
+                reason = "ExoPlayer position changed (currentPositionMs)"
+            )
         }
     }
 
@@ -120,6 +130,15 @@ fun VideoTimeline(
         val deltaMs = (delta / pxPerSecond * 1000).toLong()
         val newPos = (localPositionMs - deltaMs).coerceIn(0, durationMs)
         localPositionMs = newPos
+        
+        val deltaStr = String.format(java.util.Locale.US, "%.2f", delta)
+        // Registra telemetria de arraste manual gestual
+        TimelineLogger.logMovement(
+            mode = "MANUAL",
+            positionMs = newPos,
+            reason = "Touch gesture scroll delta = ${deltaStr}px (${deltaMs}ms)"
+        )
+        
         delta
     }
 
