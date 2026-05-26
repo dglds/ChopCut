@@ -1,0 +1,42 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ADB="$HOME/Android/Sdk/platform-tools/adb"
+LOG_FILE="$DIR/output.log"
+
+export JAVA_HOME="$DIR/jdk17"
+
+echo "🔌 Aguardando dispositivo..."
+echo "   (Ctrl+C para cancelar)"
+
+while true; do
+    devices=$($ADB devices | grep -w "device" | cut -f1)
+
+    if [ -n "$devices" ]; then
+        echo ""
+        echo "✅ Dispositivo conectado. Iniciando instalação..."
+        break
+    fi
+
+    echo -n "."
+    sleep 1
+done
+
+exec > >(tee "$LOG_FILE") 2>&1
+
+echo "🚀 Compilando e instalando ChopCut..."
+"$DIR/gradlew" installDebug "$@"
+
+if [ $? -eq 0 ]; then
+    echo "🎉 Instalação concluída com sucesso!"
+    devices=$($ADB devices | grep -w "device" | cut -f1)
+    for device in $devices; do
+        echo "📲 Iniciando o aplicativo no dispositivo: $device..."
+        $ADB -s "$device" shell am start -n com.chopcut/com.chopcut.MainActivity
+    done
+    echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
+else
+    echo "❌ Ocorreu um erro durante a compilação ou instalação."
+    echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
+    exit 1
+fi

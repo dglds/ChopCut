@@ -1,0 +1,20 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+LOG_FILE="$DIR/output.log"
+
+export JAVA_HOME="$DIR/jdk17"
+
+exec > >(tee "$LOG_FILE") 2>&1
+
+echo "🚀 Compilando ChopCut (assembleDebug)..."
+"$DIR/gradlew" assembleDebug "$@"
+
+if [ $? -eq 0 ]; then
+    echo "✅ Compilação concluída com sucesso!"
+    echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
+else
+    echo "❌ Ocorreu um erro durante a compilação."
+    echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
+    exit 1
+fi

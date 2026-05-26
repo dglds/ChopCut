@@ -1,0 +1,81 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+LOG_FILE="$DIR/output.log"
+ADB="$HOME/Android/Sdk/platform-tools/adb"
+
+export JAVA_HOME="$DIR/jdk17"
+
+$ADB start-server 2>/dev/null
+
+echo "🔌 Aguardando dispositivo..."
+echo "   (Ctrl+C para cancelar)"
+echo ""
+
+while true; do
+    devices=$($ADB devices | grep -w "device" | cut -f1)
+
+    if [ -n "$devices" ]; then
+        echo ""
+        echo "✅ Dispositivo conectado. Iniciando limpeza..."
+        for device in $devices; do
+            echo "📱 Desinstalando app do dispositivo: $device..."
+            $ADB -s "$device" uninstall com.chopcut 2>/dev/null || true
+        done
+        break
+    fi
+
+    attached=$($ADB devices | grep -v "List of devices" | grep -v "^$" | head -1)
+    if [ -n "$attached" ]; then
+        status=$(echo "$attached" | awk '{print $2}')
+        echo "⚠️  Dispositivo '$status' — autorize no dispositivo e aguarde..."
+        sleep 2
+        continue
+    fi
+
+    echo -ne "\r🔍 Procurando dispositivos na rede..."
+    found=false
+
+    for service in "_adb-tls-connect._tcp" "_adb._tcp"; do
+        while IFS=';' read -r iface proto name svc domain host addr port txt; do
+            if [ "$svc" = "$service" ] && [ -n "$addr" ] && [ -n "$port" ]; then
+                if ! $ADB devices 2>/dev/null | grep -q "$addr:$port"; then
+                    echo ""
+                    echo "📡 Conectando a $addr:$port (avahi)..."
+                    $ADB connect "$addr:$port" 2>/dev/null &
+                fi
+                found=true
+            fi
+        done < <(avahi-browse -trp "$service" 2>/dev/null | grep "^=")
+    done
+
+    if [ "$found" = false ]; then
+        echo -ne "\r⏳ Nenhum dispositivo na rede. Conecte via USB ou ative 'Depuração sem fio' no Android."
+    fi
+
+    sleep 3
+done
+
+exec > >(tee "$LOG_FILE") 2>&1
+
+echo "🧹 Limpando cache do Gradle..."
+rm -rf "$DIR/.gradle"
+echo "🗑️  Limpando build do projeto..."
+"$DIR/gradlew" clean
+
+echo "🔨 Compilando e instalando..."
+"$DIR/gradlew" installDebug "$@"
+
+if [ $? -eq 0 ]; then
+    echo "🎉 Instalação concluída com sucesso!"
+    devices=$($ADB devices | grep -w "device" | cut -f1)
+    for device in $devices; do
+        echo "📲 Iniciando o aplicativo no dispositivo: $device..."
+        $ADB -s "$device" shell am start -n com.chopcut/com.chopcut.MainActivity
+    done
+    echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
+else
+    echo "❌ Ocorreu um erro durante a compilação ou instalação."
+    echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
+    exit 1
+fi
