@@ -100,18 +100,56 @@ fun VideoTimeline(
 
     val smoothPositionMs = remember { mutableFloatStateOf(currentPositionMs.toFloat()) }
 
-    // Sincronizar posição externa com a posição suavizada (quando não estiver arrastando)
-    LaunchedEffect(currentPositionMs) {
+    // Sincronizar instantaneamente em alterações bruscas ou quando o player estiver pausado
+    LaunchedEffect(currentPositionMs, isPlaying) {
         if (!isScrubbingLocal) {
-            smoothPositionMs.floatValue = currentPositionMs.toFloat()
-            localPositionMs = currentPositionMs
-            
-            // Registra telemetria de reprodução automática (ExoPlayer)
-            TimelineLogger.logMovement(
-                mode = "AUTO",
-                positionMs = currentPositionMs,
-                reason = "ExoPlayer position changed (currentPositionMs)"
-            )
+            val diff = kotlin.math.abs(currentPositionMs - smoothPositionMs.floatValue)
+            if (!isPlaying || diff > 200) {
+                smoothPositionMs.floatValue = currentPositionMs.toFloat()
+                localPositionMs = currentPositionMs
+                
+                // Registra telemetria de resincronização brusca ou pause
+                TimelineLogger.logMovement(
+                    mode = if (isPlaying) "AUTO_S" else "AUTO_P",
+                    positionMs = currentPositionMs,
+                    reason = if (isPlaying) "ExoPlayer seek/drift resync (diff = ${String.format(java.util.Locale.US, "%.1f", diff)}ms)" else "Player paused/seeked position updated"
+                )
+            }
+        }
+    }
+
+    // Motor de Interpolação de Playhead a 120 FPS
+    LaunchedEffect(isPlaying, isScrubbingLocal) {
+        if (isPlaying && !isScrubbingLocal) {
+            var lastTimeNanos = System.nanoTime()
+            while (true) {
+                withFrameNanos { frameTimeNanos ->
+                    val elapsedMs = (frameTimeNanos - lastTimeNanos) / 1_000_000f
+                    lastTimeNanos = frameTimeNanos
+                    
+                    val currentPos = smoothPositionMs.floatValue
+                    val playerPos = currentPositionMs.toFloat()
+                    
+                    // Avança linearmente a estimativa contínua
+                    val targetPos = currentPos + elapsedMs
+                    
+                    // Diferença em relação ao relógio oficial do ExoPlayer
+                    val diff = playerPos - targetPos
+                    
+                    // Interpolação Suave (Lerp amortecido a 12%) em direção ao player
+                    val newSmoothPos = targetPos + (diff * 0.12f)
+                    
+                    smoothPositionMs.floatValue = newSmoothPos.coerceIn(0f, durationMs.toFloat())
+                    localPositionMs = newSmoothPos.toLong()
+                    
+                    // Registra telemetria com altíssima frequência (120 FPS reais no autoplay!)
+                    TimelineLogger.logMovement(
+                        mode = "AUTO",
+                        positionMs = localPositionMs,
+                        reason = "Choreographer interpolation frame (elapsedMs = ${String.format(java.util.Locale.US, "%.1f", elapsedMs)}ms, diffExo = ${String.format(java.util.Locale.US, "%.1f", diff)}ms)"
+                    )
+                }
+            }
         }
     }
 
