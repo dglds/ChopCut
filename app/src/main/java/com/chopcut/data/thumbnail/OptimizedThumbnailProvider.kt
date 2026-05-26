@@ -65,6 +65,11 @@ class OptimizedThumbnailProvider(
         Log.i("ChopCut", "[PROVIDER] init DONE, workers submitted")
     }
 
+    // RESTRIÇÃO ARQUITETURAL CRÍTICA: O cache deve permanecer OBRIGATORIAMENTE desativado (cacheEnabled = false).
+    // Requisito oficial do projeto para evitar "falsos positivos" durante os testes e perfilamento
+    // da performance crua de extração das miniaturas (fotos) do vídeo. NÃO alterar para true.
+    private val cacheEnabled = false
+
     /**
      * Solicita um thumbnail para uma posição específica.
      * Retorna do cache se disponível, caso contrário adiciona à fila.
@@ -72,7 +77,7 @@ class OptimizedThumbnailProvider(
     fun requestThumbnail(uri: Uri, positionMs: Long, priority: ThumbnailPriority) {
         val quantizedTime = quantizeTimestamp(positionMs)
 
-        val cached = cache.get(uri.toString(), quantizedTime)
+        val cached = if (cacheEnabled) cache.get(uri.toString(), quantizedTime) else null
         if (cached != null) {
             scope.launch { _thumbnailUpdates.emit(quantizedTime to cached) }
             return
@@ -85,7 +90,9 @@ class OptimizedThumbnailProvider(
             width = thumbWidth,
             height = thumbHeight,
             callback = { bitmap ->
-                cache.put(uri.toString(), quantizedTime, bitmap)
+                if (cacheEnabled) {
+                    cache.put(uri.toString(), quantizedTime, bitmap)
+                }
                 scope.launch { _thumbnailUpdates.emit(quantizedTime to bitmap) }
             }
         )

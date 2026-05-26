@@ -99,9 +99,15 @@ ORDER BY Tempo_Total_Gasto_ms DESC;
 ## ⚠️ Requisitos e Restrições de Projeto / Teste
 
 > [!IMPORTANT]
-> **Manter o Cache de Áudio Desativado (`cacheEnabled = false`)**:
-> Por diretriz estrita do projeto (definida pelo Chefe/Liderança), o cache de áudio em disco em `AudioViewModel.kt` **deve permanecer obrigatoriamente desativado**.
+> **Manter Caches de Áudio e Fotos Desativados (`cacheEnabled = false`)**:
+> Por diretriz estrita do projeto (definida pelo Chefe/Liderança), **todos os caches de áudio e de imagens (miniaturas/fotos) na timeline devem permanecer obrigatoriamente desativados**.
 > 
-> * **Motivo**: Garantir que as sessões de perfilamento, testes de performance e instrumentação via Perfetto meçam a latência real e crua da extração e decodificação de mídia de forma íntegra, evitando "falsos positivos" ou medições distorcidas por cache hits.
-> * **Ação**: Esta configuração é imutável e não deve ser alterada ou ativada sob nenhuma hipótese durante esta fase de homologação.
+> * **Áreas Afetadas**:
+>   - **Áudio (Waveform)** em [AudioViewModel.kt](file:///home/diego/Android/ChopCut/app/src/main/java/com/chopcut/ui/viewmodel/AudioViewModel.kt)
+>   - **Fotos (Timeline Thumbnails)** em [OptimizedThumbnailProvider.kt](file:///home/diego/Android/ChopCut/app/src/main/java/com/chopcut/data/thumbnail/OptimizedThumbnailProvider.kt)
+>   - **Strips de Thumbnail** em [ThumbnailCacheManager.kt](file:///home/diego/Android/ChopCut/app/src/main/java/com/chopcut/data/thumbnail/ThumbnailCacheManager.kt)
+> 
+> * **Motivo**: Garantir que todas as sessões de perfilamento, testes de stress de UI, latência nativa e instrumentação via Perfetto meçam a latência real e "crua" da extração física e decodificação do hardware (MediaCodec / MediaExtractor / MediaMetadataRetriever) de forma 100% limpa, evitando "falsos positivos" ou medições mascaradas por cache hits.
+> * **Ação**: Esta configuração é imutável e não deve ser alterada ou ativada sob nenhuma hipótese durante esta fase de homologação e validação técnica da timeline do ChopCut.
+
 

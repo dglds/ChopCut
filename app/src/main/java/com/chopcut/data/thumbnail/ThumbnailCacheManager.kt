@@ -31,6 +31,11 @@ import kotlin.math.abs
 object ThumbnailCacheManager {
     @Volatile
     private var appContext: Context? = null
+
+    // RESTRIÇÃO ARQUITETURAL CRÍTICA: O cache deve permanecer OBRIGATORIAMENTE desativado (cacheEnabled = false).
+    // Requisito oficial do projeto para evitar "falsos positivos" durante os testes e perfilamento
+    // da performance crua de extração dos strips de vídeo. NÃO alterar para true.
+    private const val cacheEnabled = false
     
     // Cache em memória LRU (100 strips ~43MB)
     private val memoryCache = ThumbnailCache(maxSize = 100)
@@ -237,7 +242,7 @@ object ThumbnailCacheManager {
 
         // Single lookup via getOrPut (isRecycled check is inside ThumbnailCache.get)
         return try {
-            val result = memoryCache.get(uriString, positionKey)
+            val result = if (cacheEnabled) memoryCache.get(uriString, positionKey) else null
             if (result != null) {
                 metrics.recordHit()
                 result
@@ -252,7 +257,9 @@ object ThumbnailCacheManager {
                 val extractionTime = System.currentTimeMillis() - startTime
                 metrics.recordExtraction(extractionTime)
 
-                memoryCache.put(uriString, positionKey, strip)
+                if (cacheEnabled) {
+                    memoryCache.put(uriString, positionKey, strip)
+                }
                 strip
             }
         } catch (e: NoSuchElementException) {
@@ -558,6 +565,7 @@ object ThumbnailCacheManager {
      * Verifica rapidamente se um segmento específico está no cache (memória ou disco).
      */
     fun isSegmentCached(uri: Uri, segmentIndex: Int): Boolean {
+        if (!cacheEnabled) return false
         val uriString = uri.toString()
         val positionKey = segmentIndex.toLong()
         
