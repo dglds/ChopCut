@@ -37,6 +37,9 @@ class TimelineAdapter(
     // Map de timestamps pendentes para posições (para atualização batch)
     private val pendingPositions = mutableMapOf<Long, MutableList<Int>>()
 
+    // Cache de bitmaps carregados (timestamp quantizado → bitmap)
+    private val thumbnailCache = mutableMapOf<Long, Bitmap>()
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ThumbnailViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_timeline_thumbnail, parent, false)
@@ -65,10 +68,14 @@ class TimelineAdapter(
 
     private fun bind(holder: ThumbnailViewHolder, position: Int, isPayload: Boolean) {
         val timestamp = (position.toLong() * durationMs) / itemCountLimit
-        val quantizedTime = (timestamp / 500) * 500 // Quantização local (500ms)
-        
-        // Se for bind completo, resetar imagem
-        if (!isPayload) {
+        val quantizedTime = (timestamp / 500) * 500
+
+        // Verificar cache primeiro
+        val cached = thumbnailCache[quantizedTime]
+        if (cached != null) {
+            holder.thumbnailImage.setImageBitmap(cached)
+            holder.loadingOverlay.visibility = View.GONE
+        } else if (!isPayload) {
             holder.thumbnailImage.setImageBitmap(null)
             holder.loadingOverlay.visibility = View.VISIBLE
         }
@@ -81,7 +88,7 @@ class TimelineAdapter(
 
         // Solicitar thumbnail (Prioridade VISIBLE para o bind atual)
         provider.requestThumbnail(uri, quantizedTime, ThumbnailPriority.VISIBLE)
-        
+
         // Realizar prefetch das posições adjacentes
         performPrefetch(position)
     }
@@ -100,9 +107,9 @@ class TimelineAdapter(
      * Atualiza os thumbnails visíveis quando novos bitmaps são gerados pelo provedor.
      */
     fun onThumbnailLoaded(timestamp: Long, bitmap: Bitmap) {
+        thumbnailCache[timestamp] = bitmap
         val positions = pendingPositions.remove(timestamp) ?: return
-        
-        // Notificar mudanças para todas as posições que mapeiam para este timestamp
+
         positions.forEach { pos ->
             notifyItemChanged(pos, PAYLOAD_THUMB)
         }

@@ -46,8 +46,10 @@ import androidx.compose.ui.platform.LocalDensity
 fun OptimizedVideoTimeline(
     uri: Uri,
     durationMs: Long,
-    currentPosition: Long, // Nova posição para scroll programático
-    onScrollChanged: (Long) -> Unit, // Callback para scroll do usuário
+    currentPosition: Long,
+    onScrollChanged: (Long) -> Unit,
+    onScrollStart: () -> Unit = {},
+    onScrollEnd: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
     itemCount: Int = 900,
     thumbnailHeight: Int = 120,
@@ -94,13 +96,13 @@ fun OptimizedVideoTimeline(
     val recyclerViewRef = remember { mutableStateOf<RecyclerView?>(null) }
     val layoutManagerRef = remember { mutableStateOf<LinearLayoutManager?>(null) }
 
-    // Scroll programático para a posição atual
+    // Scroll programático para a posição atual (apenas quando não está sendo arrastado pelo usuário)
     LaunchedEffect(currentPosition, recyclerViewRef.value, layoutManagerRef.value) {
         val recyclerView = recyclerViewRef.value
         val layoutManager = layoutManagerRef.value
         if (recyclerView == null || layoutManager == null || durationMs == 0L) return@LaunchedEffect
+        if (recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING) return@LaunchedEffect
 
-        // Calcular a posição do item e o offset para centralizar o playhead
         val targetPosition = (currentPosition.toFloat() / durationMs.toFloat() * adapter.itemCount).toInt().coerceIn(0, adapter.itemCount - 1)
         val centerOffsetPx = recyclerView.width / 2
 
@@ -130,11 +132,19 @@ fun OptimizedVideoTimeline(
                     // Lógica de cancelamento de requests em scroll rápido e notificação de scroll
                     addOnScrollListener(object : RecyclerView.OnScrollListener() {
                         override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                            // Clear queue only when dragging (user initiated scroll)
                             if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                                onScrollStart()
                                 scope.launch {
                                     provider.clearQueue()
                                 }
+                            }
+                            if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                                val centerItemPosition = layoutManagerRef.value?.findFirstCompletelyVisibleItemPosition()?.let { first ->
+                                    val last = layoutManagerRef.value?.findLastCompletelyVisibleItemPosition() ?: first
+                                    (first + last) / 2
+                                } ?: 0
+                                val finalPositionMs = (centerItemPosition.toLong() * durationMs) / adapter.itemCount
+                                onScrollEnd(finalPositionMs)
                             }
                         }
 

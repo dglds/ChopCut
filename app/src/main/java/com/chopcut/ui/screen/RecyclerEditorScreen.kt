@@ -333,6 +333,8 @@ fun RecyclerEditorScreen(
                                         durationMs = state.videoDurationMs,
                                         currentPosition = state.currentPosition,
                                         onScrollChanged = { posMs -> viewModel.setCurrentPosition(posMs) },
+                                        onScrollStart = { viewModel.startScrubbing() },
+                                        onScrollEnd = { finalPos -> viewModel.stopScrubbing(finalPos) },
                                         modifier = Modifier.fillMaxWidth(),
                                         itemCount = 900,
                                         thumbnailHeight = 120,
