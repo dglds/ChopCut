@@ -32,9 +32,6 @@ import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.data.pipeline.TrimProgress
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.timeline.VideoFileInfo
-import com.chopcut.ui.components.timeline.OptimizedVideoTimeline
-import com.chopcut.ui.components.timeline.TimelineRuler
-import com.chopcut.ui.components.timeline.TimelineWaveform
 import com.chopcut.ui.components.timeline.VideoTimeline
 import androidx.compose.ui.platform.LocalDensity
 import com.chopcut.ui.components.timeline.SeekbarProgress
@@ -89,7 +86,6 @@ fun EditorScreen(
     val state by viewModel.state.collectAsState()
 
     val smoothPositionMs = remember { mutableStateOf(state.currentPosition.toFloat()) }
-    var useRecyclerView by remember { mutableStateOf(true) }
     LaunchedEffect(state.currentPosition) {
         if (state.currentPosition.toFloat() != smoothPositionMs.value) {
             smoothPositionMs.value = state.currentPosition.toFloat()
@@ -328,41 +324,6 @@ fun EditorScreen(
                                 // Passive Seekbar
                                 val progress = if (state.videoDurationMs > 0) state.currentPosition.toFloat() / state.videoDurationMs.toFloat() else 0f
                                 SeekbarProgress(progress = progress, modifier = Modifier.padding(vertical = 8.dp))
-
-                                // Botoes de Toggle para comparar as timelines
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Button(
-                                        onClick = { useRecyclerView = false },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (!useRecyclerView) Color(0xFF6366F1) else Color.Transparent,
-                                            contentColor = Color.White
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6366F1)),
-                                        modifier = Modifier.weight(1f).padding(end = 8.dp)
-                                    ) {
-                                        Text("Canvas (Antiga)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-
-                                    Button(
-                                        onClick = { useRecyclerView = true },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (useRecyclerView) Color(0xFF6366F1) else Color.Transparent,
-                                            contentColor = Color.White
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6366F1)),
-                                        modifier = Modifier.weight(1f).padding(start = 8.dp)
-                                    ) {
-                                        Text("RecyclerView (Nova)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
                             }
 
                             Spacer(Modifier.height(12.dp))
@@ -375,57 +336,21 @@ fun EditorScreen(
                                     .padding(vertical = 12.dp)
                             ) {
                                 if (state.videoDurationMs > 0) {
-                                    if (useRecyclerView) {
-                                        val density = LocalDensity.current
-                                        val thumbnailWidthPx = with(density) { 60.dp.toPx() }
-
-                                        TimelineRuler(
-                                            smoothPositionMs = smoothPositionMs.value,
-                                            durationMs = state.videoDurationMs,
-                                            pixelPerSecond = thumbnailWidthPx,
-                                            modifier = Modifier.fillMaxWidth().height(24.dp)
-                                        )
-
-                                        Spacer(Modifier.height(4.dp))
-
-                                        OptimizedVideoTimeline(
-                                            uri = videoUri,
-                                            durationMs = state.videoDurationMs,
-                                            currentPosition = state.currentPosition,
-                                            onScrollProgress = { progress -> smoothPositionMs.value = progress },
-                                            onScrollChanged = { viewModel.setCurrentPosition(it) },
-                                            onScrollStart = { viewModel.startScrubbing() },
-                                            onScrollEnd = { finalPos -> viewModel.stopScrubbing(finalPos) },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            thumbnailHeight = 56,
-                                            thumbnailWidth = 60
-                                        )
-
-                                        if (state.audioWaveformsAmplitudes.isNotEmpty()) {
-                                            Spacer(Modifier.height(4.dp))
-                                            TimelineWaveform(
-                                                amplitudes = state.audioWaveformsAmplitudes,
-                                                durationMs = state.videoDurationMs,
-                                                modifier = Modifier.fillMaxWidth().height(40.dp)
-                                            )
-                                        }
-                                    } else {
-                                        VideoTimeline(
-                                            videoUri = videoUri,
-                                            durationMs = state.videoDurationMs,
-                                            currentPositionMs = state.currentPosition,
-                                            isPlaying = state.isPlaying,
-                                            onSeek = { viewModel.setCurrentPosition(it) },
-                                            onScrubStart = { viewModel.startScrubbing() },
-                                            onScrubStop = { finalPos -> viewModel.stopScrubbing(finalPos) },
-                                            trimRanges = state.trimPosition.completeRanges,
-                                            audioAmplitudes = state.audioWaveformsAmplitudes,
-                                            showWaveform = true,
-                                            videoWidth = state.videoWidth,
-                                            videoHeight = state.videoHeight,
-                                            modifier = Modifier.fillMaxWidth().height(120.dp)
-                                        )
-                                    }
+                                    VideoTimeline(
+                                        videoUri = videoUri,
+                                        durationMs = state.videoDurationMs,
+                                        currentPositionMs = state.currentPosition,
+                                        isPlaying = state.isPlaying,
+                                        onSeek = { viewModel.setCurrentPosition(it) },
+                                        onScrubStart = { viewModel.startScrubbing() },
+                                        onScrubStop = { finalPos -> viewModel.stopScrubbing(finalPos) },
+                                        trimRanges = state.trimPosition.completeRanges,
+                                        audioAmplitudes = state.audioWaveformsAmplitudes,
+                                        showWaveform = true,
+                                        videoWidth = state.videoWidth,
+                                        videoHeight = state.videoHeight,
+                                        modifier = Modifier.fillMaxWidth().height(120.dp)
+                                    )
                                 }
                             }
 

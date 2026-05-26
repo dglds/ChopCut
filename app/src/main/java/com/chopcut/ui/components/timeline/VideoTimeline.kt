@@ -166,8 +166,10 @@ fun VideoTimeline(
 
             if (showWaveform && audioAmplitudes.isNotEmpty()) {
                 LegacyTimelineWaveform(
+                    smoothPositionState = smoothPositionMs,
                     amplitudes = audioAmplitudes,
                     durationMs = durationMs,
+                    pixelPerSecond = pxPerSecond,
                     height = waveformHeightDp,
                     waveColor = waveColor
                 )
@@ -200,6 +202,8 @@ private fun LegacyTimelineRuler(
     val rulerTickColor = remember { Color.White.copy(alpha = 0.4f) }
     val tickEndY = remember(density) { with(density) { 8.dp.toPx() } }
     val rulerTextY = remember(density) { with(density) { 20.dp.toPx() } }
+    val strokeWidthPx = remember(density) { with(density) { 1.dp.toPx() } }
+    
     val rulePaint = remember(density) {
         android.graphics.Paint().apply {
             color = android.graphics.Color.WHITE
@@ -223,15 +227,18 @@ private fun LegacyTimelineRuler(
         val startX = centerOffset - currentScrollPx
         val canvasWidth = size.width
 
-        for (sec in 0..totalSeconds) {
+        // Culling matemático: calcula o intervalo de segundos visíveis na tela
+        val firstVisibleSec = ((-50 - startX) / pixelPerSecond).toInt().coerceIn(0, totalSeconds)
+        val lastVisibleSec = ((canvasWidth + 50 - startX) / pixelPerSecond).toInt().coerceIn(0, totalSeconds)
+
+        for (sec in firstVisibleSec..lastVisibleSec) {
             val tickX = startX + (sec * pixelPerSecond)
-            if (tickX < -50 || tickX > canvasWidth + 50) continue
 
             drawLine(
                 color = rulerTickColor,
                 start = androidx.compose.ui.geometry.Offset(tickX, 0f),
                 end = androidx.compose.ui.geometry.Offset(tickX, tickEndY),
-                strokeWidth = 1.dp.toPx()
+                strokeWidth = strokeWidthPx
             )
 
             if (showAllLabels || sec % 5 == 0) {
@@ -270,7 +277,11 @@ private fun TimelineThumbnails(
         val startX = centerOffset - currentScrollPx
         val canvasWidth = size.width
 
-        for (f in 0 until totalFrames) {
+        // Culling matemático: calcula o intervalo de frames visíveis na tela
+        val firstVisibleFrame = ((-pixelPerSecond - startX) / pixelPerSecond).toInt().coerceIn(0, totalFrames - 1)
+        val lastVisibleFrame = ((canvasWidth - startX) / pixelPerSecond).toInt().coerceIn(0, totalFrames - 1)
+
+        for (f in firstVisibleFrame..lastVisibleFrame) {
             val x = startX + (f * pixelPerSecond)
             val isLast = f == totalFrames - 1
             val remainderMs = durationMs % 1000
@@ -279,8 +290,6 @@ private fun TimelineThumbnails(
             } else {
                 pixelPerSecond
             }
-
-            if (x + currentThumbWidth < 0 || x > canvasWidth) continue
 
             val sprite = viewModel.getSprite(f)
             if (sprite != null && !sprite.isRecycled) {
@@ -316,23 +325,66 @@ private fun TimelineThumbnails(
 
 @Composable
 private fun LegacyTimelineWaveform(
+    smoothPositionState: State<Float>,
     amplitudes: FloatArray,
     durationMs: Long,
+    pixelPerSecond: Float,
     height: Dp,
     waveColor: Color = Color.White.copy(alpha = 0.55f),
     modifier: Modifier = Modifier
 ) {
     if (amplitudes.isEmpty()) return
 
-    WaveformRenderer(
-        amplitudes = amplitudes,
-        modifier = modifier.height(height),
-        barWidth = 2.5.dp,
-        barGap = 1.dp,
-        minHeight = 1.5.dp,
-        color = waveColor,
-        mirrored = true,
-        baseline = com.chopcut.ui.components.waveform.WaveformBaseline.Center,
-        animate = false
-    )
+    val density = LocalDensity.current
+    
+    // Otimização: obter medidas em pixel fora do Canvas para evitar conversão dentro do loop
+    val barWidthPx = remember(density) { with(density) { 2.5.dp.toPx() } }
+    val barGapPx = remember(density) { with(density) { 1.dp.toPx() } }
+    val minHeightPx = remember(density) { with(density) { 1.5.dp.toPx() } }
+
+    Canvas(modifier = modifier.fillMaxWidth().height(height)) {
+        val centerOffset = size.width / 2f
+        val currentScrollPx = (smoothPositionState.value / 1000f) * pixelPerSecond
+        val startX = centerOffset - currentScrollPx
+        val canvasWidth = size.width
+        val canvasHeight = size.height
+        val centerY = canvasHeight / 2f
+
+        val totalWidthPx = (durationMs / 1000f) * pixelPerSecond
+        val stepPx = barWidthPx + barGapPx
+        
+        // Quantidade total de barras que cabem no vídeo
+        val totalBars = (totalWidthPx / stepPx).toInt().coerceAtLeast(1)
+
+        // Fator de normalização rápido (calculado uma única vez fora do loop)
+        var maxAmp = 0.01f
+        for (i in amplitudes.indices) {
+            val a = amplitudes[i]
+            if (a > maxAmp) maxAmp = a
+        }
+        val normFactor = if (maxAmp > 0.05f) maxAmp else 1f
+
+        // Culling matemático: calcula o intervalo de barras visíveis na tela
+        val firstVisibleBar = ((-barWidthPx - startX) / stepPx).toInt().coerceIn(0, totalBars - 1)
+        val lastVisibleBar = ((canvasWidth - startX) / stepPx).toInt().coerceIn(0, totalBars - 1)
+
+        for (i in firstVisibleBar..lastVisibleBar) {
+            val x = startX + (i * stepPx)
+
+            // Mapeamento proporcional rápido para o array de amplitudes
+            val ampIdx = ((i.toFloat() / totalBars) * amplitudes.size).toInt().coerceIn(0, amplitudes.size - 1)
+            val amp = amplitudes[ampIdx]
+            
+            val normalized = (amp / normFactor).coerceIn(0f, 1f)
+            val boosted = kotlin.math.sqrt(normalized.toDouble()).toFloat()
+            val barHeight = (boosted * centerY).coerceAtLeast(minHeightPx)
+
+            drawRoundRect(
+                color = waveColor,
+                topLeft = androidx.compose.ui.geometry.Offset(x, centerY - barHeight),
+                size = androidx.compose.ui.geometry.Size(barWidthPx, barHeight * 2f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidthPx / 2f, barWidthPx / 2f)
+            )
+        }
+    }
 }
