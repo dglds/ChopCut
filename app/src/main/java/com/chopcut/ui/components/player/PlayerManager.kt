@@ -47,11 +47,11 @@ class PlayerManager(
 
     val currentPosition: Long get() = exoPlayer.currentPosition
 
-    /** Emite a posição atual do player a cada 8ms (120 FPS) para obter rolagem ultra-suave. */
+    /** Emite a posição atual do player a cada 100ms para evitar congestionamento da UI thread e obter rolagem autônoma ultra-suave. */
     val currentPositionFlow: Flow<Long> = flow {
         while (true) {
             emit(exoPlayer.currentPosition)
-            delay(8)
+            delay(100)
         }
     }
 

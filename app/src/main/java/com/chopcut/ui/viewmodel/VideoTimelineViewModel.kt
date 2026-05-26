@@ -99,105 +99,10 @@ class VideoTimelineViewModel(
      * @param height Altura da thumbnail
      */
     fun loadSprites(uri: Uri, durationMs: Long, width: Int, height: Int) {
-        if (activeUri != null && activeUri != uri) {
-            loadingJob?.cancel()
-            clear()
-        }
-        
-        if (activeUri == uri && _isReady.value) {
-            Timber.d("Sprites já carregados para $uri, cache hit!")
-            return
-        }
-        
-        activeUri = uri
-        activeDurationMs = durationMs
-        thumbWidth = width
-        thumbHeight = height
-        
-        loadingJob = viewModelScope.launch(Dispatchers.IO) {
-            try {
-                Timber.d("Carregando sprites: uri=$uri, duration=${durationMs}ms, dims=${width}x${height}")
-                
-                _isReady.value = false
-                _extractionProgress.value = 0f
-                
-                // Inicializar cache
-                val totalFrames = kotlin.math.ceil(durationMs / 1000f).toInt()
-                val totalSprites = (totalFrames + THUMBS_PER_SPRITE - 1) / THUMBS_PER_SPRITE
-                // Cache size: se poucos sprites (<10), mantém todos; senão, 10% com max 900
-                val cacheSize = if (totalSprites < 10) {
-                    totalSprites  // Mantém todos os sprites quando são poucos
-                } else {
-                    max(min((totalSprites * CACHE_PERCENTAGE).toInt(), MAX_CACHE_SPRITES), 1)
-                }
-                spriteCache = LruCache(cacheSize)
-                
-                Timber.d("Total frames: $totalFrames, total sprites: $totalSprites, cache size: $cacheSize")
-                
-                // Recrear extractor sempre (para evitar conflito com vídeos diferentes)
-                extractor?.release()
-                extractor = FastFrameExtractor(getApplication(), uri)
-                val prepared = extractor?.prepare(width, height) ?: false
-                
-                if (!prepared) {
-                    Timber.e("Falha ao preparar FastFrameExtractor")
-                    _isReady.value = false
-                    return@launch
-                }
-                
-                Timber.d("FastFrameExtractor preparado, iniciando extração de sprites")
-                
-                val spritesExtracted = mutableMapOf<Int, Bitmap>()
-                val concurrency = 2
-                val batchSize = BATCH_SIZE
-                var nextSpriteIndex = 0
-                
-                while (nextSpriteIndex < totalSprites) {
-                    val currentBatchSize = min(batchSize, totalSprites - nextSpriteIndex)
-                    val endBatchIndex = nextSpriteIndex + currentBatchSize
-                    
-                    Timber.d("Extraindo lote: sprite $nextSpriteIndex até ${endBatchIndex - 1} (tamanho: $currentBatchSize)")
-                    
-                    (nextSpriteIndex until endBatchIndex).chunked(concurrency).forEach { chunk ->
-                        val deferreds: List<kotlinx.coroutines.Deferred<Pair<Int, Bitmap?>>> = chunk.map { spriteIndex ->
-                            async(Dispatchers.IO) {
-                                ensureActive()
-                                val cached = spriteCache?.get(spriteIndex)
-                                if (cached != null && !cached.isRecycled) {
-                                    Pair(spriteIndex, cached)
-                                } else {
-                                    val sprite = extractSprite(spriteIndex, totalFrames)
-                                    Pair(spriteIndex, sprite)
-                                }
-                            }
-                        }
-                        val results = deferreds.map { it.await() }
-                        
-                        results.forEach { (spriteIndex, sprite) ->
-                            if (sprite != null) {
-                                spritesExtracted[spriteIndex] = sprite
-                                _sprites.value = spritesExtracted.toMap()
-                                spriteCache?.put(spriteIndex, sprite)
-                                _extractionProgress.value = (spriteIndex + 1).toFloat() / totalSprites
-                                Timber.d("Sprite $spriteIndex extraido, progress: ${_extractionProgress.value}")
-                            }
-                        }
-                    }
-                    
-                    nextSpriteIndex = endBatchIndex
-                }
-                
-                _isReady.value = true
-                Timber.d("Extração de sprites concluída: ${spritesExtracted.size} sprites")
-                
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                Timber.d("Extração de sprites cancelada")
-                _isReady.value = false
-            } catch (e: Exception) {
-                Timber.e(e, "Erro ao carregar sprites")
-                _isReady.value = false
-            }
-        }
+        Timber.d("loadSprites desativada temporariamente para teste de stress")
+        _isReady.value = true
+        _extractionProgress.value = 1f
+        return
     }
     
     /**

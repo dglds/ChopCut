@@ -105,7 +105,7 @@ fun EditorScreen(
     }
 
     // Estados de controle do overlay
-    var showLoadingOverlay by remember { mutableStateOf(true) }
+    var showLoadingOverlay by remember { mutableStateOf(false) }
     var elapsedTimeMs by remember { mutableStateOf(0L) }
     var isReadyToHide by remember { mutableStateOf(false) }
 

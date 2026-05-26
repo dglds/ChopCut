@@ -58,84 +58,11 @@ class AudioViewModel(
      * @param force Force reload ignoring cache
      */
     fun loadWaveform(uri: Uri, targetBarCount: Int? = null, force: Boolean = false) {
-        timber.log.Timber.d("AudioViewModel: loadWaveform called for $uri")
-        if (activeUri != null && activeUri != uri) {
-            clear()
-        }
-
-        if (!force && activeUri == uri && _uiState.value is AudioUiState.Ready) {
-            timber.log.Timber.d("AudioViewModel: already loaded, skipping")
-            return
-        }
-
-        activeUri = uri
-        viewModelScope.launch(DispatcherProvider.io) {
-            try {
-                _uiState.value = AudioUiState.Loading
-                timber.log.Timber.d("AudioViewModel: starting extraction")
-                
-                // OTIMIZAÇÃO: Densidade dinâmica (20 barras/seg) via extractor
-                val barCount = targetBarCount ?: -1
-
-                // RESTRIÇÃO ARQUITETURAL CRÍTICA: O cache deve permanecer OBRIGATORIAMENTE desativado (cacheEnabled = false).
-                // Requisito oficial do projeto para evitar "falsos positivos" durante os testes e perfilamento
-                // da performance crua de extração da mídia. NÃO alterar para true.
-                val cacheEnabled = false
-                val cacheFile = if (cacheEnabled) WaveformCache.fileFor(getApplication(), uri) else null
-                val cached = cacheFile?.let { WaveformCache.read(it) }
-                val rawData = if (cached != null) {
-                    timber.log.Timber.d("AudioViewModel: cache HIT (${cached.pcmSamples.size} pontos) para $uri")
-                    cached
-                } else {
-                    val t0 = System.currentTimeMillis()
-                    timber.log.Timber.d("AudioViewModel: calling waveformExtractor.extractRawPcmData")
-                    val extracted = waveformExtractor.extractRawPcmData(uri, targetBarCount = barCount)
-                    val elapsed = System.currentTimeMillis() - t0
-                    timber.log.Timber.d("AudioViewModel: extraction returned ${extracted.pcmSamples.size} samples")
-                    timber.log.Timber.d(
-                        "AudioViewModel: extração concluída em %dms — %d pontos, %dms de áudio (%.1fx realtime)",
-                        elapsed,
-                        extracted.pcmSamples.size,
-                        extracted.durationMs,
-                        if (elapsed > 0) extracted.durationMs.toFloat() / elapsed else 0f
-                    )
-                    if (cacheEnabled && extracted.pcmSamples.isNotEmpty() && cacheFile != null) {
-                        WaveformCache.write(cacheFile, extracted)
-                    }
-                    extracted
-                }
-                
-                // Gerar waveform
-                val amplitudesList = WaveFormGenerator.generateWaveform(
-                    pcmSamples = rawData.pcmSamples,
-                    durationMs = rawData.durationMs,
-                    quality = waveformQuality,
-                    screenWidthDp = 400f,
-                    threshold = 0.05f,
-                    silenceHeight = null
-                )
-                timber.log.Timber.d("AudioViewModel: WaveformGenerator returned ${amplitudesList.size} amplitudes")
-
-                // Criar WaveformData
-                val waveformData = WaveformData(
-                    amplitudes = amplitudesList,
-                    sampleRate = rawData.sampleRate,
-                    durationMs = rawData.durationMs
-                )
-
-                // Atualizar estado
-                _waveform.value = waveformData
-                _amplitudes.value = amplitudesList
-                _uiState.value = AudioUiState.Ready(amplitudesList.size)
-                timber.log.Timber.d("AudioViewModel: state updated with ${amplitudesList.size} amplitudes, _amplitudes.value.size=${_amplitudes.value.size}")
-                
-                
-            } catch (e: Exception) {
-                timber.log.Timber.e("AudioViewModel: error loading waveform - ${e.message}")
-                e.printStackTrace()
-                _uiState.value = AudioUiState.Error(e.message ?: "Erro desconhecido")
-            }
-        }
+        timber.log.Timber.d("AudioViewModel: loadWaveform desativada temporariamente para teste de stress")
+        _uiState.value = AudioUiState.Ready(0)
+        _amplitudes.value = floatArrayOf()
+        _waveform.value = WaveformData(floatArrayOf(), 0, 0)
+        return
     }
     
     /**

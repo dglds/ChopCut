@@ -1,0 +1,197 @@
+{
+  "main": {
+    "id": "a8f3b9a58651e274",
+    "type": "split",
+    "children": [
+      {
+        "id": "aff5fa078626f76d",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "a1ab21ed70a58516",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "rastreamento/features/timeline.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "timeline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "32d5ea0421ee6dc7",
+    "type": "split",
+    "children": [
+      {
+        "id": "cb2e6d4111f19f34",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "1b78ffc1dc9e26a5",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "f5de076a5b48ab25",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "a9a6754917e4afe4",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 200
+  },
+  "right": {
+    "id": "145cf382c690b877",
+    "type": "split",
+    "children": [
+      {
+        "id": "f388165a1b52b255",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d8af1f47402c745b",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "rastreamento/features/timeline.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for timeline"
+            }
+          },
+          {
+            "id": "412bf9fa308027c0",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "rastreamento/features/timeline.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from timeline"
+            }
+          },
+          {
+            "id": "26b0216682c421ca",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "9fd3e7de4019b394",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "7d3e5b99dcf9e8cd",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "rastreamento/features/timeline.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of timeline"
+            }
+          }
+        ],
+        "currentTab": 4
+      }
+    ],
+    "direction": "horizontal",
+    "width": 200,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "a1ab21ed70a58516",
+  "lastOpenFiles": [
+    "rastreamento/index.md",
+    "rastreamento/2026-01.md",
+    "rastreamento/features/thumbnails.md",
+    "rastreamento/2025-01.md",
+    "rastreamento/features/ui-design.md",
+    "rastreamento/features/Untitled.canvas",
+    "rastreamento/features/audio.md"
+  ]
+}

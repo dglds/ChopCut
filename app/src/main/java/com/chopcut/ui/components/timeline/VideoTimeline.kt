@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableFloatStateOf
@@ -99,16 +100,18 @@ fun VideoTimeline(
     var isScrubbingLocal by remember { mutableStateOf(false) }
 
     val smoothPositionMs = remember { mutableFloatStateOf(currentPositionMs.toFloat()) }
-    var lastIsPlaying by remember { mutableStateOf(false) }
 
-    // Sincronizar posição apenas quando pausado ou na transição de Play (Ancoragem Inicial)
-    LaunchedEffect(currentPositionMs, isPlaying) {
+    // Sincronizar posição de forma inteligente baseando-se no estado de reprodução
+    LaunchedEffect(isPlaying) {
         if (!isPlaying) {
-            // Quando pausado, mantém sincronia em tempo real absoluta (seek, etc.)
-            smoothPositionMs.floatValue = currentPositionMs.toFloat()
-            localPositionMs = currentPositionMs
-        } else if (!lastIsPlaying && isPlaying) {
-            // Ancoragem Inicial de Reprodução: sincroniza a posição exata ao iniciar o Play
+            // Quando pausado, mantém sincronia em tempo real absoluta via snapshotFlow (reage a seeks, etc.)
+            snapshotFlow { currentPositionMs }
+                .collect { pos ->
+                    smoothPositionMs.floatValue = pos.toFloat()
+                    localPositionMs = pos
+                }
+        } else {
+            // Ancoragem Inicial de Reprodução: sincroniza a posição exata apenas na transição de entrada do Play
             smoothPositionMs.floatValue = currentPositionMs.toFloat()
             localPositionMs = currentPositionMs
             
@@ -118,13 +121,13 @@ fun VideoTimeline(
                 reason = "Autoplay initial anchoring triggered (anchored at ${currentPositionMs}ms)"
             )
         }
-        lastIsPlaying = isPlaying
     }
 
-    // Motor de Rolagem 100% Autônomo e Desacoplado a 120 FPS
+    // Motor de Rolagem 100% Autônomo e Desacoplado a 60 FPS
     LaunchedEffect(isPlaying) {
         if (isPlaying) {
             var lastTimeNanos = 0L
+            var accumulatedMs = 0f
             while (true) {
                 withFrameNanos { frameTimeNanos ->
                     if (lastTimeNanos == 0L) {
@@ -133,13 +136,17 @@ fun VideoTimeline(
                     } else {
                         val elapsedMs = (frameTimeNanos - lastTimeNanos) / 1_000_000f
                         lastTimeNanos = frameTimeNanos
+                        accumulatedMs += elapsedMs
                         
-                        // Avança a timeline de forma pura, linear e 100% autônoma
-                        val currentPos = smoothPositionMs.floatValue
-                        val newSmoothPos = (currentPos + elapsedMs).coerceIn(0f, durationMs.toFloat())
-                        
-                        smoothPositionMs.floatValue = newSmoothPos
-                        localPositionMs = newSmoothPos.toLong()
+                        // Limitador estrito a 60 FPS (atualizações visuais a cada ~16.67ms)
+                        if (accumulatedMs >= 16.67f) {
+                            val currentPos = smoothPositionMs.floatValue
+                            val newSmoothPos = (currentPos + accumulatedMs).coerceIn(0f, durationMs.toFloat())
+                            
+                            smoothPositionMs.floatValue = newSmoothPos
+                            localPositionMs = newSmoothPos.toLong()
+                            accumulatedMs = 0f
+                        }
                     }
                 }
             }
@@ -190,6 +197,7 @@ fun VideoTimeline(
             .fillMaxWidth()
             .height(totalHeightDp)
             .background(Color.Black.copy(alpha = 0.2f))
+            .border(2.dp, Color.Green) // Borda verde de depuração e monitoramento!
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             LegacyTimelineRuler(
@@ -210,6 +218,8 @@ fun VideoTimeline(
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             )
 
+            // Waveform de áudio desativada temporariamente para teste de stress
+            /*
             if (showWaveform && audioAmplitudes.isNotEmpty()) {
                 LegacyTimelineWaveform(
                     smoothPositionState = smoothPositionMs,
@@ -220,18 +230,16 @@ fun VideoTimeline(
                     waveColor = waveColor
                 )
             }
+            */
         }
 
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
-                .width(2.dp)
+                .width(4.dp)
                 .fillMaxHeight()
-                .background(
-                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.White, Color.Transparent)
-                    )
-                )
+                .border(1.dp, Color.Green)
+                .background(Color.White)
         )
     }
 }
@@ -243,61 +251,8 @@ private fun LegacyTimelineRuler(
     pixelPerSecond: Float,
     modifier: Modifier = Modifier
 ) {
-    val density = LocalDensity.current
-
-    val rulerTickColor = remember { Color.White.copy(alpha = 0.4f) }
-    val tickEndY = remember(density) { with(density) { 8.dp.toPx() } }
-    val rulerTextY = remember(density) { with(density) { 20.dp.toPx() } }
-    val strokeWidthPx = remember(density) { with(density) { 1.dp.toPx() } }
-    
-    val rulePaint = remember(density) {
-        android.graphics.Paint().apply {
-            color = android.graphics.Color.WHITE
-            alpha = 100
-            textSize = with(density) { 10.dp.toPx() }
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-    }
-
-    val totalSeconds = remember(durationMs) { (durationMs / 1000).toInt() }
-    val showAllLabels = totalSeconds < 30
-    val timeLabels = remember(durationMs) {
-        (0..totalSeconds).associateWith { sec ->
-            TimeUtils.formatDuration(sec * 1000L)
-        }
-    }
-
     Canvas(modifier = modifier.fillMaxWidth()) {
-        val centerOffset = size.width / 2f
-        val currentScrollPx = (smoothPositionState.value / 1000f) * pixelPerSecond
-        val startX = centerOffset - currentScrollPx
-        val canvasWidth = size.width
-
-        // Culling matemático: calcula o intervalo de segundos visíveis na tela
-        val firstVisibleSec = ((-50 - startX) / pixelPerSecond).toInt().coerceIn(0, totalSeconds)
-        val lastVisibleSec = ((canvasWidth + 50 - startX) / pixelPerSecond).toInt().coerceIn(0, totalSeconds)
-
-        for (sec in firstVisibleSec..lastVisibleSec) {
-            val tickX = startX + (sec * pixelPerSecond)
-
-            drawLine(
-                color = rulerTickColor,
-                start = androidx.compose.ui.geometry.Offset(tickX, 0f),
-                end = androidx.compose.ui.geometry.Offset(tickX, tickEndY),
-                strokeWidth = strokeWidthPx
-            )
-
-            if (showAllLabels || sec % 5 == 0) {
-                drawIntoCanvas { canvas ->
-                    canvas.nativeCanvas.drawText(
-                        timeLabels[sec] ?: "",
-                        tickX,
-                        rulerTextY,
-                        rulePaint
-                    )
-                }
-            }
-        }
+        // Ticks desligados temporariamente para teste de performance pura
     }
 }
 
@@ -312,10 +267,15 @@ private fun TimelineThumbnails(
     shimmerAlpha: Float,
     modifier: Modifier = Modifier
 ) {
-    val srcRect = remember { android.graphics.Rect() }
-    val dstRect = remember { android.graphics.Rect() }
+    val textPaint = remember {
+        android.graphics.Paint().apply {
+            color = android.graphics.Color.GREEN
+            textSize = 40f
+            textAlign = android.graphics.Paint.Align.CENTER
+            isAntiAlias = true
+        }
+    }
     val totalFrames = remember(durationMs) { kotlin.math.ceil(durationMs / 1000f).toInt() }
-    val THUMBS_PER_SPRITE = 3
 
     Canvas(modifier = modifier.fillMaxWidth()) {
         val centerOffset = size.width / 2f
@@ -337,33 +297,29 @@ private fun TimelineThumbnails(
                 pixelPerSecond
             }
 
-            val sprite = viewModel.getSprite(f)
-            if (sprite != null && !sprite.isRecycled) {
-                val col = f % THUMBS_PER_SPRITE
-                val sw = sprite.width / THUMBS_PER_SPRITE
-                val sh = sprite.height
-                val sx = col * sw
+            // Desenhar uma box cinza escura de fundo
+            drawRect(
+                color = Color(0xFF202020),
+                topLeft = androidx.compose.ui.geometry.Offset(x, 0f),
+                size = androidx.compose.ui.geometry.Size(currentThumbWidth, thumbHeightPx),
+                style = androidx.compose.ui.graphics.drawscope.Fill
+            )
+            // Desenhar uma borda verde fina em volta
+            drawRect(
+                color = Color.Green.copy(alpha = 0.5f),
+                topLeft = androidx.compose.ui.geometry.Offset(x, 0f),
+                size = androidx.compose.ui.geometry.Size(currentThumbWidth, thumbHeightPx),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+            )
 
-                val sourceFactor = if (isLast && remainderMs > 0) remainderMs / 1000f else 1f
-                val currentSourceWidth = (sw * sourceFactor).toInt().coerceAtLeast(1)
-
-                srcRect.set(sx, 0, sx + currentSourceWidth, sh)
-                dstRect.set(
-                    x.toInt(), 0,
-                    (x + currentThumbWidth).toInt(), thumbHeightPx.toInt()
+            // Desenhar o número do frame f no centro
+            drawIntoCanvas { canvas ->
+                canvas.nativeCanvas.drawText(
+                    f.toString(),
+                    x + currentThumbWidth / 2f,
+                    thumbHeightPx / 2f + 15f,
+                    textPaint
                 )
-
-                drawIntoCanvas { canvas ->
-                    canvas.nativeCanvas.drawBitmap(sprite, srcRect, dstRect, null)
-                }
-            } else if (!isReady) {
-                if (shimmerAlpha > 0f) {
-                    drawRect(
-                        color = Color.White.copy(alpha = shimmerAlpha),
-                        topLeft = androidx.compose.ui.geometry.Offset(x, 0f),
-                        size = androidx.compose.ui.geometry.Size(currentThumbWidth, thumbHeightPx)
-                    )
-                }
             }
         }
     }

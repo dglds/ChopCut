@@ -68,7 +68,7 @@ fun CurrentTimeDisplay(
             .padding(vertical = 8.dp)
             .clip(RectangleShape)
             .background(Color.Black.copy(alpha = 0.4f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
+            .border(2.dp, Color.Green, RectangleShape)
             .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         Text(
