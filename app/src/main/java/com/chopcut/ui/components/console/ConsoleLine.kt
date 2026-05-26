@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RectangleShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -118,14 +118,14 @@ fun ConsoleLine(
             modifier = containerModifier
                 .background(
                     color = theme.backgroundColor.copy(alpha = 0.9f),
-                    shape = androidx.compose.foundation.shape.RectangleShape
+                    shape = RectangleShape
                 )
                 .border(
                     width = 1.dp,
                     color = theme.textColor.copy(alpha = 0.2f),
-                    shape = androidx.compose.foundation.shape.RectangleShape
+                    shape = RectangleShape
                 )
-                .clip(androidx.compose.foundation.shape.RectangleShape)
+                .clip(RectangleShape)
                 .pointerInput(Unit) {
                     detectDragGestures { _, dragAmount ->
                         val verticalDrag = dragAmount.y

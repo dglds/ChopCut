@@ -29,7 +29,7 @@ import com.chopcut.ui.screen.PreferencesScreen
 import com.chopcut.ui.viewmodel.PreloadViewModel
 import com.chopcut.ui.viewmodel.ThumbnailViewModel
 import com.chopcut.ui.screen.EditorScreen
-import com.chopcut.ui.screen.debug.AudioWaveFormsTestScreen
+import com.chopcut.ui.screen.RecyclerEditorScreen
 
 @Composable
 fun ChopCutNavGraph(
@@ -87,24 +87,13 @@ fun ChopCutNavGraph(
                         val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
                         navController.navigate("editor?videoUri=$encodedUri")
                     },
+                    onNavigateToRecyclerEditor = { videoUri ->
+                        val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
+                        navController.navigate("editor-recycler?videoUri=$encodedUri")
+                    },
                     onNavigateToPreferences = {
                         navController.navigate("preferences")
-                    },
-                    onNavigateToTests = {
-                        navController.navigate("audio_waveforms_test")
                     }
-                )
-            }
-
-            composable(
-                route = "audio_waveforms_test",
-                enterTransition = { navFadeIn },
-                exitTransition = { navFadeOut },
-                popEnterTransition = { navFadeIn },
-                popExitTransition = { navFadeOut }
-            ) {
-                AudioWaveFormsTestScreen(
-                    debugViewModel = debugViewModel
                 )
             }
 
@@ -138,6 +127,34 @@ fun ChopCutNavGraph(
                 val videoUri = videoUriString?.let { Uri.parse(it) }
 
                 EditorScreen(
+                    videoUri = videoUri ?: Uri.EMPTY,
+                    preloadViewModel = preloadViewModel,
+                    thumbnailViewModel = thumbnailViewModel,
+                    audioViewModel = audioViewModel,
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable(
+                route = "editor-recycler?videoUri={videoUri}",
+                arguments = listOf(
+                    navArgument("videoUri") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                ),
+                enterTransition = { navFadeIn },
+                exitTransition = { navFadeOut },
+                popEnterTransition = { navFadeIn },
+                popExitTransition = { navFadeOut }
+            ) { backStackEntry ->
+                val videoUriString = backStackEntry.arguments?.getString("videoUri")
+                val videoUri = videoUriString?.let { Uri.parse(it) }
+
+                RecyclerEditorScreen(
                     videoUri = videoUri ?: Uri.EMPTY,
                     preloadViewModel = preloadViewModel,
                     thumbnailViewModel = thumbnailViewModel,

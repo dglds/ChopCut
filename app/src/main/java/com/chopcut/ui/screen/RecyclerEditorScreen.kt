@@ -20,7 +20,6 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.chopcut.ui.components.loading.LoadingConstants
@@ -32,7 +31,7 @@ import com.chopcut.data.pipeline.TransformerPipeline
 import com.chopcut.data.pipeline.TrimProgress
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.timeline.VideoFileInfo
-import com.chopcut.ui.components.timeline.VideoTimeline
+import com.chopcut.ui.components.timeline.OptimizedVideoTimeline
 import com.chopcut.ui.components.timeline.SeekbarProgress
 import com.chopcut.ui.components.timeline.CurrentTimeDisplay
 import com.chopcut.ui.components.timeline.VideoPreview
@@ -60,7 +59,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditorScreen(
+fun RecyclerEditorScreen(
     videoUri: Uri,
     preloadViewModel: PreloadViewModel,
     thumbnailViewModel: ThumbnailViewModel,
@@ -329,20 +328,15 @@ fun EditorScreen(
                                     .padding(vertical = 12.dp)
                             ) {
                                 if (state.videoDurationMs > 0) {
-                                    VideoTimeline(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        videoUri = videoUri,
+                                    OptimizedVideoTimeline(
+                                        uri = videoUri,
                                         durationMs = state.videoDurationMs,
-                                        currentPositionMs = state.currentPosition,
-                                        isPlaying = state.isPlaying,
-                                        onSeek = { viewModel.setCurrentPosition(it) },
-                                        onScrubStart = { viewModel.startScrubbing() },
-                                        onScrubStop = { finalPos -> viewModel.stopScrubbing(finalPos) },
-                                        trimRanges = state.trimPosition.completeRanges,
-                                        audioAmplitudes = state.audioWaveformsAmplitudes,
-                                        showWaveform = true,
-                                        videoWidth = state.videoWidth,
-                                        videoHeight = state.videoHeight
+                                        currentPosition = state.currentPosition,
+                                        onScrollChanged = { posMs -> viewModel.setCurrentPosition(posMs) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        itemCount = 900,
+                                        thumbnailHeight = 120,
+                                        thumbnailWidth = 120
                                     )
                                 }
                             }

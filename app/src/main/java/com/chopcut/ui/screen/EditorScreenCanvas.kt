@@ -20,7 +20,6 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.chopcut.ui.components.loading.LoadingConstants
@@ -60,7 +59,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditorScreen(
+fun EditorScreenCanvas(
     videoUri: Uri,
     preloadViewModel: PreloadViewModel,
     thumbnailViewModel: ThumbnailViewModel,

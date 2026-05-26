@@ -41,7 +41,7 @@ fun ChopCutFab(
             hoveredElevation = 10.dp,
             focusedElevation = 8.dp
         ),
-        shape = androidx.compose.foundation.shape.RectangleShape
+        shape = RectangleShape
     ) {
         Icon(
             imageVector = icon,
@@ -77,7 +77,7 @@ fun ChopCutSmallFab(
             hoveredElevation = 6.dp,
             focusedElevation = 6.dp
         ),
-        shape = androidx.compose.foundation.shape.RectangleShape
+        shape = RectangleShape
     ) {
         Icon(
             imageVector = icon,

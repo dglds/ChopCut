@@ -30,7 +30,7 @@ fun WaveformConfigPanel(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = androidx.compose.foundation.shape.RectangleShape
+        shape = RectangleShape
     ) {
         Row(
             modifier = Modifier

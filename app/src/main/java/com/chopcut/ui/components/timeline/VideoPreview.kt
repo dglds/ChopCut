@@ -58,9 +58,9 @@ fun VideoPreview(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(androidx.compose.foundation.shape.RectangleShape)
+            .clip(RectangleShape)
             .background(Color.Black)
-            .border(0.5.dp, Color.White.copy(alpha = 0.1f), androidx.compose.foundation.shape.RectangleShape)
+            .border(0.5.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
     ) {
         if (playerError != null) {
             VideoErrorState(
@@ -208,7 +208,7 @@ private fun VideoControls(
             IconButton(
                 onClick = onTogglePlayPause,
                 modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.RectangleShape)
+                    .background(Color.Black.copy(alpha = 0.5f), RectangleShape)
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,

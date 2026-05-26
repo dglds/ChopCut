@@ -67,7 +67,7 @@ fun ChopCutPrimaryButton(
             horizontal = 24.dp,
             vertical = 12.dp
         ),
-        shape = androidx.compose.foundation.shape.RectangleShape
+        shape = RectangleShape
     ) {
         if (icon != null) {
             Icon(
@@ -113,7 +113,7 @@ fun ChopCutSecondaryButton(
             horizontal = 16.dp,
             vertical = 10.dp
         ),
-        shape = androidx.compose.foundation.shape.RectangleShape,
+        shape = RectangleShape,
         border = ButtonDefaults.outlinedButtonBorder
     ) {
         if (icon != null) {
