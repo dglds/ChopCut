@@ -333,11 +333,12 @@ fun EditorScreen(
                                         videoUri = videoUri,
                                         durationMs = state.videoDurationMs,
                                         currentPositionMs = state.currentPosition,
+                                        isPlaying = state.isPlaying,
                                         onSeek = { viewModel.setCurrentPosition(it) },
                                         onScrubStart = { viewModel.startScrubbing() },
                                         onScrubStop = { finalPos -> viewModel.stopScrubbing(finalPos) },
                                         trimRanges = state.trimPosition.completeRanges,
-                                        audioAmplitudes = state.audioWaveformsAmplitudes.toList(),
+                                        audioAmplitudes = state.audioWaveformsAmplitudes,
                                         showWaveform = true,
                                         videoWidth = state.videoWidth,
                                         videoHeight = state.videoHeight
