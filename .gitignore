@@ -53,3 +53,9 @@ tmp/
 app/version.properties
 chopcut_startup_20260320_115447.perfetto-trace
 *.perfetto-trace
+jdk17/
+t.md
+trackme
+build_errors
+rastreamento/
+report_commits.txt
