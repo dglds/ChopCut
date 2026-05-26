@@ -51,7 +51,6 @@ import com.chopcut.ui.viewmodel.PreloadUiState
 import com.chopcut.ui.viewmodel.PreloadProgress
 import com.chopcut.ui.viewmodel.ExtractionStage
 import com.chopcut.ui.viewmodel.ThumbnailViewModel
-import com.chopcut.ui.viewmodel.VideoTimelineViewModel
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.Dispatchers

@@ -105,7 +105,6 @@ import com.chopcut.ui.viewmodel.ClearCacheState
 fun HomeScreen(
     preloadViewModel: PreloadViewModel,
     onNavigateToEditor: (Uri) -> Unit = {},
-    onNavigateToRecyclerEditor: (Uri) -> Unit = {},
     onNavigateToPreferences: () -> Unit = {}
 ) {
     val application = LocalContext.current.applicationContext as Application
@@ -190,9 +189,6 @@ fun HomeScreen(
                                 onChangeVideo = requestGallery,
                                 onOpenEditor = {
                                     onNavigateToEditor(uri)
-                                },
-                                onOpenRecyclerEditor = {
-                                    onNavigateToRecyclerEditor(uri)
                                 },
                                 onRemoveVideo = {
                                     preloadViewModel.clear()
@@ -360,7 +356,6 @@ private fun VideoPickerLoaded(
     isPreloading: Boolean = false,
     onChangeVideo: () -> Unit,
     onOpenEditor: () -> Unit,
-    onOpenRecyclerEditor: () -> Unit = {},
     onRemoveVideo: () -> Unit
 ) {
     val context = LocalContext.current
@@ -480,24 +475,6 @@ private fun VideoPickerLoaded(
                             color = OnPrimary
                         )
                     }
-                }
-                Box(
-                    modifier = Modifier
-                        .height(40.dp)
-                        .width(44.dp)
-                        .background(
-                            Color(0xFF00E5FF).copy(alpha = 0.3f),
-                            RectangleShape
-                        )
-                        .clickable(onClick = onOpenRecyclerEditor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "RV",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF00E5FF)
-                    )
                 }
                 Box(
                     modifier = Modifier
