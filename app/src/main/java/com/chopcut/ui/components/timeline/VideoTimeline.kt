@@ -95,41 +95,20 @@ fun VideoTimeline(
     var localPositionMs by remember { mutableLongStateOf(currentPositionMs) }
     var isScrubbingLocal by remember { mutableStateOf(false) }
 
-    val scrollMode by remember {
-        derivedStateOf {
-            when {
-                isScrubbingLocal -> TimelineScrollMode.MANUAL
-                isPlaying -> TimelineScrollMode.AUTO
-                else -> TimelineScrollMode.IDLE
-            }
+    val smoothPositionMs = remember { mutableFloatStateOf(currentPositionMs.toFloat()) }
+
+    // Sincronizar posição externa com a posição suavizada (quando não estiver arrastando)
+    LaunchedEffect(currentPositionMs) {
+        if (!isScrubbingLocal) {
+            smoothPositionMs.floatValue = currentPositionMs.toFloat()
+            localPositionMs = currentPositionMs
         }
     }
 
-    val smoothPositionMs = remember { mutableFloatStateOf(currentPositionMs.toFloat()) }
-
-    when (scrollMode) {
-        TimelineScrollMode.IDLE -> {
-            LaunchedEffect(currentPositionMs) {
-                smoothPositionMs.floatValue = currentPositionMs.toFloat()
-            }
-        }
-        TimelineScrollMode.AUTO -> {
-            LaunchedEffect(isPlaying) {
-                if (!isPlaying) return@LaunchedEffect
-                val startPositionMs = currentPositionMs
-                val startTimeNanos = System.nanoTime()
-                while (true) {
-                    withFrameNanos { frameTimeNanos ->
-                        val elapsedMs = (frameTimeNanos - startTimeNanos) / 1_000_000f
-                        smoothPositionMs.floatValue = (startPositionMs + elapsedMs).coerceIn(0f, durationMs.toFloat())
-                    }
-                }
-            }
-        }
-        TimelineScrollMode.MANUAL -> {
-            LaunchedEffect(localPositionMs) {
-                smoothPositionMs.floatValue = localPositionMs.toFloat()
-            }
+    // Sincronizar arraste manual do usuário
+    LaunchedEffect(localPositionMs) {
+        if (isScrubbingLocal) {
+            smoothPositionMs.floatValue = localPositionMs.toFloat()
         }
     }
 
