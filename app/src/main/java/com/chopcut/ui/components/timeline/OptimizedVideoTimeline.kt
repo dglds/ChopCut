@@ -20,6 +20,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.chopcut.data.thumbnail.OptimizedThumbnailProvider
 import kotlinx.coroutines.flow.collectLatest
+import android.util.Log
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
@@ -56,11 +57,13 @@ fun OptimizedVideoTimeline(
     thumbnailWidth: Int = 120
 ) {
     val context = LocalContext.current
+    Log.i("ChopCut", "[TIMELINE_RV] OptimizedVideoTimeline COMPOSING... uri=$uri duration=$durationMs")
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
     // Provedor e Adapter são lembrados durante a vida do Composable
     val provider = remember {
+        Log.i("ChopCut", "[TIMELINE_RV] Criando OptimizedThumbnailProvider...")
         OptimizedThumbnailProvider(
             context = context,
             thumbWidth = thumbnailWidth,
@@ -81,7 +84,9 @@ fun OptimizedVideoTimeline(
 
     // Coleta as atualizações do provedor e notifica o adapter
     LaunchedEffect(provider, adapter) {
+        Log.i("ChopCut", "[TIMELINE_RV] LaunchedEffect started, waiting for thumbnail updates...")
         provider.thumbnailUpdates.collectLatest { (timestamp, bitmap) ->
+            Log.i("ChopCut", "[TIMELINE_RV] received thumbnail ts=$timestamp bmp=${bitmap.width}x${bitmap.height}")
             adapter.onThumbnailLoaded(timestamp, bitmap)
         }
     }

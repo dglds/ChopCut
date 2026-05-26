@@ -34,6 +34,9 @@ class ChopCutApplication : Application() {
 
         instance = this
 
+        android.util.Log.i("ChopCut", "!!! APP ONCREATE STARTED !!!")
+        System.out.println("!!! CHOPCUT APP ONCREATE !!!")
+        
         // Setup Timber for logging
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())

@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.chopcut.R
 import com.chopcut.data.thumbnail.OptimizedThumbnailProvider
 import com.chopcut.data.thumbnail.ThumbnailPriority
+import android.util.Log
 
 /**
  * Adapter para a timeline de thumbnails otimizada.
@@ -70,14 +71,17 @@ class TimelineAdapter(
         val timestamp = (position.toLong() * durationMs) / itemCountLimit
         val quantizedTime = (timestamp / 500) * 500
 
-        // Verificar cache primeiro
         val cached = thumbnailCache[quantizedTime]
         if (cached != null) {
+            Log.i("ChopCut", "[ADAPTER] bind pos=$position ts=$quantizedTime HAS_CACHE, setting bitmap")
             holder.thumbnailImage.setImageBitmap(cached)
             holder.loadingOverlay.visibility = View.GONE
         } else if (!isPayload) {
+            Log.i("ChopCut", "[ADAPTER] bind pos=$position ts=$quantizedTime NO_CACHE, requesting")
             holder.thumbnailImage.setImageBitmap(null)
             holder.loadingOverlay.visibility = View.VISIBLE
+        } else {
+            Log.i("ChopCut", "[ADAPTER] bind pos=$position ts=$quantizedTime PAYLOAD_BUT_NO_CACHE")
         }
 
         // Adicionar esta posição ao registro de pendentes para este timestamp
@@ -107,9 +111,14 @@ class TimelineAdapter(
      * Atualiza os thumbnails visíveis quando novos bitmaps são gerados pelo provedor.
      */
     fun onThumbnailLoaded(timestamp: Long, bitmap: Bitmap) {
+        Log.i("ChopCut", "[ADAPTER] onThumbnailLoaded ts=$timestamp bmp=${bitmap.width}x${bitmap.height}")
         thumbnailCache[timestamp] = bitmap
-        val positions = pendingPositions.remove(timestamp) ?: return
+        val positions = pendingPositions.remove(timestamp) ?: run {
+            Log.i("ChopCut", "[ADAPTER] onThumbnailLoaded ts=$timestamp NO_PENDING_POSITIONS")
+            return
+        }
 
+        Log.i("ChopCut", "[ADAPTER] onThumbnailLoaded ts=$timestamp notifying ${positions.size} positions")
         positions.forEach { pos ->
             notifyItemChanged(pos, PAYLOAD_THUMB)
         }

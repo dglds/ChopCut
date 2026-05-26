@@ -67,6 +67,8 @@ fun RecyclerEditorScreen(
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    System.out.println("!!! RECYCLER EDITOR SCREEN ENTERED !!!")
+    android.util.Log.i("ChopCut", "[RECYCLER_SCREEN] RecyclerEditorScreen entered with $videoUri")
     val scope = rememberCoroutineScope()
  
     // Observar PreloadViewModel com lifecycle awareness
@@ -97,7 +99,7 @@ fun RecyclerEditorScreen(
     }
 
     // Estados de controle do overlay
-    var showLoadingOverlay by remember { mutableStateOf(true) }
+    var showLoadingOverlay by remember { mutableStateOf(false) } // Recycler não precisa de preload Canvas
     var elapsedTimeMs by remember { mutableStateOf(0L) }
     var isReadyToHide by remember { mutableStateOf(false) }
 

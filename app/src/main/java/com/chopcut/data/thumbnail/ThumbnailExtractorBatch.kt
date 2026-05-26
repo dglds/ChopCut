@@ -11,6 +11,7 @@ import com.chopcut.util.logging.ActivityLogger
 import com.chopcut.util.logging.AppActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.util.Log
 import kotlin.system.measureTimeMillis
 
 /**
@@ -108,12 +109,20 @@ open class ThumbnailExtractorBatch(
         width: Int = 320,
         height: Int = 180
     ): Bitmap? = withContext(Dispatchers.IO) {
+        Log.i("ChopCut", "[EXTRACT] extractSingle pos=$positionMs ${width}x${height}")
         val startTime = System.currentTimeMillis()
         val retriever = MediaMetadataRetriever()
 
         try {
             retriever.setDataSource(context, uri)
+            Log.i("ChopCut", "[EXTRACT] setDataSource OK, getting frame at ${positionMs}ms")
             val bitmap = extractFrameAt(retriever, positionMs, width, height, ThumbnailQuality.HIGH)
+
+            if (bitmap != null) {
+                Log.i("ChopCut", "[EXTRACT] SUCCESS bitmap=${bitmap.width}x${bitmap.height} in ${System.currentTimeMillis() - startTime}ms")
+            } else {
+                Log.i("ChopCut", "[EXTRACT] NULL BITMAP from extractFrameAt")
+            }
 
             bitmap
         } catch (e: Exception) {

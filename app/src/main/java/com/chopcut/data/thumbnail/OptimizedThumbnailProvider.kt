@@ -13,9 +13,8 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import android.util.Log
 import java.util.concurrent.PriorityBlockingQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -46,26 +45,24 @@ class OptimizedThumbnailProvider(
     private val extractorBatch = ThumbnailExtractorBatch(context)
     private val requestQueue = PriorityBlockingQueue<ThumbnailRequest>()
     private val executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE)
-    
-    // Mutex para proteger a fila de requests pendentes
-    private val queueMutex = Mutex()
-    // Map de timestamps pendentes para evitar duplicidade na fila
-    private val pendingTimestamps = mutableSetOf<Long>()
 
     // Flow para emitir atualizações de thumbnails (UI batching)
     private val _thumbnailUpdates = MutableSharedFlow<Pair<Long, Bitmap>>(
         extraBufferCapacity = 64,
+        replay = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     val thumbnailUpdates: SharedFlow<Pair<Long, Bitmap>> = _thumbnailUpdates
 
     init {
-        // Iniciar workers de extração
+        Log.i("ChopCut", "[PROVIDER] init START, starting ${THREAD_POOL_SIZE} workers")
         repeat(THREAD_POOL_SIZE) {
             executor.execute {
+                Log.i("ChopCut", "[PROVIDER] worker LOOP starting on ${Thread.currentThread().name}")
                 workerLoop()
             }
         }
+        Log.i("ChopCut", "[PROVIDER] init DONE, workers submitted")
     }
 
     /**
@@ -74,32 +71,26 @@ class OptimizedThumbnailProvider(
      */
     fun requestThumbnail(uri: Uri, positionMs: Long, priority: ThumbnailPriority) {
         val quantizedTime = quantizeTimestamp(positionMs)
-        
-        // 1. Verificar cache
+
         val cached = cache.get(uri.toString(), quantizedTime)
         if (cached != null) {
             scope.launch { _thumbnailUpdates.emit(quantizedTime to cached) }
             return
         }
 
-        // 2. Adicionar à fila se não estiver pendente
-        scope.launch {
-            queueMutex.withLock {
-                if (pendingTimestamps.contains(quantizedTime)) return@withLock
-                
-                pendingTimestamps.add(quantizedTime)
-                requestQueue.add(ThumbnailRequest(
-                    uri = uri,
-                    timestamp = quantizedTime,
-                    priority = priority,
-                    width = thumbWidth,
-                    height = thumbHeight,
-                    callback = { bitmap ->
-                        cache.put(uri.toString(), quantizedTime, bitmap)
-                        scope.launch { _thumbnailUpdates.emit(quantizedTime to bitmap) }
-                    }
-                ))
+        val request = ThumbnailRequest(
+            uri = uri,
+            timestamp = quantizedTime,
+            priority = priority,
+            width = thumbWidth,
+            height = thumbHeight,
+            callback = { bitmap ->
+                cache.put(uri.toString(), quantizedTime, bitmap)
+                scope.launch { _thumbnailUpdates.emit(quantizedTime to bitmap) }
             }
+        )
+        if (!requestQueue.contains(request)) {
+            requestQueue.add(request)
         }
     }
 
@@ -120,10 +111,7 @@ class OptimizedThumbnailProvider(
      * Limpa a fila de extração (útil em scroll rápido).
      */
     suspend fun clearQueue() {
-        queueMutex.withLock {
-            requestQueue.clear()
-            pendingTimestamps.clear()
-        }
+        requestQueue.clear()
     }
 
     /**
@@ -137,16 +125,15 @@ class OptimizedThumbnailProvider(
      * Loop principal de extração executado em threads do pool.
      */
     private fun workerLoop() {
+        Log.i("ChopCut", "[PROVIDER] workerLoop started on ${Thread.currentThread().name}")
         while (!Thread.currentThread().isInterrupted) {
             try {
-                // take() bloqueia até que um item esteja disponível
                 val request = requestQueue.take()
+                Log.i("ChopCut", "[PROVIDER] worker got request ts=${request.timestamp} prio=${request.priority.name}")
                 
-                // Extrair thumbnail
                 val bitmap = runBlockingExtract(request)
                 
                 if (bitmap != null) {
-                    // Configurar bitmap para RGB_565 para economizar memória
                     val optimizedBitmap = if (bitmap.config != Bitmap.Config.RGB_565) {
                         val copy = bitmap.copy(Bitmap.Config.RGB_565, false)
                         bitmap.recycle()
@@ -154,15 +141,8 @@ class OptimizedThumbnailProvider(
                     } else {
                         bitmap
                     }
-                    
-                    request.callback(optimizedBitmap)
-                }
 
-                // Remover do set de pendentes
-                scope.launch {
-                    queueMutex.withLock {
-                        pendingTimestamps.remove(request.timestamp)
-                    }
+                    request.callback(optimizedBitmap)
                 }
             } catch (e: InterruptedException) {
                 break
