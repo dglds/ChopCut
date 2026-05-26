@@ -124,25 +124,23 @@ fun VideoTimeline(
     // Motor de Rolagem 100% Autônomo e Desacoplado a 120 FPS
     LaunchedEffect(isPlaying) {
         if (isPlaying) {
-            var lastTimeNanos = System.nanoTime()
+            var lastTimeNanos = 0L
             while (true) {
                 withFrameNanos { frameTimeNanos ->
-                    val elapsedMs = (frameTimeNanos - lastTimeNanos) / 1_000_000f
-                    lastTimeNanos = frameTimeNanos
-                    
-                    // Avança a timeline de forma pura, linear e 100% autônoma baseada no Choreographer
-                    val currentPos = smoothPositionMs.floatValue
-                    val newSmoothPos = (currentPos + elapsedMs).coerceIn(0f, durationMs.toFloat())
-                    
-                    smoothPositionMs.floatValue = newSmoothPos
-                    localPositionMs = newSmoothPos.toLong()
-                    
-                    // Registra telemetria do movimento autônomo desacoplado
-                    TimelineLogger.logMovement(
-                        mode = "AUTO_I",
-                        positionMs = localPositionMs,
-                        reason = "Independent timeline scroll tick (elapsedMs = ${String.format(java.util.Locale.US, "%.1f", elapsedMs)}ms)"
-                    )
+                    if (lastTimeNanos == 0L) {
+                        // Sincroniza a base de tempo inicial diretamente com o Choreographer
+                        lastTimeNanos = frameTimeNanos
+                    } else {
+                        val elapsedMs = (frameTimeNanos - lastTimeNanos) / 1_000_000f
+                        lastTimeNanos = frameTimeNanos
+                        
+                        // Avança a timeline de forma pura, linear e 100% autônoma
+                        val currentPos = smoothPositionMs.floatValue
+                        val newSmoothPos = (currentPos + elapsedMs).coerceIn(0f, durationMs.toFloat())
+                        
+                        smoothPositionMs.floatValue = newSmoothPos
+                        localPositionMs = newSmoothPos.toLong()
+                    }
                 }
             }
         }
