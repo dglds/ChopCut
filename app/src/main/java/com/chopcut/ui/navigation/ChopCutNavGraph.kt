@@ -28,7 +28,7 @@ import com.chopcut.ui.screen.HomeScreen
 import com.chopcut.ui.screen.PreferencesScreen
 import com.chopcut.ui.viewmodel.PreloadViewModel
 import com.chopcut.ui.viewmodel.ThumbnailViewModel
-import com.chopcut.ui.screen.RecyclerEditorScreen
+import com.chopcut.ui.screen.EditorScreen
 
 @Composable
 fun ChopCutNavGraph(
@@ -121,7 +121,7 @@ fun ChopCutNavGraph(
                 val videoUriString = backStackEntry.arguments?.getString("videoUri")
                 val videoUri = videoUriString?.let { Uri.parse(it) }
 
-                RecyclerEditorScreen(
+                EditorScreen(
                     videoUri = videoUri ?: Uri.EMPTY,
                     preloadViewModel = preloadViewModel,
                     thumbnailViewModel = thumbnailViewModel,

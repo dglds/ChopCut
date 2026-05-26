@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.chopcut.ui.components.loading.LoadingConstants
@@ -32,6 +33,9 @@ import com.chopcut.data.pipeline.TrimProgress
 import com.chopcut.data.repository.VideoRepository
 import com.chopcut.ui.components.timeline.VideoFileInfo
 import com.chopcut.ui.components.timeline.OptimizedVideoTimeline
+import com.chopcut.ui.components.timeline.TimelineRuler
+import com.chopcut.ui.components.timeline.TimelineWaveform
+import androidx.compose.ui.platform.LocalDensity
 import com.chopcut.ui.components.timeline.SeekbarProgress
 import com.chopcut.ui.components.timeline.CurrentTimeDisplay
 import com.chopcut.ui.components.timeline.VideoPreview
@@ -58,7 +62,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecyclerEditorScreen(
+fun EditorScreen(
     videoUri: Uri,
     preloadViewModel: PreloadViewModel,
     thumbnailViewModel: ThumbnailViewModel,
@@ -66,8 +70,6 @@ fun RecyclerEditorScreen(
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    System.out.println("!!! RECYCLER EDITOR SCREEN ENTERED !!!")
-    android.util.Log.i("ChopCut", "[RECYCLER_SCREEN] RecyclerEditorScreen entered with $videoUri")
     val scope = rememberCoroutineScope()
  
     // Observar PreloadViewModel com lifecycle awareness
@@ -85,6 +87,13 @@ fun RecyclerEditorScreen(
     )
     val state by viewModel.state.collectAsState()
 
+    val smoothPositionMs = remember { mutableStateOf(state.currentPosition.toFloat()) }
+    LaunchedEffect(state.currentPosition) {
+        if (state.currentPosition.toFloat() != smoothPositionMs.value) {
+            smoothPositionMs.value = state.currentPosition.toFloat()
+        }
+    }
+
     var saveDialogState by remember { mutableStateOf(SaveDialogState()) }
     var showSaveDialog by remember { mutableStateOf(false) }
 
@@ -98,7 +107,7 @@ fun RecyclerEditorScreen(
     }
 
     // Estados de controle do overlay
-    var showLoadingOverlay by remember { mutableStateOf(false) } // Recycler não precisa de preload Canvas
+    var showLoadingOverlay by remember { mutableStateOf(true) }
     var elapsedTimeMs by remember { mutableStateOf(0L) }
     var isReadyToHide by remember { mutableStateOf(false) }
 
@@ -329,18 +338,39 @@ fun RecyclerEditorScreen(
                                     .padding(vertical = 12.dp)
                             ) {
                                 if (state.videoDurationMs > 0) {
+                                    val density = LocalDensity.current
+                                    val thumbnailWidthPx = with(density) { 60.dp.toPx() }
+
+                                    TimelineRuler(
+                                        smoothPositionMs = smoothPositionMs.value,
+                                        durationMs = state.videoDurationMs,
+                                        pixelPerSecond = thumbnailWidthPx,
+                                        modifier = Modifier.fillMaxWidth().height(24.dp)
+                                    )
+
+                                    Spacer(Modifier.height(4.dp))
+
                                     OptimizedVideoTimeline(
                                         uri = videoUri,
                                         durationMs = state.videoDurationMs,
                                         currentPosition = state.currentPosition,
-                                        onScrollChanged = { posMs -> viewModel.setCurrentPosition(posMs) },
+                                        onScrollProgress = { progress -> smoothPositionMs.value = progress },
+                                        onScrollChanged = { viewModel.setCurrentPosition(it) },
                                         onScrollStart = { viewModel.startScrubbing() },
                                         onScrollEnd = { finalPos -> viewModel.stopScrubbing(finalPos) },
                                         modifier = Modifier.fillMaxWidth(),
-                                        itemCount = 900,
-                                        thumbnailHeight = 120,
-                                        thumbnailWidth = 120
+                                        thumbnailHeight = 56,
+                                        thumbnailWidth = 60
                                     )
+
+                                    if (state.audioWaveformsAmplitudes.isNotEmpty()) {
+                                        Spacer(Modifier.height(4.dp))
+                                        TimelineWaveform(
+                                            amplitudes = state.audioWaveformsAmplitudes,
+                                            durationMs = state.videoDurationMs,
+                                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                                        )
+                                    }
                                 }
                             }
 

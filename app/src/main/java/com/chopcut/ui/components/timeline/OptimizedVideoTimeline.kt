@@ -1,73 +1,68 @@
 package com.chopcut.ui.components.timeline
 
 import android.net.Uri
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
+import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.chopcut.data.thumbnail.OptimizedThumbnailProvider
+import com.chopcut.data.thumbnail.ThumbnailPriority
 import kotlinx.coroutines.flow.collectLatest
-import android.util.Log
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-import androidx.compose.ui.Alignment
-import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 
 /**
- * Timeline de thumbnails de vídeo otimizada usando RecyclerView dentro do Compose.
+ * Timeline otimizada com foco EXCLUSIVO na rolagem e exibição das miniaturas do vídeo.
  *
- * Integra o `OptimizedThumbnailProvider` e `TimelineAdapter` para
- * renderizar uma timeline com até 900 posições de forma performática.
+ * Não renderiza Régua de Ticks ou Forma de Onda internas, mantendo-se como um componente leve
+ * focado em performance, reuso de views e interação sob demanda via RecyclerView.
  *
  * @param uri URI do vídeo.
  * @param durationMs Duração total do vídeo em milissegundos.
- * @param currentPosition Posição atual do playhead em milissegundos (para scroll programático).
- * @param onScrollChanged Callback para notificar a nova posição de scroll (em ms) ao rolar manualmente.
- * @param modifier Modificador para o componente.
- * @param itemCount Total de thumbnails a serem exibidos (padrão 900).
- * @param thumbnailHeight Altura de cada thumbnail em pixels.
- * @param thumbnailWidth Largura de cada thumbnail em pixels.
+ * @param currentPosition Posição de reprodução atual em milissegundos (para sincronismo programático).
+ * @param onScrollProgress Callback acionado a cada pixel de rolagem, transmitindo o timestamp exato em ms.
+ * @param onScrollChanged Callback acionado durante gestos de arrasto ativos para atualizar o playhead.
+ * @param onScrollStart Callback acionado ao iniciar o arrasto.
+ * @param onScrollEnd Callback acionado ao cessar a rolagem.
+ * @param modifier Modificador Compose.
+ * @param thumbnailHeight Altura de cada miniatura em dp (padrão 56.dp).
+ * @param thumbnailWidth Largura de cada miniatura em dp (padrão 60.dp, onde 1s = 60dp).
  */
 @Composable
 fun OptimizedVideoTimeline(
     uri: Uri,
     durationMs: Long,
     currentPosition: Long,
+    onScrollProgress: (Float) -> Unit,
     onScrollChanged: (Long) -> Unit,
     onScrollStart: () -> Unit = {},
     onScrollEnd: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
-    itemCount: Int = 900,
-    thumbnailHeight: Int = 120,
-    thumbnailWidth: Int = 120
+    thumbnailHeight: Int = 56,
+    thumbnailWidth: Int = 60
 ) {
     val context = LocalContext.current
-    Log.i("ChopCut", "[TIMELINE_RV] OptimizedVideoTimeline COMPOSING... uri=$uri duration=$durationMs")
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
-    // Provedor e Adapter são lembrados durante a vida do Composable
+    val thumbnailHeightPx = with(density) { thumbnailHeight.dp.roundToPx() }
+    val thumbnailWidthPx = with(density) { thumbnailWidth.dp.roundToPx() }
+
+    // Provedor e Adapter compartilhados
     val provider = remember {
         Log.i("ChopCut", "[TIMELINE_RV] Criando OptimizedThumbnailProvider...")
         OptimizedThumbnailProvider(
             context = context,
-            thumbWidth = thumbnailWidth,
-            thumbHeight = thumbnailHeight
+            thumbWidth = thumbnailWidthPx,
+            thumbHeight = thumbnailHeightPx
         )
     }
 
@@ -75,23 +70,18 @@ fun OptimizedVideoTimeline(
         TimelineAdapter(
             uri = uri,
             durationMs = durationMs,
-            itemCountLimit = itemCount,
             provider = provider,
-            thumbWidth = thumbnailWidth,
-            thumbHeight = thumbnailHeight
+            thumbWidth = thumbnailWidthPx,
+            thumbHeight = thumbnailHeightPx
         )
     }
 
-    // Coleta as atualizações do provedor e notifica o adapter
     LaunchedEffect(provider, adapter) {
-        Log.i("ChopCut", "[TIMELINE_RV] LaunchedEffect started, waiting for thumbnail updates...")
         provider.thumbnailUpdates.collectLatest { (timestamp, bitmap) ->
-            Log.i("ChopCut", "[TIMELINE_RV] received thumbnail ts=$timestamp bmp=${bitmap.width}x${bitmap.height}")
             adapter.onThumbnailLoaded(timestamp, bitmap)
         }
     }
 
-    // Limpeza de recursos quando o Composable é removido da árvore
     DisposableEffect(provider) {
         onDispose {
             provider.release()
@@ -101,98 +91,103 @@ fun OptimizedVideoTimeline(
     val recyclerViewRef = remember { mutableStateOf<RecyclerView?>(null) }
     val layoutManagerRef = remember { mutableStateOf<LinearLayoutManager?>(null) }
 
-    // Scroll programático para a posição atual (apenas quando não está sendo arrastado pelo usuário)
+    // Sincronização programática a partir do ExoPlayer (apenas quando não arrastado pelo usuário)
     LaunchedEffect(currentPosition, recyclerViewRef.value, layoutManagerRef.value) {
         val recyclerView = recyclerViewRef.value
         val layoutManager = layoutManagerRef.value
         if (recyclerView == null || layoutManager == null || durationMs == 0L) return@LaunchedEffect
         if (recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING) return@LaunchedEffect
 
-        val targetPosition = (currentPosition.toFloat() / durationMs.toFloat() * adapter.itemCount).toInt().coerceIn(0, adapter.itemCount - 1)
-        val centerOffsetPx = recyclerView.width / 2
+        val targetSeconds = currentPosition.toFloat() / 1000f
+        val scrollXPx = targetSeconds * thumbnailWidthPx
 
-        layoutManager.scrollToPositionWithOffset(targetPosition, centerOffsetPx - thumbnailWidth / 2)
+        layoutManager.scrollToPositionWithOffset(0, -(scrollXPx.toInt()))
+        onScrollProgress(currentPosition.toFloat())
     }
 
-
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .height(thumbnailHeight.dp)
-            .background(Color.Black) // Background para visualização da timeline
+            .background(Color.Black)
     ) {
-        // AndroidView para hospedar o RecyclerView
-        AndroidView(
-            factory = { ctx ->
-                RecyclerView(ctx).apply {
-                    layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false).also { layoutManagerRef.value = it }
-                    this.adapter = adapter
-                    recyclerViewRef.value = this // Guardar referência para scroll programático
+        val screenWidthPx = with(density) { maxWidth.toPx() }
+        val centerOffsetPx = screenWidthPx / 2
+        val horizontalPaddingPx = centerOffsetPx - (thumbnailWidthPx / 2)
 
-                    // Otimizações do RecyclerView
-                    setHasFixedSize(true)
-                    setItemViewCacheSize(40) // Manter mais views em cache
-                    itemAnimator = null // Desabilitar animações para performance
+        Box(modifier = Modifier.fillMaxSize()) {
+            AndroidView(
+                factory = { ctx ->
+                    RecyclerView(ctx).apply {
+                        layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false).also { layoutManagerRef.value = it }
+                        this.adapter = adapter
+                        recyclerViewRef.value = this
 
-                    // Lógica de cancelamento de requests em scroll rápido e notificação de scroll
-                    addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                        override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                            if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
-                                onScrollStart()
-                                scope.launch {
-                                    provider.clearQueue()
-                                }
-                            }
-                            if (newState == RecyclerView.SCROLL_STATE_IDLE) {
-                                val centerItemPosition = layoutManagerRef.value?.findFirstCompletelyVisibleItemPosition()?.let { first ->
-                                    val last = layoutManagerRef.value?.findLastCompletelyVisibleItemPosition() ?: first
-                                    (first + last) / 2
-                                } ?: 0
-                                val finalPositionMs = (centerItemPosition.toLong() * durationMs) / adapter.itemCount
-                                onScrollEnd(finalPositionMs)
-                            }
-                        }
+                        setHasFixedSize(true)
+                        setItemViewCacheSize(20)
+                        itemAnimator = null
 
-                        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                            val firstVisibleItemPosition = layoutManagerRef.value?.findFirstVisibleItemPosition() ?: 0
-                            val lastVisibleItemPosition = layoutManagerRef.value?.findLastVisibleItemPosition() ?: 0
-                            
-                            // Calculate visible range for prefetching
-                            if (durationMs > 0) {
-                                val firstVisibleMs = (firstVisibleItemPosition.toLong() * durationMs) / adapter.itemCount
-                                val lastVisibleMs = (lastVisibleItemPosition.toLong() * durationMs) / adapter.itemCount
-                                provider.prefetch(uri, firstVisibleMs, lastVisibleMs + 2000L) // Add some buffer
+                        // Aplicar espaçamento de centralização flexível nas bordas do RecyclerView
+                        clipToPadding = false
+                        setPadding(horizontalPaddingPx.toInt(), 0, horizontalPaddingPx.toInt(), 0)
 
-                                // Calculate new current position at the center of the RecyclerView for user scroll feedback
-                                val centerItemPosition = layoutManagerRef.value?.findFirstCompletelyVisibleItemPosition()?.let { firstCompletelyVisible ->
-                                    val lastCompletelyVisible = layoutManagerRef.value?.findLastCompletelyVisibleItemPosition() ?: firstCompletelyVisible
-                                    (firstCompletelyVisible + lastCompletelyVisible) / 2
-                                } ?: 0
-                                
-                                val newPositionMs = (centerItemPosition.toLong() * durationMs) / adapter.itemCount
-                                if (newPositionMs != currentPosition) {
-                                    // Notify only if user is actively scrolling or on a significant change
-                                    if (recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING || recyclerView.scrollState == RecyclerView.SCROLL_STATE_SETTLING) {
-                                        onScrollChanged(newPositionMs)
+                        addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                                if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                                    onScrollStart()
+                                    scope.launch {
+                                        provider.clearQueue()
                                     }
                                 }
+                                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                                    val firstVisible = layoutManagerRef.value?.findFirstVisibleItemPosition() ?: 0
+                                    val firstView = layoutManagerRef.value?.findViewByPosition(firstVisible)
+                                    val left = firstView?.left ?: 0
+                                    val scrollX = firstVisible * thumbnailWidthPx - (left - recyclerView.paddingLeft)
+                                    val finalPositionMs = (scrollX.toFloat() / thumbnailWidthPx * 1000f).toLong()
+                                    onScrollEnd(finalPositionMs.coerceIn(0L, durationMs))
+                                }
                             }
-                        }
-                    })
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
 
-        // Overlay do Playhead (linha vertical no centro)
-        val playheadOffset = with(density) { (thumbnailWidth / 2).toDp() }
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(2.dp)
-                .background(androidx.compose.ui.graphics.Color.Red)
-                .align(Alignment.Center)
-        )
+                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                                val layoutManager = layoutManagerRef.value ?: return
+                                val firstVisible = layoutManager.findFirstVisibleItemPosition()
+                                if (firstVisible == RecyclerView.NO_POSITION) return
+                                
+                                val firstView = layoutManager.findViewByPosition(firstVisible) ?: return
+                                
+                                // Cálculo exato de scroll por pixel em relação ao padding de início
+                                val scrollX = firstVisible * thumbnailWidthPx - (firstView.left - paddingLeft)
+                                val calculatedMs = (scrollX.toFloat() / thumbnailWidthPx * 1000f)
+                                
+                                // Propagar progresso instantâneo em tempo real
+                                onScrollProgress(calculatedMs.coerceIn(0f, durationMs.toFloat()))
+
+                                // Notificar alteração apenas quando o usuário arrasta manualmente
+                                if (recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING || recyclerView.scrollState == RecyclerView.SCROLL_STATE_SETTLING) {
+                                    onScrollChanged(calculatedMs.toLong().coerceIn(0L, durationMs))
+                                }
+
+                                // Prefetch dinâmico
+                                val lastVisible = layoutManager.findLastVisibleItemPosition()
+                                val firstVisibleMs = firstVisible * 1000L
+                                val lastVisibleMs = if (lastVisible != RecyclerView.NO_POSITION) lastVisible * 1000L else firstVisibleMs + 5000L
+                                provider.prefetch(uri, firstVisibleMs, lastVisibleMs + 2000L)
+                            }
+                        })
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Overlay de Playhead fixo (Linha Vermelha central)
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(2.dp)
+                    .background(Color.Red)
+                    .align(Alignment.Center)
+            )
+        }
     }
 }
-

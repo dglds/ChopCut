@@ -24,15 +24,16 @@ import android.util.Log
 class TimelineAdapter(
     private val uri: Uri,
     private val durationMs: Long,
-    private val itemCountLimit: Int = 900,
     private val provider: OptimizedThumbnailProvider,
-    private val thumbWidth: Int = 120,
-    private val thumbHeight: Int = 120
+    private val thumbWidth: Int = 180,
+    private val thumbHeight: Int = 180
 ) : RecyclerView.Adapter<TimelineAdapter.ThumbnailViewHolder>() {
+
+    private val totalSeconds = kotlin.math.ceil(durationMs / 1000f).toInt().coerceAtLeast(1)
 
     companion object {
         private const val PAYLOAD_THUMB = "PAYLOAD_THUMB"
-        private const val PREFETCH_DISTANCE = 30 // Janela de prefetch
+        private const val PREFETCH_DISTANCE = 15 // Janela de prefetch de 15 segundos
     }
 
     // Map de timestamps pendentes para posições (para atualização batch)
@@ -48,12 +49,13 @@ class TimelineAdapter(
         // Ajustar largura proporcionalmente
         val params = view.layoutParams
         params.width = thumbWidth
+        params.height = thumbHeight
         view.layoutParams = params
         
         return ThumbnailViewHolder(view)
     }
 
-    override fun getItemCount(): Int = itemCountLimit
+    override fun getItemCount(): Int = totalSeconds
 
     override fun onBindViewHolder(holder: ThumbnailViewHolder, position: Int) {
         bind(holder, position, false)
@@ -68,8 +70,8 @@ class TimelineAdapter(
     }
 
     private fun bind(holder: ThumbnailViewHolder, position: Int, isPayload: Boolean) {
-        val timestamp = (position.toLong() * durationMs) / itemCountLimit
-        val quantizedTime = (timestamp / 500) * 500
+        val timestamp = position.toLong() * 1000L
+        val quantizedTime = timestamp // 1 frame por segundo já é múltiplo de 500ms
 
         val cached = thumbnailCache[quantizedTime]
         if (cached != null) {
@@ -98,11 +100,11 @@ class TimelineAdapter(
     }
 
     private fun performPrefetch(currentPosition: Int) {
-        val start = (currentPosition + 1).coerceAtMost(itemCountLimit - 1)
-        val end = (currentPosition + PREFETCH_DISTANCE).coerceAtMost(itemCountLimit - 1)
+        val start = (currentPosition + 1).coerceAtMost(totalSeconds - 1)
+        val end = (currentPosition + PREFETCH_DISTANCE).coerceAtMost(totalSeconds - 1)
         
         for (i in start..end) {
-            val ts = (i.toLong() * durationMs) / itemCountLimit
+            val ts = i.toLong() * 1000L
             provider.requestThumbnail(uri, ts, ThumbnailPriority.PREFETCH)
         }
     }
