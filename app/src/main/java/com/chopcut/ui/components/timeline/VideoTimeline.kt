@@ -99,54 +99,49 @@ fun VideoTimeline(
     var isScrubbingLocal by remember { mutableStateOf(false) }
 
     val smoothPositionMs = remember { mutableFloatStateOf(currentPositionMs.toFloat()) }
+    var lastIsPlaying by remember { mutableStateOf(false) }
 
-    // Sincronizar instantaneamente em alterações bruscas ou quando o player estiver pausado
+    // Sincronizar posição apenas quando pausado ou na transição de Play (Ancoragem Inicial)
     LaunchedEffect(currentPositionMs, isPlaying) {
-        if (!isScrubbingLocal) {
-            val diff = kotlin.math.abs(currentPositionMs - smoothPositionMs.floatValue)
-            if (!isPlaying || diff > 200) {
-                smoothPositionMs.floatValue = currentPositionMs.toFloat()
-                localPositionMs = currentPositionMs
-                
-                // Registra telemetria de resincronização brusca ou pause
-                TimelineLogger.logMovement(
-                    mode = if (isPlaying) "AUTO_S" else "AUTO_P",
-                    positionMs = currentPositionMs,
-                    reason = if (isPlaying) "ExoPlayer seek/drift resync (diff = ${String.format(java.util.Locale.US, "%.1f", diff)}ms)" else "Player paused/seeked position updated"
-                )
-            }
+        if (!isPlaying) {
+            // Quando pausado, mantém sincronia em tempo real absoluta (seek, etc.)
+            smoothPositionMs.floatValue = currentPositionMs.toFloat()
+            localPositionMs = currentPositionMs
+        } else if (!lastIsPlaying && isPlaying) {
+            // Ancoragem Inicial de Reprodução: sincroniza a posição exata ao iniciar o Play
+            smoothPositionMs.floatValue = currentPositionMs.toFloat()
+            localPositionMs = currentPositionMs
+            
+            TimelineLogger.logMovement(
+                mode = "AUTO_A",
+                positionMs = currentPositionMs,
+                reason = "Autoplay initial anchoring triggered (anchored at ${currentPositionMs}ms)"
+            )
         }
+        lastIsPlaying = isPlaying
     }
 
-    // Motor de Interpolação de Playhead a 120 FPS
-    LaunchedEffect(isPlaying, isScrubbingLocal) {
-        if (isPlaying && !isScrubbingLocal) {
+    // Motor de Rolagem 100% Autônomo e Desacoplado a 120 FPS
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
             var lastTimeNanos = System.nanoTime()
             while (true) {
                 withFrameNanos { frameTimeNanos ->
                     val elapsedMs = (frameTimeNanos - lastTimeNanos) / 1_000_000f
                     lastTimeNanos = frameTimeNanos
                     
+                    // Avança a timeline de forma pura, linear e 100% autônoma baseada no Choreographer
                     val currentPos = smoothPositionMs.floatValue
-                    val playerPos = currentPositionMs.toFloat()
+                    val newSmoothPos = (currentPos + elapsedMs).coerceIn(0f, durationMs.toFloat())
                     
-                    // Avança linearmente a estimativa contínua
-                    val targetPos = currentPos + elapsedMs
-                    
-                    // Diferença em relação ao relógio oficial do ExoPlayer
-                    val diff = playerPos - targetPos
-                    
-                    // Interpolação Suave (Lerp amortecido a 12%) em direção ao player
-                    val newSmoothPos = targetPos + (diff * 0.12f)
-                    
-                    smoothPositionMs.floatValue = newSmoothPos.coerceIn(0f, durationMs.toFloat())
+                    smoothPositionMs.floatValue = newSmoothPos
                     localPositionMs = newSmoothPos.toLong()
                     
-                    // Registra telemetria com altíssima frequência (120 FPS reais no autoplay!)
+                    // Registra telemetria do movimento autônomo desacoplado
                     TimelineLogger.logMovement(
-                        mode = "AUTO",
+                        mode = "AUTO_I",
                         positionMs = localPositionMs,
-                        reason = "Choreographer interpolation frame (elapsedMs = ${String.format(java.util.Locale.US, "%.1f", elapsedMs)}ms, diffExo = ${String.format(java.util.Locale.US, "%.1f", diff)}ms)"
+                        reason = "Independent timeline scroll tick (elapsedMs = ${String.format(java.util.Locale.US, "%.1f", elapsedMs)}ms)"
                     )
                 }
             }
@@ -197,10 +192,6 @@ fun VideoTimeline(
             .fillMaxWidth()
             .height(totalHeightDp)
             .background(Color.Black.copy(alpha = 0.2f))
-            .scrollable(
-                state = scrollableState,
-                orientation = Orientation.Horizontal
-            )
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             LegacyTimelineRuler(
