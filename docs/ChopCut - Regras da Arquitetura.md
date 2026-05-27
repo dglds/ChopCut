@@ -2,9 +2,9 @@
 
 > Documento de referência rápida para manter o projeto funcionando sem quebrar.
 
-## 🏗️ Estrutura de Arquivos (19 no total)
+## 🏗️ Estrutura de Arquivos (20 no total)
 
-Não crie novos arquivos .kt sem necessidade. Tudo deve caber nos 19 arquivos existentes.
+Não crie novos arquivos .kt sem necessidade. Tudo deve caber nos 20 arquivos existentes.
 
 ```
 com.chopcut/                          # package único para todos os arquivos
@@ -30,6 +30,7 @@ com.chopcut/                          # package único para todos os arquivos
 │   │   ├── EditorFeature.kt          # EditorScreen + EditorViewModel + AudioViewModel + ThumbnailViewModel + Configs
 │   │   ├── EditorToolsUI.kt          # MainToolBar, TrimToolPanel, FormatToolPanel, CompressToolPanel
 │   │   ├── TimelineUI.kt             # VideoTimeline, TimelineEditor, VideoPreview, PlayerManager, Seekbar
+│   │   ├── TimelineV2Feature.kt      # TimelineV2Screen, TimelineV2ViewModel, TimelineV2 Canvas (Demo)
 │   │   ├── TrimUI.kt                 # TrimPosition, TrimRange, TrimSaveDialog, RangeManager
 │   │   └── WaveformUI.kt             # WaveformRenderer, AudioWaveForms, WaveformConfig
 │   └── navigation/
@@ -51,7 +52,7 @@ val info = VideoInfo(...)    // definido em core/Models.kt
 ErrorState(...)              // definido em ui/SharedComponents.kt
 ```
 
-### 2. Só adicione código novo dentro dos 19 arquivos
+### 2. Só adicione código novo dentro dos 20 arquivos
 
 Qualquer nova funcionalidade deve ser adicionada a um dos arquivos existentes. Não crie novos arquivos .kt.
 
@@ -62,6 +63,7 @@ Qualquer nova funcionalidade deve ser adicionada a um dos arquivos existentes. N
 | Componente UI reutilizável | `ui/SharedComponents.kt` |
 | Tela/ViewModel do editor | `ui/editor/EditorFeature.kt` |
 | Componente da timeline | `ui/editor/TimelineUI.kt` |
+| Componente da Timeline V2 | `ui/editor/TimelineV2Feature.kt` |
 | Componente de corte | `ui/editor/TrimUI.kt` |
 | Componente de áudio | `ui/editor/WaveformUI.kt` |
 | Barra de ferramentas | `ui/editor/EditorToolsUI.kt` |
@@ -140,6 +142,7 @@ Assets de teste: `app/src/androidTest/assets/sample.mp4`
 | `FormatUtils`, `FileNameUtils`, `RangeUtils` | `core/Utils.kt` |
 | `PreloadViewModel`, `PreloadUiState`, `PreloadStage`, `PreloadProgress` | `ui/home/HomeFeature.kt` |
 | `ThumbnailViewModel`, `AudioViewModel`, `EditorViewModel` | `ui/editor/EditorFeature.kt` |
+| `TimelineV2Screen`, `TimelineV2ViewModel`, `TimelineV2` (Canvas) | `ui/editor/TimelineV2Feature.kt` |
 | `EditorState`, `EditorTool`, `CompressionLevel` | `ui/editor/EditorFeature.kt` (config) ou `ui/editor/EditorToolsUI.kt` (state) |
 | `TrimPosition`, `TrimRange`, `SaveDialogState` | `ui/editor/TrimUI.kt` |
 | `ThumbnailConfig`, `AudioConfig` | `ui/editor/EditorFeature.kt` |

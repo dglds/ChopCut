@@ -1,7 +1,7 @@
 # ChopCut — Instruções para as Próximas Sessões
 
 **Data:** 2026-05-27
-**Estado atual:** Pós-refatoração arquitetural — build passando, 19 arquivos
+**Estado atual:** Pós-refatoração arquitetural — build passando, 20 arquivos
 
 ---
 
@@ -31,13 +31,17 @@ Siga o padrão de commits da Session #01:
 Commite em grupos lógicos e pequenos, não um único commit gigante.
 
 ### 4. No final de cada sessão
-Crie um arquivo `docs/session-<session-id>.md` , onde o id pode ser qualquer identificadort próprio`:
+Crie um arquivo `docs/session-<session-id>.md` (onde o id pode ser qualquer identificador próprio como `session#03`):
 - Identificação (nome do modelo, ou qualquer identificador de modelo de IA)
 - Data e objetivo
 - O que foi feito 
 - Resultados (tabela antes/depois)
 - Comandos úteis
 - Pendências
+
+> [!IMPORTANT]
+> **Manutenção das Regras de Arquitetura:**
+> Sempre que houver qualquer mudança estrutural na base de código (como criação de novos arquivos, novas rotas, novos ViewModels ou alteração de regras do projeto), **você DEVE atualizar imediatamente** o arquivo [ChopCut - Regras da Arquitetura.md](file:///home/diego/Android/ChopCut/docs/ChopCut%20-%20Regras%20da%20Arquitetura.md) para manter a documentação da arquitetura sincronizada e 100% íntegra.
 
 ---
 
@@ -51,10 +55,8 @@ Isso significa que **não existem imports entre arquivos internos** — tudo no 
 // ✅ CERTO — referência direta, sem import
 ErrorState(...)
 val info = VideoInfo(...)
-```
-
-### Não crie novos arquivos .kt
-Qualquer novo código deve ser adicionado a um dos 19 arquivos existentes.
+```### Não crie novos arquivos .kt sem necessidade
+Qualquer novo código deve ser adicionado a um dos 20 arquivos existentes.
 
 | Novo código | Adicionar em |
 |------------|--------------|
@@ -63,6 +65,7 @@ Qualquer novo código deve ser adicionado a um dos 19 arquivos existentes.
 | Componente UI | `ui/SharedComponents.kt` |
 | Editor | `ui/editor/EditorFeature.kt` |
 | Timeline | `ui/editor/TimelineUI.kt` |
+| Timeline V2 | `ui/editor/TimelineV2Feature.kt` |
 | Corte | `ui/editor/TrimUI.kt` |
 | Áudio/Waveform | `ui/editor/WaveformUI.kt` |
 | Ferramentas | `ui/editor/EditorToolsUI.kt` |
@@ -81,9 +84,7 @@ Como tudo está no mesmo package, não pode haver duas classes, objetos ou enums
 O script na raiz configura `JAVA_HOME=jdk17` automaticamente.
 Não use `./gradlew assembleDebug` diretamente ou falhará com Java 25 do sistema.
 
----
-
-## Arquitetura atual (19 arquivos)
+---## Arquitetura atual (20 arquivos)
 
 ```
 app/src/main/java/com/chopcut/
@@ -107,6 +108,7 @@ app/src/main/java/com/chopcut/
 │   ├── editor/EditorFeature.kt
 │   ├── editor/EditorToolsUI.kt
 │   ├── editor/TimelineUI.kt
+│   ├── editor/TimelineV2Feature.kt
 │   ├── editor/TrimUI.kt
 │   ├── editor/WaveformUI.kt
 │   └── navigation/ChopCutNavGraph.kt
