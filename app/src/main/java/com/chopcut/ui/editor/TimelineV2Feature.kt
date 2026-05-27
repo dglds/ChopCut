@@ -1,28 +1,33 @@
 package com.chopcut
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -39,12 +44,24 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
 
+data class MarkerInterval(
+    val id: Int,
+    val startMs: Long,
+    val endMs: Long
+)
+
 class TimelineV2ViewModel : ViewModel() {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
     private val _currentPositionMs = MutableStateFlow(0L)
     val currentPositionMs: StateFlow<Long> = _currentPositionMs.asStateFlow()
+
+    private val _markerIntervals = MutableStateFlow<List<MarkerInterval>>(emptyList())
+    val markerIntervals: StateFlow<List<MarkerInterval>> = _markerIntervals.asStateFlow()
+
+    private val _activeMarkerStartMs = MutableStateFlow<Long?>(null)
+    val activeMarkerStartMs: StateFlow<Long?> = _activeMarkerStartMs.asStateFlow()
 
     val durationMs = 59_000L
 
@@ -70,6 +87,62 @@ class TimelineV2ViewModel : ViewModel() {
     fun updatePosition(ms: Long) {
         _currentPositionMs.value = ms.coerceIn(0L, durationMs)
     }
+
+    fun toggleMarker(currentPositionMs: Long) {
+        val start = _activeMarkerStartMs.value
+        if (start == null) {
+            // Start a new marker interval at current playhead
+            _activeMarkerStartMs.value = currentPositionMs
+        } else {
+            // Finish active marker interval
+            val end = currentPositionMs
+            val minTime = Math.min(start, end)
+            val maxTime = Math.max(start, end)
+            
+            val newInterval = MarkerInterval(
+                id = 0, // Assigned dynamically after sorting/merging
+                startMs = minTime,
+                endMs = maxTime
+            )
+            
+            _markerIntervals.value = mergeIntervals(_markerIntervals.value + newInterval)
+            _activeMarkerStartMs.value = null
+        }
+    }
+
+    fun deleteInterval(intervalId: Int) {
+        _markerIntervals.value = _markerIntervals.value.filter { it.id != intervalId }
+        _markerIntervals.value = reindexIntervals(_markerIntervals.value)
+    }
+
+    private fun reindexIntervals(list: List<MarkerInterval>): List<MarkerInterval> {
+        return list.mapIndexed { index, interval ->
+            interval.copy(id = index + 1)
+        }
+    }
+
+    private fun mergeIntervals(list: List<MarkerInterval>): List<MarkerInterval> {
+        if (list.isEmpty()) return emptyList()
+        
+        // Sort intervals by startMs
+        val sorted = list.sortedWith(compareBy({ it.startMs }, { it.endMs }))
+        val merged = mutableListOf<MarkerInterval>()
+        var current = sorted[0]
+        
+        for (i in 1 until sorted.size) {
+            val next = sorted[i]
+            if (next.startMs <= current.endMs) {
+                // Merge overlapping or continuous intervals
+                current = current.copy(endMs = Math.max(current.endMs, next.endMs))
+            } else {
+                merged.add(current)
+                current = next
+            }
+        }
+        merged.add(current)
+        
+        return reindexIntervals(merged)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +154,9 @@ fun TimelineV2Screen(
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     val currentPositionMs by viewModel.currentPositionMs.collectAsStateWithLifecycle()
     val durationMs = viewModel.durationMs
+
+    val markerIntervals by viewModel.markerIntervals.collectAsStateWithLifecycle()
+    val activeMarkerStartMs by viewModel.activeMarkerStartMs.collectAsStateWithLifecycle()
 
     // Target position for manual scrubbing smoothing
     var targetPositionMs by remember { mutableStateOf(currentPositionMs.toFloat()) }
@@ -141,8 +217,6 @@ fun TimelineV2Screen(
         }
     }
 
-
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -199,27 +273,147 @@ fun TimelineV2Screen(
                 durationMs = durationMs,
                 isPlaying = isPlaying,
                 sensitivity = 1.60f,
+                markerIntervals = markerIntervals,
+                activeMarkerStartMs = activeMarkerStartMs,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(114.dp)
             )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
-            // Play / Pause Button
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(Color.White.copy(alpha = 0.08f), CircleShape)
-                    .clickable { viewModel.togglePlayPause() },
-                contentAlignment = Alignment.Center
+            // Controls Row (Play/Pause & Marker Button side by side)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "Pausar" else "Reproduzir",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+                // Play / Pause Button
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                        .clickable { viewModel.togglePlayPause() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pausar" else "Reproduzir",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                // Marker Button (with generic name, pulsing red active indicators, and tiny labels)
+                val isRecording = activeMarkerStartMs != null
+                val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                val pulseAlpha by if (isRecording) {
+                    infiniteTransition.animateFloat(
+                        initialValue = 0.08f,
+                        targetValue = 0.3f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1000, easing = FastOutLinearInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "alpha"
+                    )
+                } else {
+                    remember { mutableStateOf(0.08f) }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(
+                            color = if (isRecording) Color.Red.copy(alpha = pulseAlpha) else Color.White.copy(alpha = 0.08f),
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isRecording) Color.Red else Color.White.copy(alpha = 0.15f),
+                            shape = CircleShape
+                        )
+                        .clickable { viewModel.toggleMarker(currentPositionMs) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    color = if (isRecording) Color.Red else Color.White,
+                                    shape = CircleShape
+                                )
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (isRecording) "CORTE" else "MARCAR",
+                            color = if (isRecording) Color.Red else Color.White,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+
+            // Minimalist Marker List at the bottom
+            if (markerIntervals.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Text(
+                    text = "INTERVALOS MARCADOS",
+                    style = TextStyle(
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.Start)
+                        .padding(horizontal = 24.dp)
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 120.dp)
+                        .padding(horizontal = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(markerIntervals, key = { it.id }) { interval ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = String.format(Locale.US, "#%02d: %dms - %dms", interval.id, interval.startMs, interval.endMs),
+                                style = TextStyle(
+                                    color = Color.Yellow,
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Excluir marcação",
+                                tint = Color.Red.copy(alpha = 0.8f),
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clickable { viewModel.deleteInterval(interval.id) }
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -233,6 +427,8 @@ fun TimelineV2(
     durationMs: Long,
     isPlaying: Boolean,
     sensitivity: Float,
+    markerIntervals: List<MarkerInterval>,
+    activeMarkerStartMs: Long?,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -241,6 +437,23 @@ fun TimelineV2(
     val targetPositionState = rememberUpdatedState(targetPositionMs)
     val onTargetPositionChangedState = rememberUpdatedState(onTargetPositionChanged)
     val sensitivityState = rememberUpdatedState(sensitivity)
+
+    // Playhead color animation when active marker is running (rapid flashing between Cyan and bright Amber/Yellow for alert)
+    val isRecording = activeMarkerStartMs != null
+    val infiniteTransition = rememberInfiniteTransition(label = "playheadTransition")
+    val playheadColor by if (isRecording) {
+        infiniteTransition.animateColor(
+            initialValue = Color(0xFF00E5FF), // Cyan
+            targetValue = Color(0xFFFFC107),  // Amber/Yellow Warning Alert
+            animationSpec = infiniteRepeatable(
+                animation = tween(250, easing = FastOutLinearInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "playheadColor"
+        )
+    } else {
+        remember { mutableStateOf(Color(0xFF00E5FF)) }
+    }
 
     // Original, elegant visual dimensions
     val thumbWidthPx = with(density) { 80.dp.toPx() }
@@ -320,7 +533,7 @@ fun TimelineV2(
                     end = Offset(thumbRight, verticalOffsetPx + timelineTopPx + thumbHeightPx)
                 )
                 
-                // Draw thumbnail fill (starts at original timelineTopPx, leaving a gap below the ticks line)
+                // Draw thumbnail fill
                 drawRect(
                     brush = brush,
                     topLeft = Offset(thumbLeft, verticalOffsetPx + timelineTopPx),
@@ -374,6 +587,69 @@ fun TimelineV2(
             }
         }
         
+        // 3. Draw Yellow Marker Intervals (Transparent overlay + solid borders)
+        markerIntervals.forEach { interval ->
+            val startX = centerX + (interval.startMs.toFloat() / durationMs.toFloat()) * totalTimelineWidthPx - scrollOffsetPx
+            val endX = centerX + (interval.endMs.toFloat() / durationMs.toFloat()) * totalTimelineWidthPx - scrollOffsetPx
+            val drawWidth = endX - startX
+            
+            if (endX >= 0f && startX <= width) {
+                // Fill semi-transparent yellow
+                drawRect(
+                    color = Color.Yellow.copy(alpha = 0.22f),
+                    topLeft = Offset(startX, verticalOffsetPx + timelineTopPx),
+                    size = Size(drawWidth, thumbHeightPx)
+                )
+                
+                // Left & Right solid border
+                drawLine(
+                    color = Color.Yellow,
+                    start = Offset(startX, verticalOffsetPx + timelineTopPx),
+                    end = Offset(startX, verticalOffsetPx + timelineTopPx + thumbHeightPx),
+                    strokeWidth = with(density) { 1.5.dp.toPx() }
+                )
+                drawLine(
+                    color = Color.Yellow,
+                    start = Offset(endX, verticalOffsetPx + timelineTopPx),
+                    end = Offset(endX, verticalOffsetPx + timelineTopPx + thumbHeightPx),
+                    strokeWidth = with(density) { 1.5.dp.toPx() }
+                )
+            }
+        }
+
+        // 4. Draw In-Progress Active Marker Selection (Real-time expanding/contracting visual feedback)
+        if (activeMarkerStartMs != null) {
+            val minMs = Math.min(activeMarkerStartMs, currentPositionMs)
+            val maxMs = Math.max(activeMarkerStartMs, currentPositionMs)
+            
+            val startX = centerX + (minMs.toFloat() / durationMs.toFloat()) * totalTimelineWidthPx - scrollOffsetPx
+            val endX = centerX + (maxMs.toFloat() / durationMs.toFloat()) * totalTimelineWidthPx - scrollOffsetPx
+            val drawWidth = endX - startX
+            
+            if (endX >= 0f && startX <= width) {
+                // Fill semi-transparent active yellow
+                drawRect(
+                    color = Color.Yellow.copy(alpha = 0.15f),
+                    topLeft = Offset(startX, verticalOffsetPx + timelineTopPx),
+                    size = Size(drawWidth, thumbHeightPx)
+                )
+                
+                // Active solid borders
+                drawLine(
+                    color = Color.Yellow.copy(alpha = 0.7f),
+                    start = Offset(startX, verticalOffsetPx + timelineTopPx),
+                    end = Offset(startX, verticalOffsetPx + timelineTopPx + thumbHeightPx),
+                    strokeWidth = with(density) { 1.5.dp.toPx() }
+                )
+                drawLine(
+                    color = Color.Yellow.copy(alpha = 0.7f),
+                    start = Offset(endX, verticalOffsetPx + timelineTopPx),
+                    end = Offset(endX, verticalOffsetPx + timelineTopPx + thumbHeightPx),
+                    strokeWidth = with(density) { 1.5.dp.toPx() }
+                )
+            }
+        }
+
         // Final tick mark at 59 seconds
         val endTickX = centerX + (59 * thumbWidthPx) - scrollOffsetPx
         if (endTickX >= -10f && endTickX <= width + 10f) {
@@ -397,18 +673,30 @@ fun TimelineV2(
             )
         }
 
-        // 3. Draw premium Cyan Playhead (#00E5FF) exactly at the center
+        // 5. Draw premium Playhead (alternating Cyan/Amber in rapid alert flash when active, else Cyan) exactly at the center
+        val playheadWidth = if (isRecording) 3.5.dp else 2.5.dp
+        val capRadius = if (isRecording) 7.dp else 5.dp
+
+        if (isRecording) {
+            // Draw a semi-transparent pulsing alert glow behind the playhead cap
+            drawCircle(
+                color = playheadColor.copy(alpha = 0.25f),
+                radius = with(density) { (capRadius + 4.dp).toPx() },
+                center = Offset(centerX, verticalOffsetPx + timelineTopPx - tickGapPx - tickHeightPx)
+            )
+        }
+
         drawLine(
-            color = Color(0xFF00E5FF),
+            color = playheadColor,
             start = Offset(centerX, verticalOffsetPx + timelineTopPx - tickGapPx - tickHeightPx),
             end = Offset(centerX, verticalOffsetPx + timelineTopPx + thumbHeightPx + 4.dp.toPx()),
-            strokeWidth = with(density) { 2.5.dp.toPx() }
+            strokeWidth = with(density) { playheadWidth.toPx() }
         )
         
         // Playhead top cap (small circle)
         drawCircle(
-            color = Color(0xFF00E5FF),
-            radius = with(density) { 5.dp.toPx() },
+            color = playheadColor,
+            radius = with(density) { capRadius.toPx() },
             center = Offset(centerX, verticalOffsetPx + timelineTopPx - tickGapPx - tickHeightPx)
         )
     }
@@ -421,5 +709,3 @@ private fun formatMs(ms: Long): String {
     val milliseconds = ms % 1000
     return String.format(Locale.US, "%02d:%02d.%03d", minutes, seconds, milliseconds)
 }
-
-
