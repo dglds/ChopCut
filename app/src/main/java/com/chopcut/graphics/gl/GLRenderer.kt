@@ -1,10 +1,9 @@
-package com.chopcut.graphics.gl
+package com.chopcut
 
 import android.graphics.SurfaceTexture
 import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.Matrix
-import com.chopcut.data.model.Transform
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer

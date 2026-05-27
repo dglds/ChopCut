@@ -1,4 +1,4 @@
-package com.chopcut.ui.navigation
+package com.chopcut
 
 import android.net.Uri
 import androidx.compose.animation.*
@@ -15,27 +15,11 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.chopcut.BuildConfig
-import com.chopcut.data.local.PreferencesManager
-import com.chopcut.ui.components.feedback.DebugPosition
-import com.chopcut.ui.components.feedback.DebugState
-import com.chopcut.ui.components.feedback.DebugToast
-import com.chopcut.ui.components.feedback.DebugViewModel
-import com.chopcut.ui.components.loading.LoadingConstants
-import com.chopcut.ui.onboarding.OnboardingScreen
-import com.chopcut.ui.viewmodel.AudioViewModel
-import com.chopcut.ui.screen.HomeScreen
-import com.chopcut.ui.screen.PreferencesScreen
-import com.chopcut.ui.viewmodel.PreloadViewModel
-import com.chopcut.ui.viewmodel.ThumbnailViewModel
-import com.chopcut.ui.screen.EditorScreen
 
 @Composable
 fun ChopCutNavGraph(
     navController: NavHostController,
     startDestination: String,
-    preferencesManager: PreferencesManager,
-    debugViewModel: DebugViewModel,
     preloadViewModel: PreloadViewModel,
     thumbnailViewModel: ThumbnailViewModel,
     audioViewModel: AudioViewModel
@@ -59,21 +43,6 @@ fun ChopCutNavGraph(
             startDestination = startDestination
         ) {
             composable(
-                route = "onboarding",
-                enterTransition = { navFadeIn },
-                exitTransition = { navFadeOut }
-            ) {
-                OnboardingScreen(
-                    onFinish = {
-                        preferencesManager.isFirstRun = false
-                        navController.navigate("home") {
-                            popUpTo("onboarding") { inclusive = true }
-                        }
-                    }
-                )
-            }
-
-            composable(
                 route = "home",
                 enterTransition = { navFadeIn },
                 exitTransition = { navFadeOut },
@@ -85,22 +54,7 @@ fun ChopCutNavGraph(
                     onNavigateToEditor = { videoUri ->
                         val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
                         navController.navigate("editor?videoUri=$encodedUri")
-                    },
-                    onNavigateToPreferences = {
-                        navController.navigate("preferences")
                     }
-                )
-            }
-
-            composable(
-                route = "preferences",
-                enterTransition = { navFadeIn },
-                exitTransition = { navFadeOut },
-                popEnterTransition = { navFadeIn },
-                popExitTransition = { navFadeOut }
-            ) {
-                PreferencesScreen(
-                    onNavigateBack = { navController.popBackStack() }
                 )
             }
 
@@ -129,28 +83,6 @@ fun ChopCutNavGraph(
                     onNavigateBack = {
                         navController.popBackStack()
                     }
-                )
-            }
-        }
-
-        if (BuildConfig.DEBUG) {
-            val debugState = debugViewModel.debugState.collectAsState()
-            val debugPosition = debugViewModel.position.collectAsState()
-
-            if (debugState.value is DebugState.Active) {
-                val alignment = when (debugPosition.value) {
-                    DebugPosition.TOP -> Alignment.TopEnd
-                    DebugPosition.BOTTOM -> Alignment.BottomEnd
-                }
-
-                DebugToast(
-                    entries = (debugState.value as DebugState.Active).entries,
-                    modifier = Modifier
-                        .align(alignment)
-                        .navigationBarsPadding()
-                        .padding(12.dp),
-                    onClose = { debugViewModel.clear() },
-                    onTogglePosition = { debugViewModel.togglePosition() }
                 )
             }
         }

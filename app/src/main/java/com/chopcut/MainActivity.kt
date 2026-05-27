@@ -15,13 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
-import com.chopcut.data.local.PreferencesManager
-import com.chopcut.ui.components.feedback.DebugViewModel
-import com.chopcut.ui.navigation.ChopCutNavGraph
-import com.chopcut.ui.viewmodel.AudioViewModel
-import com.chopcut.ui.viewmodel.PreloadViewModel
-import com.chopcut.ui.viewmodel.ThumbnailViewModel
-import com.chopcut.ui.theme.ChopCutTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 
@@ -37,15 +30,7 @@ class MainActivity : ComponentActivity() {
         Timber.tag("MainActivity").d("MainActivity: onCreate called. App launching.")
         setContent {
             val context = LocalContext.current
-            val preferencesManager = remember { PreferencesManager(context) }
-            
-            val themeMode by preferencesManager.themeModeFlow.collectAsState()
-            val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
-            val darkTheme = when (themeMode) {
-                1 -> false // Light
-                2 -> true  // Dark
-                else -> isSystemDark // System (0)
-            }
+            val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
 
             ChopCutTheme(darkTheme = darkTheme) {
                 Surface(
@@ -54,7 +39,6 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val navController = rememberNavController()
 
-                    val debugViewModel: DebugViewModel = viewModel()
                     val application = remember { context.applicationContext as Application }
                     val thumbnailViewModel: ThumbnailViewModel = viewModel(
                         factory = ThumbnailViewModel.ThumbnailViewModelFactory(application)
@@ -87,8 +71,6 @@ class MainActivity : ComponentActivity() {
                     ChopCutNavGraph(
                         navController = navController,
                         startDestination = startDestination,
-                        preferencesManager = preferencesManager,
-                        debugViewModel = debugViewModel,
                         preloadViewModel = preloadViewModel,
                         thumbnailViewModel = thumbnailViewModel,
                         audioViewModel = audioViewModel

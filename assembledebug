@@ -13,6 +13,7 @@ echo "🚀 Compilando ChopCut (assembleDebug)..."
 if [ $? -eq 0 ]; then
     echo "✅ Compilação concluída com sucesso!"
     echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
+    ffplay -nodisp -autoexit -loglevel quiet "/home/diego/Downloads/efeitos-sonoros-brasil-sil-sil-rede-globo.mp3" 2>/dev/null &
 else
     echo ""
     echo "FAILURE:"

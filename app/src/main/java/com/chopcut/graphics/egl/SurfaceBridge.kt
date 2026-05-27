@@ -1,4 +1,4 @@
-package com.chopcut.graphics.egl
+package com.chopcut
 
 import android.graphics.SurfaceTexture
 import android.opengl.EGL14
