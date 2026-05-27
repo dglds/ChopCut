@@ -57,8 +57,8 @@
   # 🚫 NUNCA FAÇA ISSO (Pode quebrar por incompatibilidade de versão de Java)
   ./gradlew assembleDebug
   
-  # ✅ FAÇA ISSO: use o script centralizador da raiz ou defina a variável:
-  ./assembledebug
+  # ✅ FAÇA ISSO: use o script centralizador na pasta scripts/ ou defina a variável:
+  ./scripts/assembledebug
   # OU:
   JAVA_HOME=./jdk17 ./gradlew assembleDebug
   ```

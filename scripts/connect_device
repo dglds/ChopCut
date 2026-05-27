@@ -4,7 +4,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 ADB="$HOME/Android/Sdk/platform-tools/adb"
 LOG_FILE="$DIR/output.log"
 
-export JAVA_HOME="$DIR/jdk17"
+export JAVA_HOME="$DIR/../jdk17"
 
 echo "🔌 Aguardando dispositivo..."
 echo "   (Ctrl+C para cancelar)"
@@ -25,7 +25,7 @@ done
 exec > >(tee "$LOG_FILE") 2>&1
 
 echo "🚀 Compilando e instalando ChopCut..."
-"$DIR/gradlew" installDebug "$@"
+"$DIR/../gradlew" installDebug "$@"
 
 if [ $? -eq 0 ]; then
     echo "🎉 Instalação concluída com sucesso!"

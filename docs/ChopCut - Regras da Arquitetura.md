@@ -100,12 +100,12 @@ Conflitos conhecidos e resolvidos:
 | `AudioInfo` | `core/Models.kt` | Metadata de áudio |
 | `VideoInfo` | `core/Models.kt` | Metadata de vídeo |
 
-### 5. Build sempre com `./assembledebug`
+### 5. Build sempre com `./scripts/assembledebug`
 
-O script `assembledebug` na raiz do projeto configura o `JAVA_HOME=jdk17` automaticamente. Não use `./gradlew assembleDebug` diretamente ou pode falhar com Java 25.
+O script `assembledebug` na pasta `scripts/` configura o `JAVA_HOME=jdk17` automaticamente. Não use `./gradlew assembleDebug` diretamente ou pode falhar com Java 25.
 
 ```bash
-./assembledebug     # ✅ CERTO
+./scripts/assembledebug     # ✅ CERTO
 ```
 
 ### 6. Performance: 3 padrões para evitar jank
@@ -120,7 +120,7 @@ SHA-1 dos padrões (ver CLAUDE.md para detalhes completos):
 
 ```bash
 # Build APK
-./assembledebug
+./scripts/assembledebug
 
 # Testes instrumentados
 ./gradlew connectedAndroidTest

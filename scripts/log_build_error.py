@@ -5,7 +5,7 @@ from datetime import datetime
 
 def log_error(task_name):
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    log_path = os.path.join(root_dir, "output.log")
+    log_path = os.path.join(root_dir, "scripts", "output.log")
     json_path = os.path.join(root_dir, "errors.json")
     
     # 1. Parse clean error message from output.log

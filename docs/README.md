@@ -80,8 +80,8 @@ Como tudo está no mesmo package, não pode haver duas classes, objetos ou enums
 | `PreloadStage` | `ui/home/HomeFeature.kt` | `Starting, Validating, ExtractingAudio, ExtractingThumbnails, Ready` |
 | `WaveformData` | `core/Models.kt` | 2 params: `(amplitudes, durationMs)` |
 
-### Build sempre com `./assembledebug`
-O script na raiz configura `JAVA_HOME=jdk17` automaticamente.
+### Build sempre com `./scripts/assembledebug`
+O script na pasta `scripts/` configura `JAVA_HOME=jdk17` automaticamente.
 Não use `./gradlew assembleDebug` diretamente ou falhará com Java 25 do sistema.
 
 ---## Arquitetura atual (20 arquivos)
@@ -135,7 +135,7 @@ app/src/main/java/com/chopcut/
 ## Comandos
 
 ```bash
-./assembledebug                              # Build APK debug
+./scripts/assembledebug                      # Build APK debug
 ./gradlew installDebug                       # Instalar no device
 ./gradlew connectedAndroidTest               # Rodar todos os testes
 ./gradlew connectedAndroidTest -Pclass=...   # Teste específico

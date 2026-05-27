@@ -3,7 +3,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 LOG_FILE="$DIR/output.log"
 
-export JAVA_HOME="$DIR/jdk17"
+export JAVA_HOME="$DIR/../jdk17"
 
 exec > >(tee "$LOG_FILE") 2>&1
 
@@ -22,8 +22,8 @@ echo ""
 
 # 1. Limpando cache do Gradle (.gradle do projeto)
 echo -e "${C_YELLOW}[1/4] Removendo pasta de caches locais .gradle...${C_RESET}"
-if [ -d "$DIR/.gradle" ]; then
-    rm -rf "$DIR/.gradle"
+if [ -d "$DIR/../.gradle" ]; then
+    rm -rf "$DIR/../.gradle"
     echo -e "${C_GREEN}✅ Caches locais do Gradle limpos!${C_RESET}"
 else
     echo -e "   Nenhum cache local encontrado."
@@ -31,8 +31,8 @@ fi
 
 # 2. Limpando compilações Kotlin
 echo -e "${C_YELLOW}[2/4] Removendo caches locais do Kotlin...${C_RESET}"
-if [ -d "$DIR/.kotlin" ]; then
-    rm -rf "$DIR/.kotlin"
+if [ -d "$DIR/../.kotlin" ]; then
+    rm -rf "$DIR/../.kotlin"
     echo -e "${C_GREEN}✅ Caches locais do Kotlin limpos!${C_RESET}"
 else
     echo -e "   Nenhum cache local do Kotlin encontrado."
@@ -40,22 +40,22 @@ fi
 
 # 3. Limpeza dos diretórios build, .cxx e temporários do projeto
 echo -e "${C_YELLOW}[3/4] Eliminando pastas build, .cxx e compilações NDK...${C_RESET}"
-find "$DIR" -type d -name "build" -exec rm -rf {} + 2>/dev/null
-find "$DIR" -type d -name ".externalNativeBuild" -exec rm -rf {} + 2>/dev/null
-find "$DIR" -type d -name ".cxx" -exec rm -rf {} + 2>/dev/null
+find "$DIR/.." -type d -name "build" -exec rm -rf {} + 2>/dev/null
+find "$DIR/.." -type d -name ".externalNativeBuild" -exec rm -rf {} + 2>/dev/null
+find "$DIR/.." -type d -name ".cxx" -exec rm -rf {} + 2>/dev/null
 echo -e "${C_GREEN}✅ Pastas de compilação manuais deletadas!${C_RESET}"
 
 # 4. Executando gradlew clean
 echo -e "${C_YELLOW}[4/4] Executando gradlew clean...${C_RESET}"
-if [ -f "$DIR/gradlew" ]; then
-    "$DIR/gradlew" clean -q
+if [ -f "$DIR/../gradlew" ]; then
+    "$DIR/../gradlew" clean -q
     if [ $? -eq 0 ]; then
         echo -e "${C_GREEN}✅ gradlew clean executado com sucesso!${C_RESET}"
     else
         echo -e "${C_RED}❌ Falha ao executar gradlew clean.${C_RESET}"
     fi
 else
-    echo -e "${C_RED}❌ gradlew não encontrado no diretório $DIR.${C_RESET}"
+    echo -e "${C_RED}❌ gradlew não encontrado no diretório $DIR/..${C_RESET}"
 fi
 
 echo ""

@@ -4,21 +4,11 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 LOG_FILE="$DIR/output.log"
 ADB="$HOME/Android/Sdk/platform-tools/adb"
 
-export JAVA_HOME="$DIR/jdk17"
-
-# ── ANSI colors ──
-C_RESET="\e[0m"
-C_BOLD="\e[1m"
-C_RED="\e[31m"
-C_GREEN="\e[32m"
-C_YELLOW="\e[33m"
-C_CYAN="\e[36m"
-
-now() { date '+%H:%M:%S'; }
+export JAVA_HOME="$DIR/../jdk17"
 
 $ADB start-server 2>/dev/null
 
-echo -e "${C_CYAN}[$(now)]${C_RESET} ${C_BOLD}Aguardando dispositivo...${C_RESET}"
+echo "🔌 Aguardando dispositivo..."
 echo "   (Ctrl+C para cancelar)"
 echo ""
 
@@ -30,14 +20,18 @@ while true; do
 
     if [ -n "$devices" ]; then
         echo ""
-        echo -e "✅ Dispositivo conectado. Iniciando compilação..."
+        echo "✅ Dispositivo conectado. Iniciando limpeza..."
+        for device in $devices; do
+            echo "📱 Desinstalando app do dispositivo: $device..."
+            $ADB -s "$device" uninstall com.chopcut 2>/dev/null || true
+        done
         break
     fi
 
     attached=$($ADB devices | grep -v "List of devices" | grep -v "^$" | head -1)
     if [ -n "$attached" ]; then
         status=$(echo "$attached" | awk '{print $2}')
-        echo -e "⚠️  Dispositivo '$status' — autorize no dispositivo e aguarde..."
+        echo "⚠️  Dispositivo '$status' — autorize no dispositivo e aguarde..."
         sleep 2
         continue
     fi
@@ -65,7 +59,7 @@ while true; do
 
     iterations=$((iterations + 1))
     if [ "$iterations" -ge 3 ] && [ "$prompted" = false ]; then
-        echo -e "\n\n${C_YELLOW}💡 Dica: Se a depuração sem fio estiver ativa, insira o IP e Porta manualmente.${C_RESET}"
+        echo -e "\n\n💡 Dica: Se a depuração sem fio estiver ativa, insira o IP e Porta manualmente."
         echo -ne "Digite o IP:PORTA (ou pressione Enter para continuar esperando): "
         read -t 15 manual_conn
         if [ -n "$manual_conn" ]; then
@@ -81,40 +75,24 @@ done
 
 exec > >(tee "$LOG_FILE") 2>&1
 
-echo ""
-echo -e "${C_CYAN}[$(now)]${C_RESET} ./gradlew installDebug -q"
-echo ""
-START_NS=$(date +%s%N)
+echo "🧹 Limpando cache do Gradle..."
+rm -rf "$DIR/../.gradle"
+echo "🗑️  Limpando build do projeto..."
+"$DIR/../gradlew" clean
 
-"$DIR/gradlew" installDebug -q "$@"
-EXIT=$?
+echo "🔨 Compilando e instalando..."
+"$DIR/../gradlew" installDebug "$@"
 
-END_NS=$(date +%s%N)
-ELAPSED_MS=$(( (END_NS - START_NS) / 1000000 ))
-
-if (( ELAPSED_MS < 1000 )); then
-    ELAPSED="${ELAPSED_MS}ms"
-elif (( ELAPSED_MS < 60000 )); then
-    ELAPSED="$(awk "BEGIN {printf \"%.1f\", $ELAPSED_MS / 1000}")s"
-else
-    MINS=$(( ELAPSED_MS / 60000 ))
-    SECS=$(awk "BEGIN {printf \"%.1f\", ($ELAPSED_MS % 60000) / 1000}")
-    ELAPSED="${MINS}m ${SECS}s"
-fi
-
-echo ""
-
-if [ $EXIT -eq 0 ]; then
-    echo -e "${C_GREEN}${C_BOLD}[BUILD SUCCESS]${C_RESET}  ${C_CYAN}$(now)${C_RESET}  ${ELAPSED}"
-
+if [ $? -eq 0 ]; then
+    echo "🎉 Instalação concluída com sucesso!"
     devices=$($ADB devices | grep -w "device" | cut -f1)
     for device in $devices; do
         echo "📲 Iniciando o aplicativo no dispositivo: $device..."
         $ADB -s "$device" shell am start -n com.chopcut/com.chopcut.MainActivity
     done
-    echo -e "${C_CYAN}$(now)${C_RESET} ${C_GREEN}Instalação concluída com sucesso!${C_RESET}"
+    echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
 else
-    echo -e "${C_RED}${C_BOLD}[BUILD FAILED]${C_RESET}  ${C_CYAN}$(now)${C_RESET}  ${ELAPSED}"
-    echo -e "${C_RED}Ocorreu um erro durante a compilação ou instalação.${C_RESET}"
+    echo "❌ Ocorreu um erro durante a compilação ou instalação."
+    echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
     exit 1
 fi

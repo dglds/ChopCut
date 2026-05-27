@@ -3,12 +3,12 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 LOG_FILE="$DIR/output.log"
 
-export JAVA_HOME="$DIR/jdk17"
+export JAVA_HOME="$DIR/../jdk17"
 
 exec > >(tee "$LOG_FILE") 2>&1
 
 echo "🚀 Compilando ChopCut (assembleDebug)..."
-"$DIR/gradlew" assembleDebug "$@"
+"$DIR/../gradlew" assembleDebug "$@"
 
 if [ $? -eq 0 ]; then
     echo "✅ Compilação concluída com sucesso!"
@@ -19,6 +19,6 @@ else
     echo "FAILURE:"
     awk '/^FAILURE:/{found=1} found{print; if(/^BUILD FAILED/){exit}}' "$LOG_FILE"
     echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
-    python3 "$DIR/scripts/log_build_error.py" "assembleDebug"
+    python3 "$DIR/log_build_error.py" "assembleDebug"
     exit 1
 fi
