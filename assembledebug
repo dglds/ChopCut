@@ -19,5 +19,6 @@ else
     echo "FAILURE:"
     awk '/^FAILURE:/{found=1} found{print; if(/^BUILD FAILED/){exit}}' "$LOG_FILE"
     echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
+    python3 "$DIR/scripts/log_build_error.py" "assembleDebug"
     exit 1
 fi

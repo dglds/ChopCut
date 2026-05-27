@@ -22,5 +22,6 @@ if [ $? -eq 0 ]; then
 else
     echo "❌ Ocorreu um erro durante a compilação."
     echo "🕒 Executado em: $(date '+%Y-%m-%d %H:%M:%S')"
+    python3 "$DIR/scripts/log_build_error.py" "assembleDebugClean"
     exit 1
 fi
