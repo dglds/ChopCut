@@ -12,6 +12,9 @@ echo "🔌 Aguardando dispositivo..."
 echo "   (Ctrl+C para cancelar)"
 echo ""
 
+iterations=0
+prompted=false
+
 while true; do
     devices=$($ADB devices | grep -w "device" | cut -f1)
 
@@ -33,6 +36,7 @@ while true; do
         continue
     fi
 
+    # Descobre dispositivos via avahi (mDNS) na rede local
     echo -ne "\r🔍 Procurando dispositivos na rede..."
     found=false
 
@@ -51,6 +55,19 @@ while true; do
 
     if [ "$found" = false ]; then
         echo -ne "\r⏳ Nenhum dispositivo na rede. Conecte via USB ou ative 'Depuração sem fio' no Android."
+    fi
+
+    iterations=$((iterations + 1))
+    if [ "$iterations" -ge 3 ] && [ "$prompted" = false ]; then
+        echo -e "\n\n💡 Dica: Se a depuração sem fio estiver ativa, insira o IP e Porta manualmente."
+        echo -ne "Digite o IP:PORTA (ou pressione Enter para continuar esperando): "
+        read -t 15 manual_conn
+        if [ -n "$manual_conn" ]; then
+            echo ""
+            echo "📡 Conectando a $manual_conn..."
+            $ADB connect "$manual_conn"
+        fi
+        prompted=true
     fi
 
     sleep 3

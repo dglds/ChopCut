@@ -76,17 +76,12 @@ fun EditorScreen(
     // Observar AudioViewModel com lifecycle awareness
     val audioAmplitudes by audioViewModel.amplitudes.collectAsStateWithLifecycle()
     // Criar EditorViewModel
+    val application = context.applicationContext as Application
+    // Criar EditorViewModel
     val viewModel: EditorViewModel = viewModel(
-        factory = EditorViewModel.EditorViewModelFactory(videoUri)
+        factory = EditorViewModel.EditorViewModelFactory(application, videoUri)
     )
     val state by viewModel.state.collectAsState()
-
-    val smoothPositionMs = remember { mutableStateOf(state.currentPosition.toFloat()) }
-    LaunchedEffect(state.currentPosition) {
-        if (state.currentPosition.toFloat() != smoothPositionMs.value) {
-            smoothPositionMs.value = state.currentPosition.toFloat()
-        }
-    }
 
     var saveDialogState by remember { mutableStateOf(SaveDialogState()) }
     var showSaveDialog by remember { mutableStateOf(false) }
@@ -160,7 +155,7 @@ fun EditorScreen(
                 minTimeReached = minTimeReached,
                 maxTimeReached = maxTimeReached,
                 hasSufficientThumbnails = hasSufficientThumbnails,
-                hasAudio = true // Ignorar áudio temporariamente conforme solicitado
+                hasAudio = hasAudio
             )
 
             Triple(shouldHide, currentElapsed, hasSufficientThumbnails)
@@ -188,20 +183,21 @@ fun EditorScreen(
             }
     }
 
-    // Cancelar preload ao pressionar voltar durante loading
-    BackHandler(enabled = showLoadingOverlay) {
-        preloadViewModel.cancelPreload()
-        showLoadingOverlay = false
-        onNavigateBack()
-    }
-
-    // Se estiver usando uma ferramenta, o botão voltar cancela a ferramenta em vez de sair do editor
-    BackHandler(enabled = !showLoadingOverlay) {
-        if (state.activeTool != EditorTool.NONE) {
+    val handleBackAction = {
+        if (showLoadingOverlay) {
+            preloadViewModel.cancelPreload()
+            showLoadingOverlay = false
+            onNavigateBack()
+        } else if (state.activeTool != EditorTool.NONE) {
             viewModel.setActiveTool(EditorTool.NONE)
         } else {
             onNavigateBack()
         }
+    }
+
+    // Cancelar preload ou fechar ferramentas ao pressionar voltar
+    BackHandler(enabled = true) {
+        handleBackAction()
     }
 
     val videoRepository = remember { VideoRepository(context) }
@@ -259,7 +255,7 @@ fun EditorScreen(
                                     navigationIconContentColor = Color.White
                                 ),
                                 navigationIcon = {
-                                    IconButton(onClick = onNavigateBack) {
+                                    IconButton(onClick = handleBackAction) {
                                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                                     }
                                 },
@@ -302,20 +298,33 @@ fun EditorScreen(
                                     fileInfo = FormatUtils.getFileInfo(context, videoUri, state.videoDurationMs)
                                 )
 
-                                VideoPreview(
-                                    exoPlayer = state.exoPlayer ?: return@Column,
-                                    isPlaying = state.isPlaying,
-                                    isInsideRange = state.isInsideRange,
-                                    playerError = state.playerError,
-                                    isSecurityError = state.isSecurityError,
-                                    currentTimeMs = state.currentPosition,
-                                    onRequestNewMedia = { },
-                                    onRetry = { viewModel.retryPlayer() },
-                                    onTogglePlayPause = {
-                                        if (state.isPlaying) viewModel.pause() else viewModel.play()
-                                    },
-                                    modifier = Modifier.fillMaxWidth().weight(1f)
-                                )
+                                val player = state.exoPlayer
+                                if (player != null) {
+                                    VideoPreview(
+                                        exoPlayer = player,
+                                        isPlaying = state.isPlaying,
+                                        isInsideRange = state.isInsideRange,
+                                        playerError = state.playerError,
+                                        isSecurityError = state.isSecurityError,
+                                        currentTimeMs = state.currentPosition,
+                                        onRequestNewMedia = { },
+                                        onRetry = { viewModel.retryPlayer() },
+                                        onTogglePlayPause = {
+                                            if (state.isPlaying) viewModel.pause() else viewModel.play()
+                                        },
+                                        modifier = Modifier.fillMaxWidth().weight(1f)
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f)
+                                            .background(Color.Black),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(color = Color(0xFF00E5FF))
+                                    }
+                                }
 
                                 // Passive Seekbar
                                 val progress = if (state.videoDurationMs > 0) state.currentPosition.toFloat() / state.videoDurationMs.toFloat() else 0f
@@ -332,7 +341,7 @@ fun EditorScreen(
                                     .padding(vertical = 12.dp)
                             ) {
                                 if (state.videoDurationMs > 0) {
-                                    VideoTimeline(
+                                    TimelineEditor(
                                         videoUri = videoUri,
                                         durationMs = state.videoDurationMs,
                                         currentPositionMs = state.currentPosition,
@@ -345,7 +354,8 @@ fun EditorScreen(
                                         showWaveform = true,
                                         videoWidth = state.videoWidth,
                                         videoHeight = state.videoHeight,
-                                        modifier = Modifier.fillMaxWidth().height(120.dp)
+                                        thumbnailViewModel = thumbnailViewModel,
+                                        modifier = Modifier.fillMaxWidth().height(150.dp)
                                     )
                                 }
                             }
@@ -425,14 +435,13 @@ fun EditorScreen(
                 }
             },
             onSave = {
-                scope.launch(Dispatchers.IO) {
-                    saveDialogState = saveDialogState.copy(isSaving = true, progress = 0)
+                saveDialogState = saveDialogState.copy(isSaving = true, progress = 0)
+                scope.launch {
                     try {
                         val trimRanges = state.trimPosition.completeRanges.sortedBy { it.first }
-
-
-                        val rangesToSave = RangeUtils.calculateKeepRanges(trimRanges, state.videoDurationMs)
-
+                        val rangesToSave = withContext(Dispatchers.IO) {
+                            RangeUtils.calculateKeepRanges(trimRanges, state.videoDurationMs)
+                        }
 
                         if (rangesToSave.isEmpty()) {
                             throw Exception("No ranges to save - video is empty")
@@ -450,14 +459,13 @@ fun EditorScreen(
                                         saveDialogState = saveDialogState.copy(progress = progress.percent)
                                     }
                                     is TrimProgress.Completed -> {
-                                        val trimmedFile = progress.file
-
-                                        val originalFileName = FileNameUtils.extractBaseNameFromUri(videoUri)
-                                        val fileName = FileNameUtils.generateTimestampedFileName(originalFileName)
-
-                                        videoRepository.saveToGallery(trimmedFile, fileName)
-                                        trimmedFile.delete()
-
+                                        withContext(Dispatchers.IO) {
+                                            val trimmedFile = progress.file
+                                            val originalFileName = FileNameUtils.extractBaseNameFromUri(videoUri)
+                                            val fileName = FileNameUtils.generateTimestampedFileName(originalFileName)
+                                            videoRepository.saveToGallery(trimmedFile, fileName)
+                                            trimmedFile.delete()
+                                        }
                                         saveDialogState = saveDialogState.copy(isCompleted = true, isSaving = false)
                                     }
                                     is TrimProgress.Failed -> {
@@ -566,30 +574,18 @@ class EditorViewModel(
 ) : AndroidViewModel(application) {
 
     class EditorViewModelFactory(
+        private val application: Application,
         private val videoUri: Uri?
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(EditorViewModel::class.java)) {
-                @Suppress("DEPRECATION")
-                val app = modelClass.classLoader?.let {
-                    try {
-                        java.lang.Class.forName("android.app.ActivityThread")
-                            .getMethod("currentApplication")
-                            .invoke(null) as? Application
-                    } catch (e: Exception) {
-                        null
-                    }
-                }
-
-                if (app != null) {
-                    return EditorViewModel(
-                        application = app,
-                        videoUri = videoUri,
-                        initialAudioAmplitudes = null,
-                        initialPreloadedStrips = null
-                    ) as T
-                }
+                return EditorViewModel(
+                    application = application,
+                    videoUri = videoUri,
+                    initialAudioAmplitudes = null,
+                    initialPreloadedStrips = null
+                ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
@@ -709,9 +705,7 @@ class EditorViewModel(
         _state.update { it.copy(videoDurationMs = duration) }
     }
 
-    fun setWaveformData(data: WaveformData) {
-        _state.update { it.copy(waveformData = data) }
-    }
+
 
     fun updateRange(rangeIndex: Int, newStartMs: Long, newEndMs: Long) {
         val current = _state.value.trimPosition
@@ -769,9 +763,6 @@ data class EditorState(
     val trimPosition: TrimPosition = TrimPosition.Empty,
     val currentPosition: Long = 0L,
     val videoDurationMs: Long = 0L,
-    val waveformData: WaveformData = WaveformData.empty(),
-    val isWaveformLoading: Boolean = false,
-    val waveformError: String? = null,
     // Novos campos para AudioWaveForms
     val audioWaveformsAmplitudes: FloatArray = floatArrayOf(),
     val isAudioWaveformsLoading: Boolean = false,
@@ -852,11 +843,26 @@ class AudioViewModel(
      * @param force Force reload ignoring cache
      */
     fun loadWaveform(uri: Uri, targetBarCount: Int? = null, force: Boolean = false) {
-        timber.log.Timber.d("AudioViewModel: loadWaveform desativada temporariamente para teste de stress")
-        _uiState.value = AudioUiState.Ready(0)
-        _amplitudes.value = floatArrayOf()
-        _waveform.value = WaveformData(floatArrayOf(), 0)
-        return
+        if (activeUri == uri && !force && _uiState.value is AudioUiState.Ready) {
+            return
+        }
+        activeUri = uri
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.value = AudioUiState.Loading
+            try {
+                val barCount = targetBarCount ?: 400
+                val rawData = waveformExtractor.extractRawPcmData(uri, barCount)
+                
+                _waveform.value = WaveformData(rawData.pcmSamples, rawData.durationMs)
+                _amplitudes.value = rawData.pcmSamples
+                _uiState.value = AudioUiState.Ready(rawData.pcmSamples.size)
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    _uiState.value = AudioUiState.Error(e.message ?: "Erro desconhecido")
+                }
+            }
+        }
     }
     
     /**
@@ -1116,30 +1122,28 @@ class ThumbnailViewModel(
      * @param segmentIndex Índice do segmento
      * @param durationMs Duração do vídeo em ms
      */
-    fun loadStrip(uri: Uri, segmentIndex: Int, durationMs: Long) {
-        viewModelScope.launch(Dispatchers.IO) {
-            if (_strips.value.containsKey(segmentIndex)) {
-                return@launch
-            }
+    suspend fun loadStrip(uri: Uri, segmentIndex: Int, durationMs: Long) = withContext(Dispatchers.IO) {
+        if (_strips.value.containsKey(segmentIndex)) {
+            return@withContext
+        }
+        
+        try {
+            val strip = ThumbnailCacheManager.getStrip(
+                uri = uri,
+                segmentIndex = segmentIndex,
+                durationMs = durationMs,
+                thumbWidth = stripManager?.thumbWidth ?: 60,
+                thumbHeight = stripManager?.thumbHeight ?: 40,
+                thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10
+            )
             
-            try {
-                val strip = ThumbnailCacheManager.getStrip(
-                    uri = uri,
-                    segmentIndex = segmentIndex,
-                    durationMs = durationMs,
-                    thumbWidth = stripManager?.thumbWidth ?: 60,
-                    thumbHeight = stripManager?.thumbHeight ?: 40,
-                    thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10
-                )
-                
-                if (strip != null) {
-                    _strips.update { current ->
-                        current.toMutableMap().also { it[segmentIndex] = strip }
-                    }
-                    trimMemory() // Evitar OOM durante scroll
+            if (strip != null) {
+                _strips.update { current ->
+                    current.toMutableMap().also { it[segmentIndex] = strip }
                 }
-            } catch (e: Exception) {
+                trimMemory() // Evitar OOM durante scroll
             }
+        } catch (e: Exception) {
         }
     }
     
@@ -1151,8 +1155,12 @@ class ThumbnailViewModel(
      * @param durationMs Duração do vídeo em ms
      */
     fun loadStrips(uri: Uri, segmentIndices: List<Int>, durationMs: Long) {
-        segmentIndices.forEach { segIdx ->
-            loadStrip(uri, segIdx, durationMs)
+        viewModelScope.launch(Dispatchers.IO) {
+            segmentIndices.forEach { segIdx ->
+                launch {
+                    loadStrip(uri, segIdx, durationMs)
+                }
+            }
         }
     }
     
@@ -1212,71 +1220,6 @@ class ThumbnailViewModel(
             }
         }
     }
-
-    /**
-     * Extrai thumbnails em estágios (LOD) com processamento em lotes.
-     */
-    private suspend fun extractThumbnailsLOD(
-        uri: Uri,
-        totalSegments: Int,
-        durationMs: Long,
-        onlyFirstFrame: Boolean
-    ): Map<Int, Bitmap> = kotlinx.coroutines.withContext(Dispatchers.IO) {
-        val density = getApplication<Application>().resources.displayMetrics.density
-        val defaultThumbWidth = (60 * density).toInt().coerceAtLeast(1)
-        val defaultThumbHeight = (defaultThumbWidth / 1.77f).toInt().coerceAtLeast(1)
-        
-        
-        val batchSize = 5 
-        
-        for (i in 0 until totalSegments step batchSize) {
-            ensureActive()
-            
-            val end = (i + batchSize).coerceAtMost(totalSegments)
-            val batchIndices = i until end
-            
-            val jobs = batchIndices.map { segIdx ->
-                async {
-                    ensureActive()
-                    
-                    val strip = ThumbnailCacheManager.getStrip(
-                        uri = uri,
-                        segmentIndex = segIdx,
-                        durationMs = durationMs,
-                        thumbWidth = stripManager?.thumbWidth ?: defaultThumbWidth,
-                        thumbHeight = stripManager?.thumbHeight ?: defaultThumbHeight,
-                        thumbsPerStrip = stripManager?.thumbsPerStrip ?: 10,
-                        onlyFirstFrame = onlyFirstFrame
-                    )
-                    strip?.let { segIdx to it }
-                }
-            }
-
-            val results: List<Pair<Int, Bitmap>> = jobs.awaitAll().filterNotNull()
-            
-            _strips.update { current ->
-                current.toMutableMap().also { map ->
-                    results.forEach { (segmentIndex, strip) ->
-                        map[segmentIndex] = strip
-                    }
-                }
-            }
-            
-            trimMemory()
-            
-            // Reduzido drasticamente para scroll mais fluido
-            val baseDelay = if (onlyFirstFrame) 5L else {
-                if (durationMs > 3_600_000L) 20L else 10L
-            }
-            kotlinx.coroutines.delay(baseDelay)
-        }
-
-        _strips.value.toMap()
-    }
-    
-    /**
-     * Extrai thumbnails com progresso em estágios (DEPRECATED: Usar LOD).
-     */
     
     override fun onCleared() {
         super.onCleared()

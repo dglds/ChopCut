@@ -11,10 +11,14 @@
             "id": "afad738399cb9469",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "sessions/session#02.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "session#02"
             }
           }
         ]
@@ -177,5 +181,10 @@
     }
   },
   "active": "afad738399cb9469",
-  "lastOpenFiles": []
+  "lastOpenFiles": [
+    "Handoff - Refatoração Arquitetura 15 Arquivos.md",
+    "sessions/session#02.md",
+    "session-TEMPLATE.md",
+    "sessions/session#01.md"
+  ]
 }

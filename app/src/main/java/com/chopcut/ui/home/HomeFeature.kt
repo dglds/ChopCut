@@ -116,7 +116,8 @@ import timber.log.Timber
 @Composable
 fun HomeScreen(
     preloadViewModel: PreloadViewModel,
-    onNavigateToEditor: (Uri) -> Unit = {}
+    onNavigateToEditor: (Uri) -> Unit = {},
+    onNavigateToTimelineV2: () -> Unit = {}
 ) {
     val application = LocalContext.current.applicationContext as Application
     val videoRepository = remember { VideoRepository(application) }
@@ -220,6 +221,12 @@ fun HomeScreen(
                         diskCacheSize = cacheSizeBytes,
                         clearCacheState = clearCacheState,
                         onClearCache = { viewModel.clearCache() },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(ChopCutSpacing.sm))
+                    ChopCutSecondaryButton(
+                        onClick = onNavigateToTimelineV2,
+                        text = "TimelineV2 Demo",
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
