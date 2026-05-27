@@ -141,10 +141,7 @@ fun TimelineV2Screen(
         }
     }
 
-    // Auto-play immediately when screen is loaded
-    LaunchedEffect(Unit) {
-        viewModel.play()
-    }
+
 
     Scaffold(
         topBar = {
@@ -250,6 +247,7 @@ fun TimelineV2(
     val thumbHeightPx = with(density) { 45.dp.toPx() }
     val timelineTopPx = with(density) { 24.dp.toPx() }
     val tickHeightPx = with(density) { 6.dp.toPx() }
+    val tickGapPx = with(density) { 4.dp.toPx() } // Elegant 4dp space between ruler and thumbnails
 
     Canvas(
         modifier = modifier
@@ -281,11 +279,11 @@ fun TimelineV2(
         val totalTimelineWidthPx = 59 * thumbWidthPx
         val scrollOffsetPx = (currentPositionMs.toFloat() / durationMs.toFloat()) * totalTimelineWidthPx
         
-        // 1. Draw top line for ticks reference
+        // 1. Draw top line for ticks reference (with gap offset)
         drawLine(
             color = Color.White.copy(alpha = 0.15f),
-            start = Offset(0f, verticalOffsetPx + timelineTopPx),
-            end = Offset(width, verticalOffsetPx + timelineTopPx),
+            start = Offset(0f, verticalOffsetPx + timelineTopPx - tickGapPx),
+            end = Offset(width, verticalOffsetPx + timelineTopPx - tickGapPx),
             strokeWidth = 1f
         )
         
@@ -322,7 +320,7 @@ fun TimelineV2(
                     end = Offset(thumbRight, verticalOffsetPx + timelineTopPx + thumbHeightPx)
                 )
                 
-                // Draw thumbnail fill
+                // Draw thumbnail fill (starts at original timelineTopPx, leaving a gap below the ticks line)
                 drawRect(
                     brush = brush,
                     topLeft = Offset(thumbLeft, verticalOffsetPx + timelineTopPx),
@@ -344,8 +342,8 @@ fun TimelineV2(
                 // Standard second tick
                 drawLine(
                     color = Color.White.copy(alpha = 0.4f),
-                    start = Offset(tickX, verticalOffsetPx + timelineTopPx - tickHeightPx),
-                    end = Offset(tickX, verticalOffsetPx + timelineTopPx),
+                    start = Offset(tickX, verticalOffsetPx + timelineTopPx - tickGapPx - tickHeightPx),
+                    end = Offset(tickX, verticalOffsetPx + timelineTopPx - tickGapPx),
                     strokeWidth = with(density) { 1.dp.toPx() }
                 )
                 
@@ -354,8 +352,8 @@ fun TimelineV2(
                 if (halfTickX >= -10f && halfTickX <= width + 10f && i < 58) {
                     drawLine(
                         color = Color.White.copy(alpha = 0.2f),
-                        start = Offset(halfTickX, verticalOffsetPx + timelineTopPx - (tickHeightPx / 2f)),
-                        end = Offset(halfTickX, verticalOffsetPx + timelineTopPx),
+                        start = Offset(halfTickX, verticalOffsetPx + timelineTopPx - tickGapPx - (tickHeightPx / 2f)),
+                        end = Offset(halfTickX, verticalOffsetPx + timelineTopPx - tickGapPx),
                         strokeWidth = with(density) { 0.5.dp.toPx() }
                     )
                 }
@@ -381,8 +379,8 @@ fun TimelineV2(
         if (endTickX >= -10f && endTickX <= width + 10f) {
             drawLine(
                 color = Color.White.copy(alpha = 0.4f),
-                start = Offset(endTickX, verticalOffsetPx + timelineTopPx - tickHeightPx),
-                end = Offset(endTickX, verticalOffsetPx + timelineTopPx),
+                start = Offset(endTickX, verticalOffsetPx + timelineTopPx - tickGapPx - tickHeightPx),
+                end = Offset(endTickX, verticalOffsetPx + timelineTopPx - tickGapPx),
                 strokeWidth = with(density) { 1.dp.toPx() }
             )
             val textLayoutResult = textMeasurer.measure(
@@ -402,7 +400,7 @@ fun TimelineV2(
         // 3. Draw premium Cyan Playhead (#00E5FF) exactly at the center
         drawLine(
             color = Color(0xFF00E5FF),
-            start = Offset(centerX, verticalOffsetPx + timelineTopPx - tickHeightPx),
+            start = Offset(centerX, verticalOffsetPx + timelineTopPx - tickGapPx - tickHeightPx),
             end = Offset(centerX, verticalOffsetPx + timelineTopPx + thumbHeightPx + 4.dp.toPx()),
             strokeWidth = with(density) { 2.5.dp.toPx() }
         )
@@ -411,7 +409,7 @@ fun TimelineV2(
         drawCircle(
             color = Color(0xFF00E5FF),
             radius = with(density) { 5.dp.toPx() },
-            center = Offset(centerX, verticalOffsetPx + timelineTopPx - tickHeightPx)
+            center = Offset(centerX, verticalOffsetPx + timelineTopPx - tickGapPx - tickHeightPx)
         )
     }
 }
