@@ -3,9 +3,12 @@ package com.chopcut
 import androidx.compose.animation.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
@@ -15,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -78,7 +82,17 @@ fun TimelineV2Screen(
     val currentPositionMs by viewModel.currentPositionMs.collectAsStateWithLifecycle()
     val durationMs = viewModel.durationMs
 
-    // Precise 60 FPS animation loop using withFrameNanos
+    // Target position for manual scrubbing smoothing
+    var targetPositionMs by remember { mutableStateOf(currentPositionMs.toFloat()) }
+
+    // Synchronize targetPositionMs during auto-play
+    LaunchedEffect(currentPositionMs, isPlaying) {
+        if (isPlaying) {
+            targetPositionMs = currentPositionMs.toFloat()
+        }
+    }
+
+    // Precise 60 FPS animation loop using withFrameNanos (Auto-play/Auto-scroll)
     LaunchedEffect(isPlaying) {
         if (isPlaying) {
             var lastNanos = System.nanoTime()
@@ -94,6 +108,33 @@ fun TimelineV2Screen(
 
                     if (accumulatedMs >= durationMs) {
                         viewModel.pause()
+                    }
+                }
+            }
+        }
+    }
+
+    // Smooth interpolation loop when paused (exponential decay for premium fluidity during scrubbing)
+    LaunchedEffect(isPlaying) {
+        if (!isPlaying) {
+            var lastNanos = System.nanoTime()
+            while (!isPlaying) {
+                withFrameNanos { nanos ->
+                    val deltaNanos = nanos - lastNanos
+                    val deltaMs = deltaNanos / 1_000_000f
+                    lastNanos = nanos
+
+                    val current = viewModel.currentPositionMs.value.toFloat()
+                    val target = targetPositionMs
+                    val diff = target - current
+
+                    if (Math.abs(diff) > 0.5f) {
+                        val tau = 80f // Time constant in ms (premium fluid damping coefficient)
+                        val factor = (1f - Math.exp(-deltaMs.toDouble() / tau.toDouble())).toFloat()
+                        val next = current + diff * factor
+                        viewModel.updatePosition(next.toLong())
+                    } else if (current != target) {
+                        viewModel.updatePosition(target.toLong())
                     }
                 }
             }
@@ -153,10 +194,14 @@ fun TimelineV2Screen(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Timeline Area
+            // Timeline Area (using the calibrated ideal sensitivity of 1.60x)
             TimelineV2(
+                targetPositionMs = targetPositionMs,
+                onTargetPositionChanged = { targetPositionMs = it },
                 currentPositionMs = currentPositionMs,
                 durationMs = durationMs,
+                isPlaying = isPlaying,
+                sensitivity = 1.60f,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(95.dp)
@@ -185,12 +230,20 @@ fun TimelineV2Screen(
 
 @Composable
 fun TimelineV2(
+    targetPositionMs: Float,
+    onTargetPositionChanged: (Float) -> Unit,
     currentPositionMs: Long,
     durationMs: Long,
+    isPlaying: Boolean,
+    sensitivity: Float,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
+
+    val targetPositionState = rememberUpdatedState(targetPositionMs)
+    val onTargetPositionChangedState = rememberUpdatedState(onTargetPositionChanged)
+    val sensitivityState = rememberUpdatedState(sensitivity)
 
     val thumbWidthPx = with(density) { 80.dp.toPx() }
     val thumbHeightPx = with(density) { 45.dp.toPx() }
@@ -199,6 +252,21 @@ fun TimelineV2(
 
     Canvas(
         modifier = modifier
+            .pointerInput(isPlaying) {
+                if (!isPlaying) {
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            val totalTimelineWidthPx = 59 * thumbWidthPx
+                            val msPerPx = durationMs.toFloat() / totalTimelineWidthPx
+                            val deltaMs = -dragAmount * msPerPx
+                            val newTarget = (targetPositionState.value + deltaMs * sensitivityState.value)
+                                .coerceIn(0f, durationMs.toFloat())
+                            onTargetPositionChangedState.value(newTarget)
+                        }
+                    )
+                }
+            }
     ) {
         val width = size.width
         val height = size.height
@@ -350,3 +418,5 @@ private fun formatMs(ms: Long): String {
     val milliseconds = ms % 1000
     return String.format(Locale.US, "%02d:%02d.%03d", minutes, seconds, milliseconds)
 }
+
+
