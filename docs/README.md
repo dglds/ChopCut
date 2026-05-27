@@ -15,10 +15,23 @@ Sempre começe lendo estes arquivos na ordem:
 1. `CLAUDE.md` — Instruções gerais do projeto, padrões de performance, comandos
 2. `docs/ChopCut - Regras da Arquitetura.md` — Onde cada coisa está, regras críticas
 3. `docs/session#01.md` ou o último `session#NN.md` — O que foi feito na sessão anterior
-4. `failedBuildCount.txt` — Quantas falhas de build desde o início
+4. `errors.json` — Registro automatizado de contagem e logs detalhados de falhas de build
 
-### 2. Atualize o failedBuildCount a cada falha
-Sempre que um build falhar, incremente o número em `failedBuildCount.txt`.
+### 2. Registro de Erros Automatizado (`errors.json`)
+O projeto conta com rastreamento automático de falhas. Sempre que uma compilação através dos scripts em `scripts/` falha, o script `log_build_error.py` intercepta o log de compilação, extrai o erro específico do Kotlin compiler e atualiza o arquivo `errors.json` na raiz do projeto com o seguinte formato:
+```json
+{
+    "count": 1,
+    "errors": [
+        {
+            "task": "assembleDebug",
+            "message": "Mensagem detalhada do erro extraída do compilador Kotlin...",
+            "timestamp": "2026-05-27T20:41:48-03:00"
+        }
+    ]
+}
+```
+Não é necessário incrementar manualmente nenhum contador de falhas; o sistema gerencia o estado das compilações de forma transparente.
 
 ### 3. Commits modulares
 Siga o padrão de commits da Session #01:

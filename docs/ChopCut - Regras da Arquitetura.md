@@ -104,6 +104,10 @@ Conflitos conhecidos e resolvidos:
 
 O script `assembledebug` na pasta `scripts/` configura o `JAVA_HOME=jdk17` automaticamente. Não use `./gradlew assembleDebug` diretamente ou pode falhar com Java 25.
 
+> [!TIP]
+> **Registro de Erros Automatizado (`errors.json`):**
+> Sempre que uma compilação ou script de build falhar, o script de captura grava automaticamente os detalhes da falha, a tarefa e o timestamp no arquivo `errors.json` na raiz do projeto. Isso elimina a necessidade de contagens ou anotações manuais de falhas.
+
 ```bash
 ./scripts/assembledebug     # ✅ CERTO
 ```
