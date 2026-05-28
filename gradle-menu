@@ -1,0 +1,27 @@
+#!/bin/bash
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#             🚀 BOOTSTRAP DO PAINEL GRADLE EM GO (LIPGLOSS & BUBBLE TEA)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+SRC_DIR="$DIR/gradle/scripts/menu-go"
+BIN_PATH="$SRC_DIR/menu-bin"
+
+# Verifica se o Go está instalado
+if ! command -v go >/dev/null 2>&1; then
+    echo "❌ Erro: Go não está instalado no sistema."
+    echo "Por favor, instale o Go para executar o painel de alta performance."
+    exit 1
+fi
+
+# Se o binário não existir ou o main.go for mais recente, compila
+if [ ! -f "$BIN_PATH" ] || [ "$SRC_DIR/main.go" -nt "$BIN_PATH" ] || [ "$SRC_DIR/go.mod" -nt "$BIN_PATH" ]; then
+    echo "🔄 Compilando painel em Go (Lipgloss TUI)..."
+    if ! (cd "$SRC_DIR" && go build -o menu-bin main.go); then
+        echo "❌ Falha ao compilar o painel Go."
+        exit 1
+    fi
+fi
+
+# Executa o painel substituindo o processo bash atual
+exec "$BIN_PATH" "$@"
