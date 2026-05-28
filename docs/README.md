@@ -18,7 +18,7 @@ Sempre começe lendo estes arquivos na ordem:
 4. `errors.json` — Registro automatizado de contagem e logs detalhados de falhas de build
 
 ### 2. Registro de Erros Automatizado (`errors.json`)
-O projeto conta com rastreamento automático de falhas. Sempre que uma compilação através dos scripts em `scripts/` falha, o script `log_build_error.py` intercepta o log de compilação, extrai o erro específico do Kotlin compiler e atualiza o arquivo `errors.json` na raiz do projeto com o seguinte formato:
+O projeto conta com rastreamento automático de falhas. Sempre que uma compilação falha, o sistema intercepta o log de compilação, extrai o erro específico do Kotlin compiler e atualiza o arquivo `errors.json` na raiz do projeto com o seguinte formato:
 ```json
 {
     "count": 1,
@@ -93,9 +93,12 @@ Como tudo está no mesmo package, não pode haver duas classes, objetos ou enums
 | `PreloadStage` | `ui/home/HomeFeature.kt` | `Starting, Validating, ExtractingAudio, ExtractingThumbnails, Ready` |
 | `WaveformData` | `core/Models.kt` | 2 params: `(amplitudes, durationMs)` |
 
-### Build sempre com `./scripts/assembledebug`
-O script na pasta `scripts/` configura `JAVA_HOME=jdk17` automaticamente.
-Não use `./gradlew assembleDebug` diretamente ou falhará com Java 25 do sistema.
+### Build e Tarefas com `./gradle-menu` (TUI Go)
+Para compilar, instalar e depurar com segurança e facilidade, utilize o painel interativo em Go:
+```bash
+./gradle-menu
+```
+Esse painel configura `JAVA_HOME=./jdk17` automaticamente e consome os parâmetros em `gradle/scripts/gradle-params.sh`. Para tarefas manuais no terminal, defina `JAVA_HOME=./jdk17` na frente do comando (ex: `JAVA_HOME=./jdk17 ./gradlew assembleDebug`), caso contrário o build falhará com a versão global do Java do sistema.
 
 ---## Arquitetura atual (20 arquivos)
 
@@ -148,9 +151,10 @@ app/src/main/java/com/chopcut/
 ## Comandos
 
 ```bash
-./scripts/assembledebug                      # Build APK debug
-./gradlew installDebug                       # Instalar no device
-./gradlew connectedAndroidTest               # Rodar todos os testes
-./gradlew connectedAndroidTest -Pclass=...   # Teste específico
-~/Android/Sdk/platform-tools/adb logcat -s Timber:D  # Ver logs
+./gradle-menu                                # Painel interativo de tarefas (TUI Go)
+JAVA_HOME=./jdk17 ./gradlew assembleDebug    # Build manual do APK debug
+JAVA_HOME=./jdk17 ./gradlew installDebug     # Instalar no dispositivo (manual)
+JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest # Rodar todos os testes (manual)
+JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pclass=... # Teste específico
+~/Android/Sdk/platform-tools/adb logcat -s Timber:D  # Ver logs do app
 ```

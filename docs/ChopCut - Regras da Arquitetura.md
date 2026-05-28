@@ -100,17 +100,24 @@ Conflitos conhecidos e resolvidos:
 | `AudioInfo` | `core/Models.kt` | Metadata de áudio |
 | `VideoInfo` | `core/Models.kt` | Metadata de vídeo |
 
-### 5. Build sempre com `./scripts/assembledebug`
+### 5. Build e Execução usando o `./gradle-menu` ou JDK 17 manual
 
-O script `assembledebug` na pasta `scripts/` configura o `JAVA_HOME=jdk17` automaticamente. Não use `./gradlew assembleDebug` diretamente ou pode falhar com Java 25.
+Para compilar e gerenciar as tarefas do Gradle com segurança, utilize o painel interativo de alto desempenho (TUI em Go):
+
+```bash
+./gradle-menu               # ✅ RECOMENDADO (TUI Interativa)
+```
+
+O painel configura automaticamente `JAVA_HOME=./jdk17` e aplica as configurações do arquivo `gradle/scripts/gradle-params.sh`. Para rodar tarefas manualmente no terminal, configure a variável de ambiente `JAVA_HOME` explicitamente:
+
+```bash
+JAVA_HOME=./jdk17 ./gradlew assembleDebug
+```
 
 > [!TIP]
 > **Registro de Erros Automatizado (`errors.json`):**
-> Sempre que uma compilação ou script de build falhar, o script de captura grava automaticamente os detalhes da falha, a tarefa e o timestamp no arquivo `errors.json` na raiz do projeto. Isso elimina a necessidade de contagens ou anotações manuais de falhas.
+> Sempre que uma compilação ou script de build falhar, o sistema grava automaticamente os detalhes da falha, a tarefa e o timestamp no arquivo `errors.json` na raiz do projeto. Isso elimina a necessidade de contagens ou anotações manuais de falhas.
 
-```bash
-./scripts/assembledebug     # ✅ CERTO
-```
 
 ### 6. Performance: 3 padrões para evitar jank
 
@@ -123,14 +130,17 @@ SHA-1 dos padrões (ver CLAUDE.md para detalhes completos):
 ## 🧪 Testes
 
 ```bash
-# Build APK
-./scripts/assembledebug
+# Iniciar painel de tarefas Gradle (TUI Go)
+./gradle-menu
 
-# Testes instrumentados
-./gradlew connectedAndroidTest
+# Ou build manual do APK debug
+JAVA_HOME=./jdk17 ./gradlew assembleDebug
 
-# Teste específico
-./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.timeline.FastFrameExtractorTest
+# Testes instrumentados (manual)
+JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest
+
+# Teste específico (manual)
+JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.timeline.FastFrameExtractorTest
 ```
 
 Assets de teste: `app/src/androidTest/assets/sample.mp4`

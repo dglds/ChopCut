@@ -4,25 +4,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run Commands
 
-All commands use the Gradle wrapper. ADB is at `~/Android/Sdk/platform-tools/adb`.
+Todas as tarefas principais de build, instalação e testes podem ser controladas usando o painel interativo de alta performance (TUI em Go):
+
+```bash
+# Iniciar o painel interativo (TUI Go)
+./gradle-menu
+```
+
+O painel configurará o JDK 17 do projeto automaticamente e lerá as flags configuradas no arquivo `gradle/scripts/gradle-params.sh`.
+
+### Comandos Manuais (se necessário)
+
+Caso queira executar os comandos manualmente sem usar o painel TUI, configure `JAVA_HOME` com o JDK 17 local (`./jdk17`):
 
 ```bash
 # Build debug APK
-./gradlew assembleDebug
+JAVA_HOME=./jdk17 ./gradlew assembleDebug
 
-# Install on connected device/emulator
-./gradlew installDebug
+# Instalar no dispositivo ou emulador conectado
+JAVA_HOME=./jdk17 ./gradlew installDebug
 
-# Run instrumented tests (requires device/emulator)
-./gradlew connectedAndroidTest
+# Rodar testes instrumentados (requer dispositivo/emulador)
+JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest
 
-# Run a single instrumented test class
-./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.timeline.FastFrameExtractorTest
+# Rodar um teste de classe específico
+JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.timeline.FastFrameExtractorTest
 
-# Push a video to emulator for testing
+# Enviar vídeo para o emulador para testes
 ~/Android/Sdk/platform-tools/adb push ~/Videos/video.mp4 /sdcard/Movies/video.mp4
 ~/Android/Sdk/platform-tools/adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Movies/video.mp4
 ```
+
+### Configurações de Scripts em `gradle/scripts/`
+
+As configurações de parâmetros do Gradle são declaradas em `gradle/scripts/gradle-params.sh`. Você pode ativar/desativar flags (ex: `GRADLE_PARALLEL`, `GRADLE_BUILD_CACHE`, nível de logs de stacktrace) editando esse arquivo como `true` ou `false`. O painel `./gradle-menu` lerá esse arquivo dinamicamente antes de cada tarefa.
 
 ## Architecture
 
@@ -35,12 +50,12 @@ All commands use the Gradle wrapper. ADB is at `~/Android/Sdk/platform-tools/adb
 ### Navigation & ViewModel Scoping
 Navigation is handled by `ChopCutNavGraph` (single `NavHost`). Start destination is determined in `MainActivity` based on `isFirstRun` and `ACTION_VIEW` intent (supports launching directly into editor with a video URI).
 
-ViewModels are **Activity-scoped** by design: `PreloadViewModel`, `ThumbnailViewModel`, and `AudioViewModel` are created in `MainActivity` and passed down through the nav graph as parameters. This is intentional — they must survive navigation between `HomeScreen` and `EditorScreen`.
+ViewModels are **Activity-scoped** by design: `PreloadViewModel`, `ThumbnailViewModel`, and `AudioViewModel` are created in `MainActivity` and passed down through the nav graph as parameters. ViewModels specific to screen features (e.g. `EditorViewModel` and `HomeViewModel`) are defined inline within feature files.
 
-Routes: `onboarding` → `home` → `editor?videoUri={uri}` | `preferences` | `audio_waveforms_test`
+Routes: `home` → `editor?videoUri={uri}` | `timelineV2?videoUri={uri}`
 
 ### Video Processing Pipeline
-Two pipelines exist for trim operations:
+Two pipelines exist for trim operations (both defined in `VideoEngine.kt`):
 - **`CopyPipeline`** — `MediaCodec` + `MediaExtractor` + `MediaMuxer` for lossless copy (fast, no re-encode)
 - **`TransformerPipeline`** — Media3 Transformer for multi-range trim (re-encodes, supports clipping config per segment)
 
@@ -49,7 +64,7 @@ Two pipelines exist for trim operations:
 ### Thumbnail System
 `ThumbnailViewModel` → `ThumbnailStripManager` → `FastFrameExtractor` (v3).
 
-`FastFrameExtractor` uses `MediaCodec` in ByteBuffer mode with hardware-accurate YUV layout metadata (stride/slice-height read from `getOutputFormat()`). Thumbnails are loaded **on-demand** as the user scrolls the timeline — preload is intentionally disabled. Cache lives at `context.cacheDir/thumbnail_strips/` and is cleared on app start.
+`FastFrameExtractor` (defined in `ThumbnailEngine.kt`) uses `MediaCodec` in ByteBuffer mode with hardware-accurate YUV layout metadata (stride/slice-height read from `getOutputFormat()`). Thumbnails are loaded **on-demand** as the user scrolls the timeline — preload is intentionally disabled. Cache lives at `context.cacheDir/thumbnail_strips/` and is cleared on app start.
 
 ### State Management Pattern
 `EditorViewModel` owns `EditorState` (trim ranges, playback position, waveform, ExoPlayer instance) via `MutableStateFlow`. No MVI framework — direct method calls on the ViewModel. `TrimPosition` is the core model for managing multiple non-overlapping trim ranges.
@@ -59,12 +74,6 @@ Two pipelines exist for trim operations:
 ### Constants
 All magic numbers must use the centralized constants system at `app/src/main/java/com/chopcut/config/constants/`. Key files: `ThumbnailConfig.kt`, `AudioConfig.kt`. Never hardcode pixel dimensions, durations, or quality values inline.
 
-### Debug Tooling
-- `DebugConfig` (`util/debug/DebugConfig.kt`) — central flags for verbose logs, overlays, performance monitoring. Flags are hardcoded; change them here to toggle behavior.
-- `DebugToast` — floating overlay in DEBUG builds, managed by `DebugViewModel`, rendered in `ChopCutNavGraph` above the NavHost.
-- `ActivityLogger` — logs user actions to local file via `FileLoggingTree`.
-- Perfetto tracing: `trace.sh` script for capturing system traces.
-
 ### Version Scheme
 `versionCode = gitCommitCount * 1000 + buildNumber`. Build number auto-increments per build and resets on new commit. Managed by `version.properties` (gitignored).
 
@@ -73,14 +82,15 @@ All magic numbers must use the centralized constants system at `app/src/main/jav
 | File | Purpose |
 |------|---------|
 | `ui/navigation/ChopCutNavGraph.kt` | All routes and nav logic |
-| `ui/screen/EditorScreen.kt` | Main editor screen |
-| `ui/viewmodel/EditorViewModel.kt` | Editor state + ExoPlayer |
-| `ui/viewmodel/PreloadViewModel.kt` | Coordinates thumbnail/audio preload |
-| `data/pipeline/TransformerPipeline.kt` | Multi-range trim via Media3 |
-| `data/pipeline/CopyPipeline.kt` | Lossless trim via MediaCodec |
-| `data/thumbnail/v3/FastFrameExtractor.kt` | Hardware-accelerated frame extraction |
-| `ui/components/gallery/BottomSheetGallery.kt` | Video picker (MediaStore query) |
-| `util/debug/DebugConfig.kt` | All debug flags |
+| `ui/home/HomeFeature.kt` | Home screen UI, HomeViewModel, BottomSheetGallery, and PreloadViewModel |
+| `ui/editor/EditorFeature.kt` | Unified Editor screen UI, EditorViewModel, and AudioViewModel |
+| `ui/editor/TimelineUI.kt` | TimelineEditor drawing/scrolling, PlayerManager, VideoPreview component |
+| `ui/editor/TimelineV2Feature.kt` | Calibrated high-fluidity TimelineV2 custom gesture UI, custom playhead, active markers |
+| `data/VideoEngine.kt` | Unified lossless CopyPipeline, Media3 TransformerPipeline, and VideoRepository |
+| `data/ThumbnailEngine.kt` | FastFrameExtractor v3 and ThumbnailStripManager for YUV frame extraction |
+| `data/AudioEngine.kt` | WaveformExtractor and raw PCM decoding engine |
+| `core/Models.kt` | Unified data models (VideoInfo, AudioInfo, WaveformData, etc.) |
+| `core/Utils.kt` | Unified helpers (FormatUtils, TimeUtils, FileNameUtils, RangeUtils) |
 
 ## Padrões críticos de performance
 

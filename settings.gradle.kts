@@ -21,4 +21,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "ChopCut"
 include(":app")
-include(":macrobenchmark")

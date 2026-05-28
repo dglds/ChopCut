@@ -117,7 +117,7 @@ import timber.log.Timber
 fun HomeScreen(
     preloadViewModel: PreloadViewModel,
     onNavigateToEditor: (Uri) -> Unit = {},
-    onNavigateToTimelineV2: () -> Unit = {}
+    onNavigateToTimelineV2: (String) -> Unit = {}
 ) {
     val application = LocalContext.current.applicationContext as Application
     val videoRepository = remember { VideoRepository(application) }
@@ -225,7 +225,15 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(ChopCutSpacing.sm))
                     ChopCutSecondaryButton(
-                        onClick = onNavigateToTimelineV2,
+                        onClick = {
+                            val uri = selectedUri
+                            if (uri != null) {
+                                val encodedUri = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
+                                onNavigateToTimelineV2("timelineV2?videoUri=$encodedUri")
+                            } else {
+                                onNavigateToTimelineV2("timelineV2")
+                            }
+                        },
                         text = "TimelineV2 Demo",
                         modifier = Modifier.fillMaxWidth()
                     )

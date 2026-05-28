@@ -55,20 +55,31 @@ fun ChopCutNavGraph(
                         val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
                         navController.navigate("editor?videoUri=$encodedUri")
                     },
-                    onNavigateToTimelineV2 = {
-                        navController.navigate("timelineV2")
+                    onNavigateToTimelineV2 = { route ->
+                        navController.navigate(route)
                     }
                 )
             }
 
             composable(
-                route = "timelineV2",
+                route = "timelineV2?videoUri={videoUri}",
+                arguments = listOf(
+                    navArgument("videoUri") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                ),
                 enterTransition = { navFadeIn },
                 exitTransition = { navFadeOut },
                 popEnterTransition = { navFadeIn },
                 popExitTransition = { navFadeOut }
-            ) {
+            ) { backStackEntry ->
+                val videoUriString = backStackEntry.arguments?.getString("videoUri")
+                val videoUri = videoUriString?.let { Uri.parse(it) }
+
                 TimelineV2Screen(
+                    videoUri = videoUri,
                     onNavigateBack = {
                         navController.popBackStack()
                     }
