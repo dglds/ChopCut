@@ -139,14 +139,9 @@ class TimelineViewModel(
                         durationString = TimeUtils.formatDuration(info.durationMs)
                     )
                     // Auto-detect extracted frames directory
-                    val sanitizedName = info.fileName.substringBeforeLast(".")
-                        .replace("[^a-zA-Z0-9_\\-]".toRegex(), "_").trim('_')
-                    val baseDir = application.getExternalFilesDir("extracted_frames")
-                    if (baseDir != null) {
-                        val extractedDir = java.io.File(baseDir, sanitizedName)
-                        if (extractedDir.exists() && extractedDir.isDirectory) {
-                            loadThumbnails(extractedDir.absolutePath)
-                        }
+                    val extractedDir = FileNameUtils.resolveThumbnailDirectory(application, info.fileName)
+                    if (extractedDir.exists() && extractedDir.isDirectory) {
+                        loadThumbnails(extractedDir.absolutePath)
                     }
                 }
             }
@@ -191,9 +186,42 @@ class TimelineViewModel(
                 f.name.removePrefix("frame_").substringBefore(".").toIntOrNull() ?: 0
             } ?: return@launch
 
+            val density = getApplication<Application>().resources.displayMetrics.density
+            val targetHeightPx = (60 * density).toInt()
+            val videoAr = _videoAr.value
+            val targetWidthPx = (targetHeightPx * videoAr).toInt().coerceAtLeast(1)
+
             files.forEachIndexed { index, file ->
                 val bitmap = try {
-                    BitmapFactory.decodeFile(file.absolutePath)
+                    val options = BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                    }
+                    BitmapFactory.decodeFile(file.absolutePath, options)
+                    val srcWidth = options.outWidth
+                    val srcHeight = options.outHeight
+
+                    var sampleSize = 1
+                    if (srcHeight > targetHeightPx) {
+                        val halfHeight = srcHeight / 2
+                        while (halfHeight / sampleSize >= targetHeightPx) {
+                            sampleSize *= 2
+                        }
+                    }
+
+                    val decodeOptions = BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                    }
+                    val decoded = BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+                    decoded?.let {
+                        if (it.width != targetWidthPx || it.height != targetHeightPx) {
+                            val scaled = Bitmap.createScaledBitmap(it, targetWidthPx, targetHeightPx, true)
+                            if (scaled != it) it.recycle()
+                            scaled
+                        } else {
+                            it
+                        }
+                    }
                 } catch (e: Exception) { null }
                 if (bitmap != null) {
                     _thumbBitmaps.update { it + (index to bitmap) }
@@ -723,6 +751,11 @@ fun Timeline(
 ) {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
+    val thumbnailPaint = remember {
+        android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+            isAntiAlias = true
+        }
+    }
 
     val targetPositionState = rememberUpdatedState(targetPositionMs)
     val onTargetPositionChangedState = rememberUpdatedState(onTargetPositionChanged)
@@ -823,12 +856,9 @@ fun Timeline(
                             thumbRight.toInt(),
                             (canvasVerticalOffsetPx + timelineTopPx + thumbHeightPx).toInt()
                         )
-                        // @violation:canvas-prealloc — paint alocado a cada frame para cada thumbnail; mover para remember { } fora do Canvas
-                        val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
-                            isAntiAlias = true
-                        }
+                        // Paint prealocado fora do escopo do Canvas para evitar jank por Garbage Collection
                         drawIntoCanvas { canvas ->
-                            canvas.nativeCanvas.drawBitmap(bitmap, null, dstRect, paint)
+                            canvas.nativeCanvas.drawBitmap(bitmap, null, dstRect, thumbnailPaint)
                         }
                     } else {
                         // Fallback gradient placeholder
@@ -964,12 +994,23 @@ fun Timeline(
                 }
             }
      
-            // 5. Draw premium Playhead (alternating Cyan/Amber in rapid alert flash when active, else Cyan) exactly at the center
+        }
+ 
+        // 2. Playhead Canvas (Overlay) - Redesenhado independentemente do Canvas principal para performance premium
+        Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val width = size.width
+            val height = size.height
+            val canvasCenterX = width / 2f
+            
+            val canvasContentHeightPx = timelineTopPx + thumbHeightPx
+            val canvasVerticalOffsetPx = (height - canvasContentHeightPx) / 2f
+ 
             val playheadWidth = if (isRecording) 3.5.dp else 2.5.dp
             val capRadius = if (isRecording) 7.dp else 5.dp
      
             if (isRecording) {
-                // Draw a semi-transparent pulsing alert glow behind the playhead cap
                 drawCircle(
                     color = playheadColor.copy(alpha = 0.25f),
                     radius = with(density) { (capRadius + 4.dp).toPx() },
@@ -984,7 +1025,6 @@ fun Timeline(
                 strokeWidth = with(density) { playheadWidth.toPx() }
             )
             
-            // Playhead top cap (small circle)
             drawCircle(
                 color = playheadColor,
                 radius = with(density) { capRadius.toPx() },

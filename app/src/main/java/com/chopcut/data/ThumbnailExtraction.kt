@@ -88,14 +88,9 @@ class ThumbnailExtraction(private val context: Context) {
 
         addLog("Total estimado de frames a extrair: $totalFrames")
 
-        val sanitizedName = videoInfo.fileName
-            .substringBeforeLast(".")
-            .replace("[^a-zA-Z0-9_\\-]".toRegex(), "_")
-            .trim('_')
-        val outputDirName = sanitizedName
+        val outputDir = FileNameUtils.resolveThumbnailDirectory(context, videoInfo.fileName)
+        val outputDirName = outputDir.name
 
-        val baseDir = context.getExternalFilesDir("extracted_frames") ?: context.filesDir
-        val outputDir = File(baseDir, outputDirName)
 
         if (!outputDir.exists()) {
             if (outputDir.mkdirs()) {

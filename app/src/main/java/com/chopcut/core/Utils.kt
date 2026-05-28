@@ -423,6 +423,14 @@ object FileNameUtils {
             ?.removePrefix("ChopCut_")
             ?: "video"
     }
+
+    fun resolveThumbnailDirectory(context: Context, fileName: String): File {
+        val sanitizedName = fileName.substringBeforeLast(".")
+            .replace("[^a-zA-Z0-9_\\-]".toRegex(), "_")
+            .trim('_')
+        val baseDir = context.getExternalFilesDir("extracted_frames") ?: context.filesDir
+        return File(baseDir, sanitizedName)
+    }
 }
 
 object RangeUtils {
