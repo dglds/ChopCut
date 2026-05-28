@@ -301,9 +301,6 @@ data class TimeRange(
 // --- Merged from Transform.kt ---
 
 
-/**
- * Transform configuration for video processing
- */
 data class Transform(
     val rotation: Float = 0f,        // Rotation in degrees
     val scaleX: Float = 1f,          // Horizontal scale
@@ -311,11 +308,8 @@ data class Transform(
     val cropRect: RectF? = null,     // Crop region (normalized 0-1)
     val translationX: Float = 0f,    // X translation (normalized)
     val translationY: Float = 0f,    // Y translation (normalized)
-    val volume: Float = 1.0f,        // Audio volume multiplier
     val filter: FilterType = FilterType.NONE, // Video filter
-    val filterIntensity: Float = 1.0f, // Filter intensity
-    val fadeInMs: Long = 0L,         // Audio Fade In duration in ms
-    val fadeOutMs: Long = 0L         // Audio Fade Out duration in ms
+    val filterIntensity: Float = 1.0f // Filter intensity
 ) {
     companion object {
         val IDENTITY = Transform()
@@ -456,79 +450,4 @@ data class VideoRange(
     }
 }
 
-// --- Merged from AudioFormat.kt ---
 
-/**
- * Supported audio formats for extraction
- */
-enum class AudioFormat(
-    val extension: String,
-    val mimeType: String,
-    val containerFormat: Int
-) {
-    AAC(
-        extension = ".m4a",
-        mimeType = "audio/mp4",
-        containerFormat = 0  // MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
-    )
-    // MP3(".mp3", "audio/mpeg", 1)  // Future - requires re-encoding
-}
-
-// --- Merged from AudioInfo.kt ---
-
-/**
- * Audio track metadata extracted from video
- */
-data class AudioInfo(
-    val codec: String,
-    val sampleRate: Int,
-    val channelCount: Int,
-    val bitrate: Long,
-    val durationUs: Long,
-    val mimeType: String,
-    val language: String? = null
-) {
-    val durationMs: Long
-        get() = durationUs / 1000
-
-    val bitrateKbps: Long
-        get() = bitrate / 1000
-
-    val isStereo: Boolean
-        get() = channelCount == 2
-}
-
-// --- Merged from WaveformData.kt ---
-
-/**
- * Modelo único de dados de waveform
- * 
- * Contém os dados finais prontos para renderização,
- * já com downsampling e threshold aplicados.
- */
-data class WaveformData(
-    val amplitudes: FloatArray,  // Dados finais, prontos para renderizar
-    val durationMs: Long
-) {
-    val barCount: Int get() = amplitudes.size
-    val isEmpty: Boolean get() = amplitudes.isEmpty()
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-        other as WaveformData
-        if (!amplitudes.contentEquals(other.amplitudes)) return false
-        if (durationMs != other.durationMs) return false
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = amplitudes.contentHashCode()
-        result = 31 * result + durationMs.hashCode()
-        return result
-    }
-
-    companion object {
-        fun empty() = WaveformData(floatArrayOf(), 0)
-    }
-}

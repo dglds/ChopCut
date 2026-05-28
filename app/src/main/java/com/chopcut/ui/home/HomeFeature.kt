@@ -120,12 +120,12 @@ import kotlin.math.roundToInt
 // --- Merged from HomeScreen.kt ---
 
 
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    preloadViewModel: PreloadViewModel,
-    onNavigateToEditor: (Uri) -> Unit = {},
-    onNavigateToTimelineV2: (String) -> Unit = {}
+    onNavigateToEditor: (String) -> Unit = {}
 ) {
     val application = LocalContext.current.applicationContext as Application
     val videoRepository = remember { VideoRepository(application) }
@@ -134,23 +134,10 @@ fun HomeScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedUri by viewModel.selectedVideoUri.collectAsStateWithLifecycle()
-    val preloadUiState by preloadViewModel.uiState.collectAsStateWithLifecycle()
-    val isPreloadReady by preloadViewModel.isReadyFlow.collectAsStateWithLifecycle()
-    val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsStateWithLifecycle()
-    val clearCacheState by viewModel.clearCacheState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showExtractionProgress by remember { mutableStateOf(false) }
     val extractionProgress by viewModel.extractionProgress.collectAsStateWithLifecycle()
-
-    // Iniciar preload ao selecionar vídeo
-    LaunchedEffect(selectedUri, uiState) {
-        val uri = selectedUri
-        if (uri != null && uiState is HomeUiState.VideoLoaded) {
-            preloadViewModel.startPreload(uri)
-        } else {
-        }
-    }
 
     var showGallery by remember { mutableStateOf(false) }
     var hasPermission by remember { mutableStateOf(false) }
@@ -195,25 +182,23 @@ fun HomeScreen(
                      val uri = selectedUri
                     when {
                         uri != null && uiState is HomeUiState.VideoLoaded -> {
-                            val isLoading = !isPreloadReady
-
                             Column(verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)) {
                                 VideoPickerLoaded(
                                     videoInfo = (uiState as HomeUiState.VideoLoaded).videoInfo,
                                     videoUri = uri,
-                                    isPreloading = isLoading,
+                                    isPreloading = false,
                                     onChangeVideo = requestGallery,
                                     onOpenEditor = {
-                                        onNavigateToEditor(uri)
+                                        val encodedUri = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
+                                        onNavigateToEditor("editor?videoUri=$encodedUri")
                                     },
                                     onRemoveVideo = {
-                                        preloadViewModel.clear()
                                         viewModel.clearSelectedVideo()
                                     }
                                 )
                                 val density = LocalDensity.current.density
                                 val videoInfo = (uiState as HomeUiState.VideoLoaded).videoInfo
-                                val (wDp, hDp) = ThumbnailConfig.TimelineV2Thumbs.computeDp(videoInfo.width, videoInfo.height)
+                                val (wDp, hDp) = ThumbnailConfig.TimelineThumbs.computeDp(videoInfo.width, videoInfo.height)
                                 val extractW = (wDp * density).roundToInt()
                                 val extractH = (hDp * density).roundToInt()
                                 ChopCutSecondaryButton(
@@ -244,36 +229,6 @@ fun HomeScreen(
                             VideoPickerEmpty(onClick = requestGallery)
                         }
                     }
-                }
-        
-                item {
-                    Text(
-                        text = "Sistema",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = OnSurface
-                    )
-                    Spacer(Modifier.height(ChopCutSpacing.sm))
-                    CacheFeatureCard(
-                        diskCacheSize = cacheSizeBytes,
-                        clearCacheState = clearCacheState,
-                        onClearCache = { viewModel.clearCache() },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(ChopCutSpacing.sm))
-                    ChopCutSecondaryButton(
-                        onClick = {
-                            val uri = selectedUri
-                            if (uri != null) {
-                                val encodedUri = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
-                                onNavigateToTimelineV2("timelineV2?videoUri=$encodedUri")
-                            } else {
-                                onNavigateToTimelineV2("timelineV2")
-                            }
-                        },
-                        text = "TimelineV2 Demo",
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
 
                 if (uiState is HomeUiState.Error) {
@@ -586,70 +541,7 @@ private fun VideoPickerLoaded(
     }
 }
 
-/**
- * Card de Cache de Thumbnails nos recursos
- * Mostra os bytes de cache e botão para limpar
- */
-@Composable
-private fun CacheFeatureCard(
-    diskCacheSize: Long,
-    clearCacheState: ClearCacheState,
-    onClearCache: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .clip(RectangleShape)
-            .background(Surface)
-            .padding(ChopCutSpacing.sm),
-        horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = "Cache",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = OnSurface
-            )
-            Text(
-                text = when (clearCacheState) {
-                    ClearCacheState.Idle -> formatBytes(diskCacheSize)
-                    ClearCacheState.Clearing -> "Limpando..."
-                    ClearCacheState.Done -> "Cache limpo!"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = if (clearCacheState == ClearCacheState.Done) Success else TextSecondary
-            )
-        }
-
-        ChopCutSecondaryButton(
-            onClick = onClearCache,
-            text = when (clearCacheState) {
-                ClearCacheState.Idle -> "Limpar"
-                ClearCacheState.Clearing -> "Limpando..."
-                ClearCacheState.Done -> "Limpo!"
-            },
-            enabled = clearCacheState == ClearCacheState.Idle
-        )
-    }
-}
-
-// formatAspectRatio removido (centralizado em FormatUtils)
-
-/**
- * Formata bytes em formato legível (KB, MB, GB)
- */
-private fun formatBytes(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
-        else -> "${bytes / (1024 * 1024 * 1024)} GB"
-    }
-}
+// CacheFeatureCard e formatBytes removidos pois o motor antigo de cache foi descontinuado.
 
 @Composable
 private fun BadgeText(
@@ -835,46 +727,7 @@ class HomeViewModel(
         _uiState.value = HomeUiState.Initial
     }
 
-    // --- Cache management ---
-
-    private val _cacheSizeBytes = MutableStateFlow(0L)
-    val cacheSizeBytes: StateFlow<Long> = _cacheSizeBytes.asStateFlow()
-
-    private val _clearCacheState = MutableStateFlow(ClearCacheState.Idle)
-    val clearCacheState: StateFlow<ClearCacheState> = _clearCacheState.asStateFlow()
-
-    init {
-        loadCacheInfo()
-    }
-
-    fun loadCacheInfo() {
-        viewModelScope.launch(DispatcherProvider.io) {
-            val cacheDir = File(getApplication<Application>().cacheDir, ThumbnailStripManager.CACHE_DIR)
-            if (cacheDir.exists()) {
-                val files = cacheDir.listFiles() ?: emptyArray()
-                _cacheSizeBytes.value = files.sumOf { it.length() }
-            } else {
-                _cacheSizeBytes.value = 0L
-            }
-        }
-    }
-
-    fun clearCache() {
-        viewModelScope.launch {
-            _clearCacheState.value = ClearCacheState.Clearing
-            withContext(DispatcherProvider.io) {
-                ThumbnailStripManager.clearCache(getApplication())
-                ThumbnailCacheManager.clearAll()
-            }
-            _cacheSizeBytes.value = 0L
-            _clearCacheState.value = ClearCacheState.Done
-            delay(2000)
-            _clearCacheState.value = ClearCacheState.Idle
-        }
-    }
 }
-
-enum class ClearCacheState { Idle, Clearing, Done }
 
 sealed class HomeUiState {
     object Initial : HomeUiState()
@@ -1381,288 +1234,4 @@ fun ExtractionProgressBottomSheet(
 }
 
 
-// --- Merged from PreloadUiState.kt ---
 
-
-object PreloadConfig {
-    // MELHORIA: Delay removido - extração agora é rápida (67% mais rápido com ThumbnailExtractorBatch)
-    // Antes: 3000ms (extração lenta 300-500ms/frame)
-    // Agora: 0ms (extração rápida 137ms/frame com cache em disco)
-    const val THUMBNAIL_EXTRACTION_DELAY_MS = 0L
-}
-
-sealed class PreloadUiState {
-    object Idle : PreloadUiState()
-    data class Loading(val progress: PreloadProgress) : PreloadUiState()
-    data class Ready(val data: PreloadedData) : PreloadUiState()
-    data class Error(
-        val message: String,
-        val isDurationExceeded: Boolean = false
-    ) : PreloadUiState()
-    object Cancelled : PreloadUiState()
-}
-
-data class PreloadedData(
-    val videoInfo: VideoInfo,
-    val audioAmplitudes: List<Float>,
-    val preloadedStrips: Map<Int, Bitmap>,
-    val totalSegments: Int,
-    val preloadPercentage: Float
-) {
-    val videoUri: Uri get() = videoInfo.uri
-}
-
-data class PreloadProgress(
-    val stage: PreloadStage,
-    val audioPercent: Int = 0,
-    val thumbnailPercent: Int = 0,
-    val currentSegment: Int = 0,
-    val totalSegments: Int = 0,
-    val logs: List<String> = emptyList(),
-    val preloadedStrips: Map<Int, Bitmap> = emptyMap(),
-    val audioAmplitudesCount: Int = 0,
-    val audioAmplitudesTotal: Int = 0,
-    val thumbnailsExtracted: Int = 0,
-    val thumbnailsTotal: Int = 0
-)
-
-enum class PreloadStage {
-    Starting,
-    Validating,
-    ExtractingAudio,
-    ExtractingThumbnails,
-    Ready
-}
-
-// --- Merged from PreloadViewModel.kt ---
-
-
-
-/**
- * ViewModel coordenadora para preparação de vídeo.
- * 
- * Responsabilidades:
- * - Configurar ThumbnailViewModel com metadados do vídeo
- * - Liberação de acesso ao editor (apenas após obter metadados)
- * - Gerenciar estado geral (Loading/Ready/Error)
- * - Fornecer métodos para verificar se o vídeo está pronto
- * 
- * Escopo: Activity (compartilhada entre HomeScreen e EditorScreen)
- * 
- * Estratégia On-Demand:
- * - Thumbnails são carregadas apenas quando o usuário rola a timeline
- * - Preload está DESATIVADO para maximizar performance de abertura
- * - ThumbnailViewModel.handleOnDemand() carrega strips conforme necessário
- * - AudioViewModel não é usado atualmente (áudio carregado sob demanda no EditorScreen)
- */
-class PreloadViewModel(
-    application: Application,
-    private val thumbnailVM: ThumbnailViewModel,
-    private val audioVM: AudioViewModel
-) : AndroidViewModel(application) {
-    
-    // ========== ESTADO ==========
-
-    private val _uiState = MutableStateFlow<PreloadUiState>(PreloadUiState.Idle)
-    val uiState: StateFlow<PreloadUiState> = _uiState.asStateFlow()
-
-    // StateFlow reativo para isReady — libera assim que o número de segmentos é conhecido
-    // (logo após obter os metadados do vídeo, antes de qualquer extração)
-    val isReadyFlow: StateFlow<Boolean> = thumbnailVM.totalSegments
-        .map { total -> total > 0 }
-        .stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
-    )
-
-    // ========== JOBS ==========
-    
-    private var activeUri: Uri? = null
-    private var preloadJob: Job? = null
-    private var thumbnailJob: Job? = null
-    
-    // ========== DEPENDÊNCIAS ==========
-
-    // ========== MÉTODOS PÚBLICOS ==========
-    
-    /**
-     * Inicia preparação de vídeo para o editor.
-     * 
-     * Estratégia On-Demand:
-     * - Apenas obtém metadados do vídeo (duração, dimensões, segmentos)
-     * - Configura ThumbnailViewModel para carregamento on-demand
-     * - Thumbnails são carregadas apenas quando o usuário rola a timeline
-     * - Áudio não é pré-carregado (carregado sob demanda no EditorScreen)
-     * 
-     * Benefícios:
-     * - Abertura do editor é quase instantânea
-     * - Menor uso de memória inicial
-     * - Thumbnails carregadas apenas conforme necessário
-     * 
-     * @param uri URI do vídeo
-     */
-    fun startPreload(uri: Uri) {
-        
-        if (activeUri != null && activeUri != uri) {
-            clear()
-        }
-        
-        if (activeUri == uri && _uiState.value is PreloadUiState.Ready) {
-            return
-        }
-
-        preloadJob?.cancel()
-        thumbnailJob?.cancel()
-        activeUri = uri
-        
-        preloadJob = viewModelScope.launch(DispatcherProvider.io) {
-            try {
-                _uiState.value = PreloadUiState.Loading(progress = PreloadProgress(
-                    stage = PreloadStage.Starting,
-                    audioPercent = 0,
-                    thumbnailPercent = 0,
-                    currentSegment = 0,
-                    totalSegments = 0,
-                    thumbnailsExtracted = 0,
-                    thumbnailsTotal = 0
-                ))
-                
-// Configurar ThumbnailViewModel (obter metadados, carregar strips on-demand)
-                val thumbnailSetupJob = launch {
-                    thumbnailVM.preload(uri)
-                    thumbnailVM.uiState.first { it is ThumbnailViewModel.ThumbnailUiState.Ready }
-                }
-
-                // Áudio é pré-carregado em paralelo com thumbnails (background)
-                // Isso reduce ~17s para ~2s quando o editor abre
-                val audioJob = launch {
-                    audioVM.loadWaveform(uri)
-                }
-
-                // Observar progresso de thumbnails para UI + áudio
-                thumbnailJob = launch {
-                    thumbnailVM.thumbnailProgress.collect { progress ->
-                        _uiState.update { currentState ->
-                             if (currentState is PreloadUiState.Loading) {
-                                 // Verificar se áudio está pronto
-                                 val audioPercent = if (audioVM.amplitudes.value.isNotEmpty()) 100 else 0
-                                 currentState.copy(progress = currentState.progress.copy(
-                                     stage = if (audioPercent < 100) PreloadStage.ExtractingAudio else PreloadStage.ExtractingThumbnails,
-                                     audioPercent = audioPercent,
-                                     thumbnailPercent = (progress * 100).toInt(),
-                                     thumbnailsExtracted = thumbnailVM.strips.value.size,
-                                     thumbnailsTotal = thumbnailVM.totalSegments.value
-                                 ))
-                             } else currentState
-                        }
-                    }
-                }
-
-                // AGUARDAR: Liberamos o acesso assim que o thumbnailSetupJob terminar (apenas metadados)
-                // Thumbnails são carregadas on-demand quando o usuário rola a timeline
-                thumbnailSetupJob.join()
-
-                // AGUARDAR áudio também (até 5s ou até estar pronto)
-                val audioAmplitudes = withTimeoutOrNull(5000) {
-                    audioVM.amplitudes.first { it.isNotEmpty() }
-                }
-
-                // Áudio carregado está em audioVM.amplitudes
-                val amplitudesList = audioAmplitudes?.toList() ?: emptyList()
-
-                // Áudio carregado está em audioVM.amplitudes
-                // Marcar como Ready
-                val preloadedData = PreloadedData(
-                    videoInfo = VideoInfo(
-                        uri = uri,
-                        fileName = "video.mp4",
-                        mimeType = "video/mp4",
-                        durationUs = 0,
-                        width = 0,
-                        height = 0,
-                        rotation = 0,
-                        bitrate = 0,
-                        frameRate = 30,
-                        videoCodec = null,
-                        audioCodec = null,
-                        hasAudio = true,
-                        sizeBytes = 0
-                    ),
-                    audioAmplitudes = amplitudesList,
-                    preloadedStrips = emptyMap(),
-                    totalSegments = thumbnailVM.totalSegments.value,
-                    preloadPercentage = 1f
-                )
-                _uiState.value = PreloadUiState.Ready(preloadedData)
-                
-            } catch (e: Exception) {
-                if (e !is kotlinx.coroutines.CancellationException) {
-                    _uiState.value = PreloadUiState.Error(e.message ?: "Erro desconhecido")
-                }
-            }
-        }
-    }
-    
-    /**
-     * Cancela a preparação do vídeo em andamento.
-     */
-    fun cancelPreload() {
-        
-        preloadJob?.cancel()
-        preloadJob = null
-        thumbnailJob?.cancel()
-        thumbnailJob = null
-    }
-    
-    /**
-     * Limpa todo o estado de preparação do vídeo.
-     */
-    fun clear() {
-        
-        cancelPreload()
-        activeUri = null
-        _uiState.value = PreloadUiState.Idle
-        thumbnailVM.clear()
-        audioVM.clear()
-    }
-    
-    // ========== MÉTODOS PRIVADOS ==========
-    
-    /**
-     * Calcula o número de barras de waveform.
-     */
-    private fun calculateTargetBarCount(durationMs: Long): Int {
-        return when {
-            durationMs < 60000 -> 100
-            durationMs < 300000 -> 300
-            else -> 600
-        }
-    }
-    
-    override fun onCleared() {
-        super.onCleared()
-        clear()
-    }
-    
-    // ========== CLASSES DE ESTADO ==========
-    
-    // PreloadUiState, PreloadProgress, PreloadStage já existem em PreloadUiState.kt
-    // PreloadedData pode ser mantida para compatibilidade ou removida
-    
-    // ========== FACTORY ==========
-    
-    class PreloadViewModelFactory(
-        private val application: Application,
-        private val thumbnailVM: ThumbnailViewModel,
-        private val audioVM: AudioViewModel
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(PreloadViewModel::class.java)) {
-                return PreloadViewModel(application, thumbnailVM, audioVM) as T
-            }
-            throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.simpleName}")
-        }
-    }
-}

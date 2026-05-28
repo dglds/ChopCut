@@ -12,15 +12,6 @@ class ChopCutApplication : Application() {
     companion object {
         lateinit var instance: ChopCutApplication
             private set
-
-        /**
-         * Método público para limpar o cache de thumbnails manualmente
-         * Pode ser chamado de qualquer lugar no app
-         * Limpa cache de memória (LRU) e cache de disco
-         */
-        fun clearThumbnailCache() {
-            ThumbnailCacheManager.clearAll()
-        }
     }
 
     override fun onCreate() {
@@ -43,12 +34,6 @@ class ChopCutApplication : Application() {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             defaultHandler?.uncaughtException(thread, throwable)
         }
-
-        // Inicializar ThumbnailCacheManager singleton (thread-safe)
-        ThumbnailCacheManager.initSync(this)
-        
-        // Inicializar Telemetria de Performance
-        PerformanceMonitor.init(this)
     }
 
 }

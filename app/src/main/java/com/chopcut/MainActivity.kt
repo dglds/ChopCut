@@ -40,20 +40,6 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
 
                     val application = remember { context.applicationContext as Application }
-                    val thumbnailViewModel: ThumbnailViewModel = viewModel(
-                        factory = ThumbnailViewModel.ThumbnailViewModelFactory(application)
-                    )
-                    val audioViewModel: AudioViewModel = viewModel(
-                        factory = AudioViewModel.AudioViewModelFactory(application)
-                    )
-                    val preloadViewModel: PreloadViewModel = viewModel(
-                        factory = PreloadViewModel.PreloadViewModelFactory(
-                            application,
-                            thumbnailViewModel,
-                            audioViewModel
-                        )
-                    )
-
                     // Suporte a ACTION_VIEW: abre o editor diretamente quando
                     // lançado com uma URI de vídeo (ex: pelo script de captura Perfetto)
                     val intentVideoUri: Uri? = intent
@@ -70,10 +56,7 @@ class MainActivity : ComponentActivity() {
 
                     ChopCutNavGraph(
                         navController = navController,
-                        startDestination = startDestination,
-                        preloadViewModel = preloadViewModel,
-                        thumbnailViewModel = thumbnailViewModel,
-                        audioViewModel = audioViewModel
+                        startDestination = startDestination
                     )
                 }
             }

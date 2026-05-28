@@ -671,82 +671,7 @@ class TransformerPipeline(
         }
     }
 
-    /**
-     * Extract audio track from video using Media3 Transformer.
-     * Removes video track and keeps only audio.
-     *
-     * @param uri Source video URI
-     * @param format Output audio format (default: AAC)
-     * @return Flow<Result<File>> Result with extracted audio file
-     */
-    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    fun extractAudio(
-        uri: Uri,
-        format: AudioFormat = AudioFormat.AAC
-    ): Flow<Result<File>> = callbackFlow {
-        val outputFile = videoRepository.createTempFile(format.extension)
 
-        Timber.d("TransformerPipeline: extractAudio started - format=${format.name}")
-        val timer = TimeTracker.start("audio_export")
-
-        try {
-            val mediaItem = MediaItem.fromUri(uri)
-
-            // Create transformer that removes video
-            val transformerListener = object : Transformer.Listener {
-                override fun onCompleted(composition: Composition, result: ExportResult) {
-                    val elapsedMs = timer.end()
-                    Timber.d("TransformerPipeline: extractAudio completed - ${outputFile.name} (${elapsedMs}ms, ${outputFile.length()} bytes)")
-                    trySend(Result.success(outputFile))
-                    channel.close()
-                }
-
-                override fun onError(
-                    composition: Composition,
-                    result: ExportResult,
-                    exception: ExportException
-                ) {
-                    val elapsedMs = timer.end()
-                    Timber.e("TransformerPipeline: extractAudio failed - ${exception.message} (${elapsedMs}ms)")
-                    trySend(Result.failure(exception))
-                    channel.close()
-                }
-            }
-
-            val mainHandler = Handler(Looper.getMainLooper())
-
-            mainHandler.post {
-                try {
-                    val transformer = Transformer.Builder(context)
-                        .addListener(transformerListener)
-                        .setRemoveVideo(true)  // Remove video, keep audio
-                        .setAudioMimeType(format.mimeType)
-                        .build()
-
-                    transformer.start(mediaItem, outputFile.absolutePath)
-                } catch (e: Exception) {
-                    timer.end()
-                    Timber.e("TransformerPipeline: extractAudio exception - ${e.message}")
-                    trySend(Result.failure(e))
-                    channel.close()
-                }
-            }
-
-            awaitClose {
-                // Transformer cleanup if needed
-            }
-
-        } catch (e: Exception) {
-            timer.end()
-            Timber.e("TransformerPipeline: extractAudio catch - ${e.message}")
-            trySend(Result.failure(e))
-            channel.close()
-
-            if (outputFile.exists()) {
-                outputFile.delete()
-            }
-        }
-    }
 }
 
 
@@ -822,65 +747,7 @@ class VideoRepository(
         }
     }
 
-    /**
-     * Extract audio metadata from a video file
-     * Uses MediaExtractor to get detailed audio track information
-     */
-    suspend fun getAudioMetadata(uri: Uri): AudioInfo? = withContext(Dispatchers.IO) {
-        val extractor = MediaExtractor()
-        try {
-            extractor.setDataSource(context, uri, null)
 
-            // Find audio track
-            var audioTrackIndex = -1
-            for (i in 0 until extractor.trackCount) {
-                val format = extractor.getTrackFormat(i)
-                val mime = format.getString(MediaFormat.KEY_MIME)
-                if (mime?.startsWith("audio/") == true) {
-                    audioTrackIndex = i
-                    break
-                }
-            }
-
-            if (audioTrackIndex < 0) {
-                return@withContext null
-            }
-
-            val format = extractor.getTrackFormat(audioTrackIndex)
-
-            val mimeType = format.getString(MediaFormat.KEY_MIME) ?: "audio/unknown"
-            val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            // Bitrate may not be present in all formats, use default for AAC
-            val bitrate = 128000L // Default: 128 kbps
-            val durationUs = format.getLong(MediaFormat.KEY_DURATION)
-
-            // Try to get language if available
-            val language = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                format.getString(MediaFormat.KEY_LANGUAGE)
-            } else {
-                null
-            }
-
-            AudioInfo(
-                codec = mimeType.substringAfter('/'),
-                sampleRate = sampleRate,
-                channelCount = channelCount,
-                bitrate = bitrate,
-                durationUs = durationUs,
-                mimeType = mimeType,
-                language = language
-            ).also {
-            }
-        } catch (e: Exception) {
-            null
-        } finally {
-            try {
-                extractor.release()
-            } catch (e: Exception) {
-            }
-        }
-    }
 
     /**
      * Create a temporary file for video processing

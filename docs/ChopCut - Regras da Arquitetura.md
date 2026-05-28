@@ -2,20 +2,20 @@
 
 > Documento de referência rápida para manter o projeto funcionando sem quebrar.
 
-## 🏗️ Estrutura de Arquivos (21 no total)
+## 🏗️ Estrutura de Arquivos (16 no total)
 
 ```
 com.chopcut/                          # package único para todos os arquivos
 ├── ChopCutApplication.kt             # Application class
-├── MainActivity.kt                   # Entry point, cria ViewModels Activity-scoped
+├── MainActivity.kt                   # Entry point, instanciador do NavGraph
+├── ThumbnailConfig.kt                # Configurações de dimensão e presets de miniaturas
+├── CompressionLevel.kt               # Níveis de compressão de qualidade de vídeo
 ├── core/
-│   ├── Models.kt                     # VideoInfo, AudioInfo, WaveformData, TrimPosition, etc.
+│   ├── Models.kt                     # VideoInfo, VideoRange, TimeRange, SizePreset, etc.
 │   ├── Utils.kt                      # TimeFormatter, FormatUtils, FileNameUtils, RangeUtils, etc.
 │   ├── Theme.kt                      # Cores, tipografia, tema Material3, animações
 │   └── Errors.kt                     # ErrorHandler, ChopCutException, ErrorResult
 ├── data/
-│   ├── AudioEngine.kt                # WaveformExtractor, WaveformCache, WaveformAnalyzer, AudioRawData
-│   ├── ThumbnailEngine.kt            # (aposentado) FastFrameExtractor, ThumbnailCacheManager, ThumbnailStripManager
 │   ├── ThumbnailExtraction.kt        # ThumbnailExtraction, ExtractionProgressState, ExtractionResult
 │   └── VideoEngine.kt                # TransformerPipeline, CopyPipeline, VideoRepository
 ├── graphics/
@@ -24,14 +24,9 @@ com.chopcut/                          # package único para todos os arquivos
 ├── ui/
 │   ├── SharedComponents.kt           # Botões, FABs, Cards, Loading, ErrorState, Overlays
 │   ├── home/
-│   │   └── HomeFeature.kt            # HomeScreen + HomeViewModel + BottomSheetGallery + Preload
+│   │   └── HomeFeature.kt            # HomeScreen + HomeViewModel + BottomSheetGallery
 │   ├── editor/
-│   │   ├── EditorFeature.kt          # EditorScreen + EditorViewModel + AudioViewModel + ThumbnailViewModel + Configs
-│   │   ├── EditorToolsUI.kt          # MainToolBar, TrimToolPanel, FormatToolPanel, CompressToolPanel
-│   │   ├── TimelineUI.kt             # VideoTimeline, TimelineEditor, VideoPreview, PlayerManager, Seekbar
-│   │   ├── TimelineV2Feature.kt      # TimelineV2Screen, TimelineV2ViewModel, TimelineV2 Canvas (Demo)
-│   │   ├── TrimUI.kt                 # TrimPosition, TrimRange, TrimSaveDialog, RangeManager
-│   │   └── WaveformUI.kt             # WaveformRenderer, AudioWaveForms, WaveformConfig
+│   │   └── TimelineFeature.kt        # TimelineScreen + TimelineViewModel + Timeline Canvas
 │   └── navigation/
 │       └── ChopCutNavGraph.kt        # NavHost com rotas home e editor
 ```
@@ -51,7 +46,7 @@ val info = VideoInfo(...)    // definido em core/Models.kt
 ErrorState(...)              // definido em ui/SharedComponents.kt
 ```
 
-### 2. Só adicione código novo dentro dos 20 arquivos
+### 2. Só adicione código novo dentro dos 16 arquivos
 
 Qualquer nova funcionalidade deve ser adicionada a um dos arquivos existentes. Não crie novos arquivos .kt.
 
@@ -60,30 +55,12 @@ Qualquer nova funcionalidade deve ser adicionada a um dos arquivos existentes. N
 | Modelo de dados | `core/Models.kt` |
 | Função utilitária | `core/Utils.kt` |
 | Componente UI reutilizável | `ui/SharedComponents.kt` |
-| Tela/ViewModel do editor | `ui/editor/EditorFeature.kt` |
-| Componente da timeline | `ui/editor/TimelineUI.kt` |
-| Componente da Timeline V2 | `ui/editor/TimelineV2Feature.kt` |
-| Componente de corte | `ui/editor/TrimUI.kt` |
-| Componente de áudio | `ui/editor/WaveformUI.kt` |
-| Barra de ferramentas | `ui/editor/EditorToolsUI.kt` |
+| Tela/ViewModel do editor | `ui/editor/TimelineFeature.kt` |
 | Tela inicial | `ui/home/HomeFeature.kt` |
 
-### 3. EditorViewModel e AudioViewModel são Activity-scoped
+### 3. TimelineViewModel é Activity-scoped / Route-scoped
 
-Criados em `MainActivity.kt` e **passados como parâmetro** no NavGraph. Não recrie dentro de um Composable.
-
-```kotlin
-// ✅ CERTO - factory no MainActivity
-val thumbnailViewModel: ThumbnailViewModel = viewModel(
-    factory = ThumbnailViewModel.ThumbnailViewModelFactory(application)
-)
-val audioViewModel: AudioViewModel = viewModel(
-    factory = AudioViewModel.AudioViewModelFactory(application)
-)
-val preloadViewModel: PreloadViewModel = viewModel(
-    factory = PreloadViewModel.PreloadViewModelFactory(application, thumbnailViewModel, audioViewModel)
-)
-```
+Instanciado na navegação ou resgatado na navegação do Compose de acordo com as necessidades.
 
 ### 4. Não duplique nomes de classes/objetos
 
@@ -93,10 +70,7 @@ Conflitos conhecidos e resolvidos:
 
 | Nome | Onde está | Uso |
 |------|-----------|-----|
-| `ExtractionStage` | `core/Models.kt` (via `PerformanceTelemetry`) | Estágios de thumbnails: `DECODE, PROCESS, SAVE` |
-| `PreloadStage` | `ui/home/HomeFeature.kt` | Estágios de preload: `Starting, Validating, ExtractingAudio, ExtractingThumbnails, Ready` |
-| `WaveformData` | `core/Models.kt` | Apenas 2 params: `(amplitudes: FloatArray, durationMs: Long)` |
-| `AudioInfo` | `core/Models.kt` | Metadata de áudio |
+| `ExtractionStage` | `core/Models.kt` | Estágios de thumbnails: `DECODE, PROCESS, SAVE` (telemetria do teste) |
 | `VideoInfo` | `core/Models.kt` | Metadata de vídeo |
 
 ### 5. Build e Execução usando o `./gradle-menu` ou JDK 17 manual
@@ -117,7 +91,6 @@ JAVA_HOME=./jdk17 ./gradlew assembleDebug
 > **Registro de Erros Automatizado (`errors.json`):**
 > Sempre que uma compilação ou script de build falhar, o sistema grava automaticamente os detalhes da falha, a tarefa e o timestamp no arquivo `errors.json` na raiz do projeto. Isso elimina a necessidade de contagens ou anotações manuais de falhas.
 
-
 ### 6. Performance: 3 padrões para evitar jank
 
 SHA-1 dos padrões (ver CLAUDE.md para detalhes completos):
@@ -134,15 +107,7 @@ SHA-1 dos padrões (ver CLAUDE.md para detalhes completos):
 
 # Ou build manual do APK debug
 JAVA_HOME=./jdk17 ./gradlew assembleDebug
-
-# Testes instrumentados (manual)
-JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest
-
-# Teste específico (manual)
-JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.timeline.FastFrameExtractorTest
 ```
-
-Assets de teste: `app/src/androidTest/assets/sample.mp4`
 
 ## 🔍 Localização de Componentes Comuns
 
@@ -153,14 +118,10 @@ Assets de teste: `app/src/androidTest/assets/sample.mp4`
 | `ChopCutTypography`, `primaryColor()`, `OnSurface`, `ErrorDark` | `core/Theme.kt` |
 | `ChopCutSpacing`, `ChopCutAnimation` | `core/Theme.kt` |
 | `FormatUtils`, `FileNameUtils`, `RangeUtils` | `core/Utils.kt` |
-| `PreloadViewModel`, `PreloadUiState`, `PreloadStage`, `PreloadProgress` | `ui/home/HomeFeature.kt` |
-| `ThumbnailViewModel`, `AudioViewModel`, `EditorViewModel` | `ui/editor/EditorFeature.kt` |
-| `TimelineV2Screen`, `TimelineV2ViewModel`, `TimelineV2` (Canvas) | `ui/editor/TimelineV2Feature.kt` |
-| `EditorState`, `EditorTool`, `CompressionLevel` | `ui/editor/EditorFeature.kt` (config) ou `ui/editor/EditorToolsUI.kt` (state) |
-| `TrimPosition`, `TrimRange`, `SaveDialogState` | `ui/editor/TrimUI.kt` |
-| `ThumbnailConfig`, `AudioConfig` | `ui/editor/EditorFeature.kt` |
-| `ThumbnailCacheManager`, `FastFrameExtractor`, `ThumbnailStripManager` | `data/ThumbnailEngine.kt` (aposentado) |
+| `HomeScreen`, `HomeViewModel` | `ui/home/HomeFeature.kt` |
+| `TimelineScreen`, `TimelineViewModel`, `Timeline` (Canvas) | `ui/editor/TimelineFeature.kt` |
+| `ThumbnailConfig` | `ThumbnailConfig.kt` |
+| `CompressionLevel` | `CompressionLevel.kt` |
 | `ThumbnailExtraction`, `ExtractionProgressState`, `ExtractionResult` | `data/ThumbnailExtraction.kt` |
 | `TransformerPipeline`, `CopyPipeline`, `VideoRepository` | `data/VideoEngine.kt` |
-| `WaveformExtractor`, `WaveformCache`, `WaveformConfig` | `data/AudioEngine.kt` |
 | `ErrorHandler`, `ChopCutException` | `core/Errors.kt` |

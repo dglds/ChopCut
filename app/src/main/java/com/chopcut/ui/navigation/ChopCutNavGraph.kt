@@ -19,22 +19,19 @@ import androidx.navigation.navArgument
 @Composable
 fun ChopCutNavGraph(
     navController: NavHostController,
-    startDestination: String,
-    preloadViewModel: PreloadViewModel,
-    thumbnailViewModel: ThumbnailViewModel,
-    audioViewModel: AudioViewModel
+    startDestination: String
 ) {
     val navFadeIn = fadeIn(
-        animationSpec = tween(LoadingConstants.NAV_FADE_IN_DURATION_MS, easing = FastOutSlowInEasing)
+        animationSpec = tween(400, easing = FastOutSlowInEasing)
     ) + scaleIn(
-        initialScale = LoadingConstants.NAV_SCALE_START,
-        animationSpec = tween(LoadingConstants.NAV_FADE_IN_DURATION_MS, easing = FastOutSlowInEasing)
+        initialScale = 0.95f,
+        animationSpec = tween(400, easing = FastOutSlowInEasing)
     )
     val navFadeOut = fadeOut(
-        animationSpec = tween(LoadingConstants.NAV_FADE_OUT_DURATION_MS, easing = FastOutSlowInEasing)
+        animationSpec = tween(400, easing = FastOutSlowInEasing)
     ) + scaleOut(
-        targetScale = LoadingConstants.NAV_SCALE_START,
-        animationSpec = tween(LoadingConstants.NAV_FADE_OUT_DURATION_MS, easing = FastOutSlowInEasing)
+        targetScale = 0.95f,
+        animationSpec = tween(400, easing = FastOutSlowInEasing)
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -50,38 +47,8 @@ fun ChopCutNavGraph(
                 popExitTransition = { navFadeOut }
             ) {
                 HomeScreen(
-                    preloadViewModel = preloadViewModel,
-                    onNavigateToEditor = { videoUri ->
-                        val encodedUri = java.net.URLEncoder.encode(videoUri.toString(), "UTF-8")
-                        navController.navigate("editor?videoUri=$encodedUri")
-                    },
-                    onNavigateToTimelineV2 = { route ->
+                    onNavigateToEditor = { route ->
                         navController.navigate(route)
-                    }
-                )
-            }
-
-            composable(
-                route = "timelineV2?videoUri={videoUri}",
-                arguments = listOf(
-                    navArgument("videoUri") {
-                        type = NavType.StringType
-                        nullable = true
-                        defaultValue = null
-                    }
-                ),
-                enterTransition = { navFadeIn },
-                exitTransition = { navFadeOut },
-                popEnterTransition = { navFadeIn },
-                popExitTransition = { navFadeOut }
-            ) { backStackEntry ->
-                val videoUriString = backStackEntry.arguments?.getString("videoUri")
-                val videoUri = videoUriString?.let { Uri.parse(it) }
-
-                TimelineV2Screen(
-                    videoUri = videoUri,
-                    onNavigateBack = {
-                        navController.popBackStack()
                     }
                 )
             }
@@ -103,11 +70,8 @@ fun ChopCutNavGraph(
                 val videoUriString = backStackEntry.arguments?.getString("videoUri")
                 val videoUri = videoUriString?.let { Uri.parse(it) }
 
-                EditorScreen(
-                    videoUri = videoUri ?: Uri.EMPTY,
-                    preloadViewModel = preloadViewModel,
-                    thumbnailViewModel = thumbnailViewModel,
-                    audioViewModel = audioViewModel,
+                TimelineScreen(
+                    videoUri = videoUri,
                     onNavigateBack = {
                         navController.popBackStack()
                     }

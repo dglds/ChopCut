@@ -72,7 +72,7 @@ data class MarkerInterval(
     val endMs: Long
 )
 
-class TimelineV2ViewModel(
+class TimelineViewModel(
     application: Application,
     private val videoUri: Uri?
 ) : AndroidViewModel(application) {
@@ -299,14 +299,14 @@ class TimelineV2ViewModel(
         exoPlayer?.release()
     }
 
-    class TimelineV2ViewModelFactory(
+    class TimelineViewModelFactory(
         private val application: Application,
         private val videoUri: Uri?
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(TimelineV2ViewModel::class.java)) {
-                return TimelineV2ViewModel(application, videoUri) as T
+            if (modelClass.isAssignableFrom(TimelineViewModel::class.java)) {
+                return TimelineViewModel(application, videoUri) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
@@ -344,11 +344,11 @@ fun VideoPlayerV2(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimelineV2Screen(
+fun TimelineScreen(
     videoUri: Uri? = null,
     onNavigateBack: () -> Unit,
-    viewModel: TimelineV2ViewModel = viewModel(
-        factory = TimelineV2ViewModel.TimelineV2ViewModelFactory(
+    viewModel: TimelineViewModel = viewModel(
+        factory = TimelineViewModel.TimelineViewModelFactory(
             application = LocalContext.current.applicationContext as Application,
             videoUri = videoUri
         )
@@ -439,7 +439,7 @@ fun TimelineV2Screen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "TimelineV2 Demo",
+                        text = "Timeline Demo",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -617,9 +617,9 @@ fun TimelineV2Screen(
             )
 
             // Altura dinâmica baseada nas dimensões reais do vídeo
-            val (thumbWDp, thumbHDp) = ThumbnailConfig.TimelineV2Thumbs.computeDp(videoWidth, videoHeight)
+            val (thumbWDp, thumbHDp) = ThumbnailConfig.TimelineThumbs.computeDp(videoWidth, videoHeight)
             val containerHeight = (24.dp + thumbHDp.dp + 10.dp).coerceAtLeast(80.dp)
-            TimelineV2(
+            Timeline(
                 targetPositionMs = targetPositionMs,
                 onTargetPositionChanged = { targetPositionMs = it },
                 currentPositionMs = currentPositionMs,
@@ -706,7 +706,7 @@ fun TimelineV2Screen(
 
 
 @Composable
-fun TimelineV2(
+fun Timeline(
     targetPositionMs: Float,
     onTargetPositionChanged: (Float) -> Unit,
     currentPositionMs: Long,
@@ -747,7 +747,7 @@ fun TimelineV2(
     }
 
     // Dimensões com fator de resolução + caps preservando AR exato
-    val (thumbWDpF, thumbHDpF) = ThumbnailConfig.TimelineV2Thumbs.computeDp(videoWidth, videoHeight)
+    val (thumbWDpF, thumbHDpF) = ThumbnailConfig.TimelineThumbs.computeDp(videoWidth, videoHeight)
     val thumbWidthPx  = with(density) { thumbWDpF.dp.toPx() }
     val thumbHeightPx = with(density) { thumbHDpF.dp.toPx() }
     val timelineTopPx = with(density) { 24.dp.toPx() }
