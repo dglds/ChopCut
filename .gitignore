@@ -19,6 +19,7 @@ prompt.txt
 .vscode/
 /logs/
 .claude/
+.gemini/
 .carl
 /perfetto
 /scripts

@@ -3,7 +3,11 @@
     "codegraph": {
       "type": "stdio",
       "command": "/home/diego/.codegraph/versions/v0.9.6/bin/codegraph",
-      "args": ["serve", "--mcp"]
+      "args": [
+        "serve",
+        "--mcp",
+        "--no-watch"
+      ]
     }
   }
 }
