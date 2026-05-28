@@ -233,7 +233,8 @@ fun TimelineEditor(
         if (durationMs > 0) stripManager.getSegmentCount(durationMs) else 0
     }
 
-    // Shimmer sutil para miniaturas pendentes
+    // @violation:canvas-isolated — shimmerProgress lido dentro do Canvas de thumbnails (pesado);
+    // invalida TODO o Canvas a cada frame da animação. Solução: mover shimmer para Canvas separado sobreposto via Box.
     val infiniteTransition = rememberInfiniteTransition(label = "thumbnailShimmer")
     val shimmerProgress by infiniteTransition.animateFloat(
         initialValue = -1f,
@@ -394,6 +395,7 @@ fun TimelineEditor(
                         
                         if (isMajor) {
                             drawIntoCanvas { canvas ->
+                                // @violation:canvas-prealloc — Paint alocado dentro do draw scope (GC 60×/s); mover para remember { } fora do Canvas
                                 val paint = android.graphics.Paint().apply {
                                     color = android.graphics.Color.WHITE
                                     alpha = 95
@@ -453,6 +455,7 @@ fun TimelineEditor(
             ) {
                 val width = size.width
 
+                // @violation:canvas-prealloc — renderPaint e bgPaint alocados dentro do draw scope; mover para remember { } antes do Canvas
                 val renderPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
                     isAntiAlias = true
                     isDither = true
@@ -510,6 +513,7 @@ fun TimelineEditor(
                                 x, 0f, x + stripWidthPx, thumbHeightPx,
                                 bgPaint
                            )
+                           // @violation:canvas-prealloc — shimmerPaint recriado a cada frame; mover para remember { } fora do Canvas
                            val shimmerPaint = android.graphics.Paint().apply {
                                val w = stripWidthPx
                                val h = thumbHeightPx

@@ -640,6 +640,8 @@ class EditorViewModel(
                 }
             }
             viewModelScope.launch {
+                // @pattern:scrubbing-guard — observer silenciado enquanto isScrubbing=true;
+                // evita race condition entre flow contínuo e gesto do usuário no mesmo campo.
                 playerManager?.currentPositionFlow?.collectLatest { position: Long ->
                     if (!_state.value.isScrubbing) {
                         _state.update { it.copy(currentPosition = position) }
@@ -696,10 +698,12 @@ class EditorViewModel(
         }
     }
 
+    // @pattern:scrubbing-guard — entrada do gesto: ativa flag que silencia o observer
     fun startScrubbing() {
         _state.update { it.copy(isScrubbing = true) }
     }
 
+    // @pattern:scrubbing-guard — saída do gesto: aplica valor final UMA VEZ, reativa observer
     fun stopScrubbing(finalPos: Long) {
         playerManager?.seekTo(finalPos)
         _state.update { it.copy(isScrubbing = false, currentPosition = finalPos) }

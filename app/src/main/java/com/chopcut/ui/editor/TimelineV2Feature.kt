@@ -728,7 +728,8 @@ fun TimelineV2(
     val onTargetPositionChangedState = rememberUpdatedState(onTargetPositionChanged)
     val sensitivityState = rememberUpdatedState(sensitivity)
 
-    // Playhead color animation
+    // @violation:canvas-isolated — playheadColor lido dentro do Canvas principal que renderiza thumbnails e régua;
+    // invalida TODO o Canvas a cada 250ms. Solução: extrair playhead para Canvas separado sobreposto via BoxWithConstraints.
     val isRecording = activeMarkerStartMs != null
     val infiniteTransition = rememberInfiniteTransition(label = "playheadTransition")
     val playheadColor by if (isRecording) {
@@ -822,6 +823,7 @@ fun TimelineV2(
                             thumbRight.toInt(),
                             (canvasVerticalOffsetPx + timelineTopPx + thumbHeightPx).toInt()
                         )
+                        // @violation:canvas-prealloc — paint alocado a cada frame para cada thumbnail; mover para remember { } fora do Canvas
                         val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
                             isAntiAlias = true
                         }
