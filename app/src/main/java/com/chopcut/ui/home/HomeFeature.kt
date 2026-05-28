@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMerge
 import androidx.compose.material.icons.filled.AspectRatio
@@ -107,6 +109,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import android.util.Log
+import android.media.MediaMetadataRetriever
+import android.os.Build
+import kotlinx.coroutines.ensureActive
+import java.text.SimpleDateFormat
+import java.util.Date
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 
 // --- Merged from HomeScreen.kt ---
@@ -131,6 +143,9 @@ fun HomeScreen(
     val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsStateWithLifecycle()
     val clearCacheState by viewModel.clearCacheState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    var showExtractionProgress by remember { mutableStateOf(false) }
+    val extractionProgress by viewModel.extractionProgress.collectAsStateWithLifecycle()
 
     // Iniciar preload ao selecionar vídeo
     LaunchedEffect(selectedUri, uiState) {
@@ -186,19 +201,38 @@ fun HomeScreen(
                         uri != null && uiState is HomeUiState.VideoLoaded -> {
                             val isLoading = !isPreloadReady
 
-                            VideoPickerLoaded(
-                                videoInfo = (uiState as HomeUiState.VideoLoaded).videoInfo,
-                                videoUri = uri,
-                                isPreloading = isLoading,
-                                onChangeVideo = requestGallery,
-                                onOpenEditor = {
-                                    onNavigateToEditor(uri)
-                                },
-                                onRemoveVideo = {
-                                    preloadViewModel.clear()
-                                    viewModel.clearSelectedVideo()
-                                }
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)) {
+                                VideoPickerLoaded(
+                                    videoInfo = (uiState as HomeUiState.VideoLoaded).videoInfo,
+                                    videoUri = uri,
+                                    isPreloading = isLoading,
+                                    onChangeVideo = requestGallery,
+                                    onOpenEditor = {
+                                        onNavigateToEditor(uri)
+                                    },
+                                    onRemoveVideo = {
+                                        preloadViewModel.clear()
+                                        viewModel.clearSelectedVideo()
+                                    }
+                                )
+                                ChopCutSecondaryButton(
+                                    text = "Extrair Frames",
+                                    onClick = {
+                                        showExtractionProgress = true
+                                        viewModel.startExtraction(
+                                            uri,
+                                            ThumbnailSettings(
+                                                thumbsPerSecond = 1,
+                                                quality = 85,
+                                                format = ThumbnailFormat.JPEG,
+                                                scaleMode = ThumbnailScaleMode.FILL,
+                                                extractionQuality = ThumbnailQuality.HIGH
+                                            )
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                         uri != null && uiState is HomeUiState.Loading -> {
                             VideoPickerLoading()
@@ -265,6 +299,20 @@ fun HomeScreen(
             }
         )
     }
+
+    ExtractionProgressBottomSheet(
+        visible = showExtractionProgress,
+        progressState = extractionProgress,
+        onDismiss = {
+            showExtractionProgress = false
+            if (extractionProgress.isRunning) {
+                viewModel.cancelExtraction()
+            }
+        },
+        onCancel = {
+            viewModel.cancelExtraction()
+        }
+    )
 }
 
 @Composable
@@ -633,6 +681,17 @@ private fun BadgeText(
  * NOTA: O pré-carregamento de thumbnails e áudio é gerenciado
  * pela PreloadViewModel (Activity-scoped), não por esta ViewModel.
  */
+data class ExtractionProgressState(
+    val isRunning: Boolean = false,
+    val currentIndex: Int = 0,
+    val total: Int = 0,
+    val logs: List<String> = emptyList(),
+    val isComplete: Boolean = false,
+    val error: String? = null,
+    val outputDirPath: String? = null,
+    val statsSummary: String? = null
+)
+
 class HomeViewModel(
     application: Application,
     private val videoRepository: VideoRepository
@@ -648,6 +707,304 @@ class HomeViewModel(
     
     private val _errorState = MutableStateFlow<ErrorHandler.ErrorState?>(null)
     val errorState: StateFlow<ErrorHandler.ErrorState?> = _errorState.asStateFlow()
+
+    // --- Extração de Frames ---
+    private val _extractionProgress = MutableStateFlow(ExtractionProgressState())
+    val extractionProgress: StateFlow<ExtractionProgressState> = _extractionProgress.asStateFlow()
+
+    private var extractionJob: Job? = null
+
+    fun cancelExtraction() {
+        extractionJob?.cancel()
+        _extractionProgress.update { current ->
+            val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+            val logLine = "[$timestamp] ⚠️ Extração cancelada pelo usuário."
+            Log.w("ChopCutExtraction", "Extração cancelada pelo usuário.")
+            current.copy(
+                isRunning = false,
+                logs = current.logs + logLine,
+                error = "Cancelada pelo usuário"
+            )
+        }
+    }
+
+    fun startExtraction(uri: Uri, settings: ThumbnailSettings) {
+        val videoInfo = (uiState.value as? HomeUiState.VideoLoaded)?.videoInfo ?: return
+        
+        extractionJob?.cancel()
+        
+        extractionJob = viewModelScope.launch(Dispatchers.IO) {
+            _extractionProgress.value = ExtractionProgressState(isRunning = true)
+            
+            val logTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            // Apenas escreve no ADB - nao dispara recomposicao
+            fun adbLog(message: String, isError: Boolean = false) {
+                if (isError) Log.e("ChopCutExtraction", message)
+                else Log.i("ChopCutExtraction", message)
+            }
+            // Escreve no ADB + acumula log para UI (usar somente fora do loop de frames)
+            fun addLog(message: String, isError: Boolean = false) {
+                val timestamp = logTimeFormat.format(Date())
+                val formatted = "[$timestamp] $message"
+                adbLog(message, isError)
+                _extractionProgress.update { current ->
+                    current.copy(logs = current.logs + formatted)
+                }
+            }
+
+            val startTime = System.currentTimeMillis()
+            addLog("🚀 Iniciando extração de frames...")
+            addLog("🎬 Vídeo: ${videoInfo.fileName} (${videoInfo.width}x${videoInfo.height}, ${videoInfo.frameRate}fps, ${formatDuration(videoInfo.durationMs)})")
+            addLog("⚙️ Configurações:")
+            val videoAr = videoInfo.aspectRatio
+            val (cfgW, cfgH) = settings.computeDimensions(videoAr)
+            addLog("   • Tamanho: ${settings.sizePreset.displayName} (${cfgW}x${cfgH}, 16:9)")
+            addLog("   • Escala: ${settings.scaleMode.displayName}")
+            addLog("   • Formato: ${settings.format.displayName}")
+            addLog("   • Qualidade: ${settings.quality}%")
+            
+            // Taxa de quadros
+            val thumbsPerSecond = settings.thumbsPerSecond
+            val intervalMs = if (thumbsPerSecond <= 0) {
+                // "Todos os frames"
+                addLog("   • Taxa: Todos os frames (${videoInfo.frameRate} fps)")
+                1000f / videoInfo.frameRate.coerceAtLeast(1)
+            } else {
+                addLog("   • Taxa: $thumbsPerSecond frame(s) por segundo")
+                1000f / thumbsPerSecond
+            }
+
+            val totalFrames = if (thumbsPerSecond <= 0) {
+                (videoInfo.durationMs * videoInfo.frameRate / 1000f).toInt().coerceAtLeast(1)
+            } else {
+                (videoInfo.durationMs / intervalMs).toInt().coerceAtLeast(1)
+            }
+
+            addLog("📊 Total estimado de frames a extrair: $totalFrames")
+
+            // Criar diretório de saída
+            val sanitizedName = videoInfo.fileName.substringBeforeLast(".").replace("[^a-zA-Z0-9_\\-]".toRegex(), "_").trim('_')
+            val outputDirName = sanitizedName
+            
+            val baseDir = getApplication<Application>().getExternalFilesDir("extracted_frames")
+                ?: getApplication<Application>().filesDir
+            val outputDir = File(baseDir, outputDirName)
+            
+            if (!outputDir.exists()) {
+                val created = outputDir.mkdirs()
+                if (created) {
+                    addLog("📁 Pasta criada: ${outputDir.absolutePath}")
+                } else {
+                    addLog("❌ Falha ao criar a pasta de destino.", isError = true)
+                    _extractionProgress.update { it.copy(isRunning = false, error = "Falha ao criar diretório") }
+                    return@launch
+                }
+            } else {
+                addLog("📁 Pasta de destino: ${outputDir.absolutePath}")
+            }
+
+            _extractionProgress.update { it.copy(total = totalFrames, outputDirPath = outputDir.absolutePath) }
+
+            val retriever = MediaMetadataRetriever()
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    retriever.setDataSource(getApplication(), uri)
+                } else {
+                    @Suppress("DEPRECATION")
+                    retriever.setDataSource(uri.toString())
+                }
+
+                val extension = when (settings.format) {
+                    ThumbnailFormat.JPEG -> ThumbnailConfig.FileFormats.EXT_JPG
+                    ThumbnailFormat.PNG -> ThumbnailConfig.FileFormats.EXT_PNG
+                    ThumbnailFormat.WEBP -> ThumbnailConfig.FileFormats.EXT_WEBP
+                }
+                
+                val compressFormat = when (settings.format) {
+                    ThumbnailFormat.JPEG -> Bitmap.CompressFormat.JPEG
+                    ThumbnailFormat.PNG -> Bitmap.CompressFormat.PNG
+                    ThumbnailFormat.WEBP -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            Bitmap.CompressFormat.WEBP_LOSSY
+                        } else {
+                            @Suppress("DEPRECATION")
+                            Bitmap.CompressFormat.WEBP
+                        }
+                    }
+                }
+
+                var successCount = 0
+                val extractionStart = System.currentTimeMillis()
+
+                for (i in 0 until totalFrames) {
+                    // Verificar se foi cancelado
+                    ensureActive()
+
+                    val positionMs = (i * intervalMs).toLong()
+                    val frameFile = File(outputDir, "frame_${String.format("%05d", i + 1)}$extension")
+
+                    val frameStart = System.currentTimeMillis()
+                    
+                    try {
+                        val quality = settings.extractionQuality
+                        val (targetW, targetH) = settings.computeDimensions(videoAr)
+                        val (extractBaseW, extractBaseH) = settings.computeExtractDimensions(videoAr)
+
+                        // Supersampling para qualidade alta: extrair maior e reduzir
+                        val (extractW, extractH) = if (quality == ThumbnailQuality.HIGH) {
+                            val factor = ThumbnailConfig.Quality.HIGH_QUALITY_EXTRACT_FACTOR
+                            (extractBaseW * factor).toInt() to (extractBaseH * factor).toInt()
+                        } else {
+                            extractBaseW to extractBaseH
+                        }
+
+                        // Extrair frame escalado (getScaledFrameAtTime retorna frame bruto sem aplicar rotação)
+                        val hasRotation = videoInfo.rotation == 90 || videoInfo.rotation == 270
+                        val (reqW, reqH) = if (hasRotation) {
+                            extractH to extractW
+                        } else {
+                            extractW to extractH
+                        }
+                        val rawFrame = retriever.getScaledFrameAtTime(
+                            positionMs * 1000L,
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                            reqW,
+                            reqH
+                        )
+
+                        // Aplicar rotação se necessário (ex: vídeos 9:16 armazenados como 16:9 landscape)
+                        val orientedFrame = if (rawFrame != null && hasRotation) {
+                            val matrix = android.graphics.Matrix()
+                            matrix.postRotate(videoInfo.rotation.toFloat())
+                            val rotated = Bitmap.createBitmap(rawFrame, 0, 0, rawFrame.width, rawFrame.height, matrix, true)
+                            if (rotated != rawFrame) rawFrame.recycle()
+                            rotated
+                        } else {
+                            rawFrame
+                        }
+
+                        // Mapear para dimensões alvo conforme scaleMode
+                        val bitmap = when {
+                            orientedFrame == null -> null
+                            settings.scaleMode == ThumbnailScaleMode.FILL && videoAr >= 1f && targetW != targetH -> {
+                                // Center-crop para landscape/square (preserva conteúdo nas bordas)
+                                val srcW = orientedFrame.width
+                                val srcH = orientedFrame.height
+                                val srcAr = srcW.toFloat() / srcH.toFloat()
+                                val dstAr = targetW.toFloat() / targetH.toFloat()
+                                val (cropW, cropH) = if (srcAr > dstAr) {
+                                    (srcH * dstAr).toInt() to srcH
+                                } else {
+                                    srcW to (srcW / dstAr).toInt()
+                                }
+                                val cropX = (srcW - cropW) / 2
+                                val cropY = (srcH - cropH) / 2
+                                val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.RGB_565)
+                                val canvas = android.graphics.Canvas(result)
+                                val srcRect = android.graphics.Rect(cropX, cropY, cropX + cropW, cropY + cropH)
+                                val dstRect = android.graphics.Rect(0, 0, targetW, targetH)
+                                val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+                                canvas.drawBitmap(orientedFrame, srcRect, dstRect, paint)
+                                orientedFrame.recycle()
+                                result
+                            }
+                            else -> {
+                                // FIT (ou portrait FILL): redimensiona mantendo AR dentro do box
+                                if (quality == ThumbnailQuality.HIGH && (orientedFrame.width != targetW || orientedFrame.height != targetH)) {
+                                    val scaled = Bitmap.createScaledBitmap(orientedFrame, targetW, targetH, true)
+                                    if (scaled != orientedFrame) orientedFrame.recycle()
+                                    scaled
+                                } else {
+                                    orientedFrame
+                                }
+                            }
+                        }
+
+                        if (bitmap != null) {
+                            // Salvar no arquivo
+                            java.io.FileOutputStream(frameFile).use { out ->
+                                bitmap.compress(compressFormat, settings.quality, out)
+                            }
+                            bitmap.recycle()
+                            successCount++
+
+                            val frameDuration = System.currentTimeMillis() - frameStart
+                            val percent = ((i + 1) * 100f / totalFrames).toInt()
+                            val logMsg = "📸 Frame ${i + 1}/$totalFrames ($percent%) ${targetW}x${targetH} em ${frameDuration}ms -> ${frameFile.name}"
+                            adbLog(logMsg)
+                            val timestamp = logTimeFormat.format(Date())
+                            _extractionProgress.update { current ->
+                                current.copy(
+                                    currentIndex = i + 1,
+                                    logs = current.logs + "[$timestamp] $logMsg"
+                                )
+                            }
+                        } else {
+                            val warnMsg = "⚠️ Falha ao obter frame ${i + 1} na posição ${positionMs}ms"
+                            adbLog(warnMsg, isError = true)
+                            val timestamp = logTimeFormat.format(Date())
+                            _extractionProgress.update { current ->
+                                current.copy(
+                                    currentIndex = i + 1,
+                                    logs = current.logs + "[$timestamp] $warnMsg"
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        val errMsg = "⚠️ Erro no frame ${i + 1}: ${e.message}"
+                        adbLog(errMsg, isError = true)
+                        val timestamp = logTimeFormat.format(Date())
+                        _extractionProgress.update { current ->
+                            current.copy(
+                                currentIndex = i + 1,
+                                logs = current.logs + "[$timestamp] $errMsg"
+                            )
+                        }
+                    }
+                }
+
+                val totalDuration = System.currentTimeMillis() - startTime
+                val avgTimePerFrame = if (successCount > 0) (totalDuration - (extractionStart - startTime)) / successCount else 0L
+                val fpsThroughput = if (totalDuration > 0) (successCount * 1000f / totalDuration) else 0f
+                
+                val summary = """
+                    📊 ESTATÍSTICAS DE EXTRAÇÃO:
+                       • Frames com sucesso: $successCount/$totalFrames
+                       • Tempo total: ${String.format("%.2f", totalDuration / 1000f)}s
+                       • Média por frame: ${avgTimePerFrame}ms (${String.format("%.1f", fpsThroughput)} fps)
+                       • Destino: Android/data/com.chopcut/files/extracted_frames/$outputDirName/
+                       
+                    💻 PARA COPIAR VIA ADB NO COMPUTADOR:
+                       adb pull "/sdcard/Android/data/com.chopcut/files/extracted_frames/$outputDirName" ./extracted_frames
+                """.trimIndent()
+
+                Log.i("ChopCutExtraction", summary)
+                
+                _extractionProgress.update { current ->
+                    current.copy(
+                        isRunning = false,
+                        isComplete = true,
+                        statsSummary = summary,
+                        logs = current.logs + "🎉 Extração finalizada com sucesso!"
+                    )
+                }
+
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    addLog("❌ Falha crítica: ${e.message}", isError = true)
+                    _extractionProgress.update { current ->
+                        current.copy(isRunning = false, error = e.message ?: "Erro desconhecido")
+                    }
+                }
+            } finally {
+                try {
+                    retriever.release()
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }
+        }
+    }
 
     fun selectVideo(uri: Uri) {
         _selectedVideoUri.value = uri
@@ -1065,6 +1422,239 @@ fun formatSize(bytes: Long): String {
     }
     return "${mb} MB"
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ExtractionProgressBottomSheet(
+    visible: Boolean,
+    progressState: ExtractionProgressState,
+    onDismiss: () -> Unit,
+    onCancel: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val lazyListState = rememberLazyListState()
+    
+    // Auto-scroll nos logs sempre que a lista cresce
+    LaunchedEffect(progressState.logs.size) {
+        if (progressState.logs.isNotEmpty()) {
+            try {
+                lazyListState.animateScrollToItem(progressState.logs.size - 1)
+            } catch (e: Exception) {}
+        }
+    }
+
+    if (!visible) return
+
+    ModalBottomSheet(
+        onDismissRequest = {
+            if (!progressState.isRunning) {
+                onDismiss()
+            }
+        },
+        sheetState = sheetState,
+        dragHandle = null,
+        containerColor = Background,
+        contentColor = OnBackground
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (progressState.isRunning) "Extraindo Frames..." else "Extração Finalizada",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = OnSurface
+                )
+                if (!progressState.isRunning) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Fechar",
+                            tint = OnSurface
+                        )
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+
+            // Barra de Progresso
+            if (progressState.isRunning) {
+                val progress = if (progressState.total > 0) {
+                    progressState.currentIndex.toFloat() / progressState.total
+                } else 0f
+                val percent = (progress * 100).toInt()
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Progresso Geral",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary
+                        )
+                        Text(
+                            text = "$percent% (${progressState.currentIndex}/${progressState.total})",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Primary
+                        )
+                    }
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp),
+                        color = Primary,
+                        trackColor = SurfaceVariant
+                    )
+                }
+            }
+
+            // Console estilo Terminal Dark
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "Logs em Tempo Real (ADB Mirror)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .background(Color.Black)
+                        .border(1.dp, SurfaceVariant, RectangleShape)
+                        .padding(12.dp)
+                ) {
+                    if (progressState.logs.isEmpty()) {
+                        Text(
+                            text = "Iniciando subsistema de extração...",
+                            style = DurationTextStyle.copy(
+                                fontFamily = ChopCutMonoFont,
+                                color = TextDisabled
+                            )
+                        )
+                    } else {
+                        LazyColumn(
+                            state = lazyListState,
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(progressState.logs.size) { index ->
+                                val log = progressState.logs[index]
+                                val color = when {
+                                    log.contains("❌") || log.contains("Erro") -> Error
+                                    log.contains("⚠️") -> Warning
+                                    log.contains("🎉") || log.contains("📸 Frame") -> Success
+                                    log.contains("🚀") || log.contains("🎬") || log.contains("📁") || log.contains("📊") -> Primary
+                                    else -> TextSecondary
+                                }
+                                Text(
+                                    text = log,
+                                    style = DurationTextStyle.copy(
+                                        fontFamily = ChopCutMonoFont,
+                                        color = color,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Detalhes e estatísticas de conclusão
+            if (progressState.isComplete && progressState.statsSummary != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SurfaceVariant, RectangleShape)
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Sumário de Performance",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Success
+                    )
+                    Text(
+                        text = progressState.statsSummary,
+                        style = DurationTextStyle.copy(
+                            fontFamily = ChopCutMonoFont,
+                            color = OnSurface,
+                            fontSize = 10.sp
+                        )
+                    )
+                }
+            }
+
+            // Display de Erro crítico
+            if (progressState.error != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Error.copy(alpha = 0.15f), RectangleShape)
+                        .border(1.dp, Error, RectangleShape)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Erro",
+                        tint = Error
+                    )
+                    Text(
+                        text = "Falha: ${progressState.error}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Error,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Botão de Cancelar / Confirmar
+            if (progressState.isRunning) {
+                ChopCutSecondaryButton(
+                    text = "Cancelar Extração",
+                    onClick = onCancel,
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = Icons.Default.Close
+                )
+            } else {
+                ChopCutPrimaryButton(
+                    text = "Fechar",
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
 
 // --- Merged from PreloadUiState.kt ---
 

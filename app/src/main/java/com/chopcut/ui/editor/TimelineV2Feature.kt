@@ -1,6 +1,8 @@
 package com.chopcut
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.view.ViewGroup
 import androidx.compose.animation.*
@@ -31,6 +33,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -53,10 +57,12 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -86,6 +92,12 @@ class TimelineV2ViewModel(
     private val _activeMarkerStartMs = MutableStateFlow<Long?>(null)
     val activeMarkerStartMs: StateFlow<Long?> = _activeMarkerStartMs.asStateFlow()
 
+    private val _thumbBitmaps = MutableStateFlow<Map<Int, Bitmap>>(emptyMap())
+    val thumbBitmaps: StateFlow<Map<Int, Bitmap>> = _thumbBitmaps.asStateFlow()
+
+    private val _videoAr = MutableStateFlow(16f / 9f)
+    val aspectRatio: StateFlow<Float> = _videoAr.asStateFlow()
+
     data class VideoDetails(
         val title: String,
         val sizeString: String,
@@ -101,7 +113,6 @@ class TimelineV2ViewModel(
 
     init {
         if (videoUri != null) {
-            // Inicializar ExoPlayer para reprodução real
             exoPlayer = ExoPlayer.Builder(application).build().apply {
                 setMediaItem(MediaItem.fromUri(videoUri))
                 prepare()
@@ -109,21 +120,31 @@ class TimelineV2ViewModel(
                 playWhenReady = false
             }
 
-            // Carregar metadados do vídeo real de forma assíncrona
             viewModelScope.launch {
                 val repository = VideoRepository(application)
                 repository.getMetadata(videoUri)?.let { info ->
                     _durationMs.value = info.durationMs
+                    _videoAr.value = info.aspectRatio
                     _videoDetails.value = VideoDetails(
                         title = info.fileName,
                         sizeString = FormatUtils.formatFileSize(info.sizeBytes),
                         aspectRatioString = getAspectRatioString(info.width, info.height),
                         durationString = TimeUtils.formatDuration(info.durationMs)
                     )
+                    // Auto-detect extracted frames directory
+                    val sanitizedName = info.fileName.substringBeforeLast(".")
+                        .replace("[^a-zA-Z0-9_\\-]".toRegex(), "_").trim('_')
+                    val baseDir = application.getExternalFilesDir("extracted_frames")
+                    if (baseDir != null) {
+                        val extractedDir = java.io.File(baseDir, sanitizedName)
+                        if (extractedDir.exists() && extractedDir.isDirectory) {
+                            loadThumbnails(extractedDir.absolutePath)
+                        }
+                    }
                 }
             }
 
-            // Sincronizar estados do ExoPlayer
+            // Sync ExoPlayer states
             exoPlayer?.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) {
                     _isPlaying.value = playing
@@ -140,7 +161,6 @@ class TimelineV2ViewModel(
                 }
             })
 
-            // Atualização contínua de posição a ~60fps para fluidez de scroll reativo
             viewModelScope.launch {
                 while (true) {
                     val player = exoPlayer
@@ -152,6 +172,30 @@ class TimelineV2ViewModel(
             }
         }
     }
+
+    private fun loadThumbnails(dirPath: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val dir = java.io.File(dirPath)
+            if (!dir.exists() || !dir.isDirectory) return@launch
+
+            val files = dir.listFiles { f ->
+                f.name.startsWith("frame_") && (f.name.endsWith(".jpg") || f.name.endsWith(".png") || f.name.endsWith(".webp"))
+            }?.sortedBy { f ->
+                f.name.removePrefix("frame_").substringBefore(".").toIntOrNull() ?: 0
+            } ?: return@launch
+
+            files.forEachIndexed { index, file ->
+                val bitmap = try {
+                    BitmapFactory.decodeFile(file.absolutePath)
+                } catch (e: Exception) { null }
+                if (bitmap != null) {
+                    _thumbBitmaps.update { it + (index to bitmap) }
+                }
+            }
+        }
+    }
+
+    fun getThumbBitmap(secondIndex: Int): Bitmap? = _thumbBitmaps.value[secondIndex]
 
     fun play() {
         if (exoPlayer != null) {
@@ -311,6 +355,9 @@ fun TimelineV2Screen(
     val activeMarkerStartMs by viewModel.activeMarkerStartMs.collectAsStateWithLifecycle()
 
     val videoDetails by viewModel.videoDetails.collectAsStateWithLifecycle()
+
+    val aspectRatio by viewModel.aspectRatio.collectAsStateWithLifecycle()
+    val thumbBitmaps by viewModel.thumbBitmaps.collectAsStateWithLifecycle()
 
     // Target position para suavização manual de scrubbing
     var targetPositionMs by remember { mutableStateOf(currentPositionMs.toFloat()) }
@@ -561,6 +608,7 @@ fun TimelineV2Screen(
             )
 
             // Area do TimelineV2 com suporte a onDeleteInterval
+            val containerHeight = if (aspectRatio < 1f) 140.dp else 114.dp
             TimelineV2(
                 targetPositionMs = targetPositionMs,
                 onTargetPositionChanged = { targetPositionMs = it },
@@ -571,9 +619,11 @@ fun TimelineV2Screen(
                 markerIntervals = markerIntervals,
                 activeMarkerStartMs = activeMarkerStartMs,
                 onDeleteInterval = { viewModel.deleteInterval(it) },
+                thumbBitmaps = thumbBitmaps,
+                videoAr = aspectRatio,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(114.dp)
+                    .height(containerHeight)
             )
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -655,6 +705,8 @@ fun TimelineV2(
     markerIntervals: List<MarkerInterval>,
     activeMarkerStartMs: Long?,
     onDeleteInterval: (Int) -> Unit,
+    thumbBitmaps: Map<Int, Bitmap> = emptyMap(),
+    videoAr: Float = 16f / 9f,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -664,13 +716,13 @@ fun TimelineV2(
     val onTargetPositionChangedState = rememberUpdatedState(onTargetPositionChanged)
     val sensitivityState = rememberUpdatedState(sensitivity)
 
-    // Playhead color animation when active marker is running (rapid flashing between Cyan and bright Amber/Yellow for alert)
+    // Playhead color animation
     val isRecording = activeMarkerStartMs != null
     val infiniteTransition = rememberInfiniteTransition(label = "playheadTransition")
     val playheadColor by if (isRecording) {
         infiniteTransition.animateColor(
-            initialValue = Color(0xFF00E5FF), // Cyan
-            targetValue = Color(0xFFFFC107),  // Amber/Yellow Warning Alert
+            initialValue = Color(0xFF00E5FF),
+            targetValue = Color(0xFFFFC107),
             animationSpec = infiniteRepeatable(
                 animation = tween(250, easing = FastOutLinearInEasing),
                 repeatMode = RepeatMode.Reverse
@@ -681,9 +733,21 @@ fun TimelineV2(
         remember { mutableStateOf(Color(0xFF00E5FF)) }
     }
 
-    // Original, elegant visual dimensions
-    val thumbWidthPx = with(density) { 80.dp.toPx() }
-    val thumbHeightPx = with(density) { 45.dp.toPx() }
+    // Dynamic thumb size based on orientation
+    val isPortrait = videoAr < 1f
+    val isSquare = !isPortrait && videoAr <= 1.1f
+    val thumbWidthDp = when {
+        isSquare -> 60.dp
+        isPortrait -> 45.dp
+        else -> 80.dp
+    }
+    val thumbHeightDp = when {
+        isSquare -> 60.dp
+        isPortrait -> 80.dp
+        else -> 45.dp
+    }
+    val thumbWidthPx = with(density) { thumbWidthDp.toPx() }
+    val thumbHeightPx = with(density) { thumbHeightDp.toPx() }
     val timelineTopPx = with(density) { 24.dp.toPx() }
     val tickHeightPx = with(density) { 6.dp.toPx() }
     val tickGapPx = with(density) { 4.dp.toPx() }
@@ -741,45 +805,51 @@ fun TimelineV2(
                 strokeWidth = 1f
             )
             
-            // 2. Draw Ticks & Labels & Mocked Thumbnails
+            // 2. Draw Ticks & Labels & Thumbnails
             for (i in 0..totalSeconds) {
                 val thumbLeft = canvasCenterX + (i * thumbWidthPx) - canvasScrollOffsetPx
                 val thumbRight = thumbLeft + thumbWidthPx
                 
                 // Draw thumbnail only if within duration bounds
                 if (i < totalSeconds && thumbRight >= -50f && thumbLeft <= width + 50f) {
-                    // Diagonal premium gradients
-                    val colorStart: Color
-                    val colorEnd: Color
-                    
-                    when {
-                        i % 5 == 0 -> {
-                            // High accent gradient for scene cuts
-                            colorStart = Color(0xFFE94560)
-                            colorEnd = Color(0xFF0F3460)
+                    val bitmap = thumbBitmaps[i]
+                    if (bitmap != null && !bitmap.isRecycled) {
+                        // Draw real bitmap thumbnail
+                        val dstRect = android.graphics.Rect(
+                            thumbLeft.toInt(),
+                            (canvasVerticalOffsetPx + timelineTopPx).toInt(),
+                            thumbRight.toInt(),
+                            (canvasVerticalOffsetPx + timelineTopPx + thumbHeightPx).toInt()
+                        )
+                        val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+                            isAntiAlias = true
                         }
-                        i % 2 == 0 -> {
-                            colorStart = Color(0xFF1A1A2E)
-                            colorEnd = Color(0xFF16213E)
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawBitmap(bitmap, null, dstRect, paint)
                         }
-                        else -> {
-                            colorStart = Color(0xFF0F3460)
-                            colorEnd = Color(0xFF1A1A2E)
+                    } else {
+                        // Fallback gradient placeholder
+                        val colorStart = when {
+                            i % 5 == 0 -> Color(0xFFE94560)
+                            i % 2 == 0 -> Color(0xFF1A1A2E)
+                            else -> Color(0xFF0F3460)
                         }
+                        val colorEnd = when {
+                            i % 5 == 0 -> Color(0xFF0F3460)
+                            i % 2 == 0 -> Color(0xFF16213E)
+                            else -> Color(0xFF1A1A2E)
+                        }
+                        val brush = Brush.linearGradient(
+                            colors = listOf(colorStart, colorEnd),
+                            start = Offset(thumbLeft, canvasVerticalOffsetPx + timelineTopPx),
+                            end = Offset(thumbRight, canvasVerticalOffsetPx + timelineTopPx + thumbHeightPx)
+                        )
+                        drawRect(
+                            brush = brush,
+                            topLeft = Offset(thumbLeft, canvasVerticalOffsetPx + timelineTopPx),
+                            size = Size(thumbWidthPx, thumbHeightPx)
+                        )
                     }
-                    
-                    val brush = Brush.linearGradient(
-                        colors = listOf(colorStart, colorEnd),
-                        start = Offset(thumbLeft, canvasVerticalOffsetPx + timelineTopPx),
-                        end = Offset(thumbRight, canvasVerticalOffsetPx + timelineTopPx + thumbHeightPx)
-                    )
-                    
-                    // Draw thumbnail fill
-                    drawRect(
-                        brush = brush,
-                        topLeft = Offset(thumbLeft, canvasVerticalOffsetPx + timelineTopPx),
-                        size = Size(thumbWidthPx, thumbHeightPx)
-                    )
                     
                     // Draw thin thumbnail border
                     drawRect(

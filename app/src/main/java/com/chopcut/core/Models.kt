@@ -6,6 +6,8 @@ import android.os.Parcelable
 import android.util.Size
 import androidx.compose.ui.graphics.Color
 import java.util.UUID
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import kotlinx.parcelize.Parcelize
 
 
@@ -130,12 +132,57 @@ enum class ThumbnailQuality {
  * Configurações para extração de thumbnails em massa
  */
 data class ThumbnailSettings(
-    val thumbsPerSecond: Int = 1,        // 1-10 thumbs por segundo
-    val quality: Int = 85,                // 50-100 (JPEG)
+    val thumbsPerSecond: Int = 1,
+    val quality: Int = 85,
     val format: ThumbnailFormat = ThumbnailFormat.JPEG,
-    val dimensionPreset: DimensionPreset = DimensionPreset.MEDIUM,
-    val extractionQuality: ThumbnailQuality = ThumbnailQuality.HIGH
-)
+    val sizePreset: SizePreset = SizePreset.SMALL,
+    val extractionQuality: ThumbnailQuality = ThumbnailQuality.HIGH,
+    val scaleMode: ThumbnailScaleMode = ThumbnailScaleMode.FIT
+) {
+    /** Backward compat para ThumbnailEngine.kt */
+    @Deprecated("Use sizePreset")
+    val dimensionPreset: DimensionPreset get() = sizePreset
+    @Deprecated("No longer used")
+    val aspectRatioPreset: AspectRatioPreset get() = AspectRatioPreset.ORIGINAL
+    @Deprecated("No longer used")
+    val cropZoom: Float get() = 1f
+    @Deprecated("No longer used")
+    val scaleFactor: Float get() = 1f
+
+    fun computeDimensions(videoAr: Float): Pair<Int, Int> {
+        val baseH = sizePreset.baseHeight.coerceAtLeast(16)
+        val w = (baseH * 16f / 9f).roundToInt().coerceAtLeast(16)
+        return when {
+            videoAr in 0.9f..1.1f -> {
+                val sq = sqrt((w * baseH).toFloat()).roundToInt()
+                sq to sq
+            }
+            videoAr < 1f -> baseH to w
+            else -> w to baseH
+        }
+    }
+
+    fun computeExtractDimensions(videoAr: Float): Pair<Int, Int> {
+        val (tw, th) = computeDimensions(videoAr)
+        if (tw == th) return tw to th
+        val landscape = videoAr >= 1f
+        return when (scaleMode) {
+            ThumbnailScaleMode.FIT -> tw to th
+            ThumbnailScaleMode.FILL -> {
+                if (!landscape) {
+                    tw to th
+                } else {
+                    val boxAr = 16f / 9f
+                    if (videoAr > boxAr) {
+                        (th * videoAr).toInt() to th
+                    } else {
+                        tw to (tw / videoAr).toInt()
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
  * Formatos de imagem suportados para extração de thumbnails
@@ -147,18 +194,63 @@ enum class ThumbnailFormat(val displayName: String, val description: String) {
 }
 
 /**
- * Presets de dimensão para thumbnails
+ * Modo de escala para mapear o frame do vídeo nas dimensões alvo do thumbnail
  */
-enum class DimensionPreset(
+enum class ThumbnailScaleMode(
     val displayName: String,
-    val width: Int,
-    val height: Int
+    val description: String
 ) {
-    SMALL("Pequeno (240x135)", 240, 135),
-    MEDIUM("Médio (320x180)", 320, 180),
-    LARGE("Grande (480x270)", 480, 270),
-    HD("HD (640x360)", 640, 360)
+    FIT("Scale to Fit", "Mantém AR, encaixa dentro (letterbox)"),
+    FILL("Scale to Fill", "Mantém AR, preenche cortando (center-crop)")
 }
+
+/**
+ * Presets de aspect ratio para thumbnails
+ */
+enum class AspectRatioPreset(
+    val displayName: String,
+    val ratio: Float?
+) {
+    ORIGINAL("Original", null),
+    R16_9("16:9", 16f / 9f),
+    R1_1("1:1", 1f),
+    R4_3("4:3", 4f / 3f),
+    R9_16("9:16", 9f / 16f),
+    R21_9("21:9", 21f / 9f)
+}
+
+/**
+ * Presets de tamanho para thumbnails, baseados em altura.
+ * A largura é sempre derivada: width = baseHeight × aspectRatioPreset.ratio
+ */
+enum class SizePreset(
+    val displayName: String,
+    val baseHeight: Int
+) {
+    THUMBNAIL("Thumbnail", 36),
+    SMALL("Small", 45),
+    MEDIUM("Medium", 60),
+    LARGE("Large", 90),
+    HD("HD", 120);
+
+    /** Backward compat: largura assumindo 16:9 */
+    val width get() = (baseHeight * 16f / 9f).toInt()
+    val height get() = baseHeight
+
+    companion object {
+        /** Sugere um preset adequado com base na altura do vídeo */
+        fun suggest(videoHeight: Int): SizePreset = when {
+            videoHeight >= 2160 -> HD
+            videoHeight >= 1440 -> LARGE
+            videoHeight >= 1080 -> MEDIUM
+            videoHeight >= 720  -> SMALL
+            else                -> THUMBNAIL
+        }
+    }
+}
+
+/** Backward compat para ThumbnailEngine.kt */
+typealias DimensionPreset = SizePreset
 
 /**
  * Progresso da extração de thumbnails
