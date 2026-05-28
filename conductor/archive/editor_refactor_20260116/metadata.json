@@ -1,8 +1,0 @@
-{
-  "track_id": "editor_refactor_20260116",
-  "type": "feature",
-  "status": "new",
-  "created_at": "2026-01-16T17:07:59Z",
-  "updated_at": "2026-01-16T17:07:59Z",
-  "description": "Refatoração da UI do Editor para Visualização Dividida: Preview/Timeline/Waveform no topo, controles dinâmicos na base."
-}
