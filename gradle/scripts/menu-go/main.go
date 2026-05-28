@@ -283,7 +283,7 @@ func (m model) refreshDevicesCmd() tea.Cmd {
 						styledStatus = lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Render(status)
 					}
 
-					list = append(list, fmt.Sprintf("  • %s\n    (%s)", devName, styledStatus))
+					list = append(list, fmt.Sprintf("  • %s (%s)", devName, styledStatus))
 				}
 			}
 		}
