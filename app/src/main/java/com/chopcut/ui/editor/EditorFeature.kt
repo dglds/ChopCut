@@ -4,6 +4,10 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.sqrt
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -1315,5 +1319,37 @@ object ThumbnailConfig {
     object Adaptive {
         const val MIN_THUMBS_PER_STRIP = 5
         const val ADAPTIVE_POWER_CURVE_EXPONENT = 0.5f
+    }
+
+    object TimelineV2Thumbs {
+        const val BASE_THUMB_SIZE_DP  = 60
+        const val MAX_THUMB_WIDTH_DP  = 100
+        const val MAX_THUMB_HEIGHT_DP = 90
+        const val MIN_THUMB_SIZE_DP   = 30
+
+        /**
+         * Calcula (widthDp, heightDp) a partir das dimensões reais do vídeo (já corrigidas por rotação).
+         *
+         * Fórmula de área constante com fator de resolução:
+         *   resFactor = (maxDim / 1080)^0.3  — sutil: 720p→0.92, 1080p→1.0, 4K→1.41(cap)
+         *   base = BASE × resFactor
+         *   w = base × √AR,  h = base / √AR
+         *
+         * Os caps (MAX_W, MAX_H) são aplicados preservando o AR exato:
+         *   se um lado excede o limite, ambos são escalonados proporcionalmente.
+         */
+        fun computeDp(videoWidth: Int, videoHeight: Int): Pair<Float, Float> {
+            val ar = (videoWidth.toFloat() / videoHeight.toFloat()).coerceIn(0.2f, 5f)
+            val maxDim = max(videoWidth, videoHeight).coerceAtLeast(720)
+            val resFactor = (maxDim / 1080f).pow(0.3f).coerceIn(0.85f, 1.6f)
+            val base = BASE_THUMB_SIZE_DP * resFactor
+            val uncW = base * sqrt(ar)
+            val uncH = base / sqrt(ar)
+            val capScaleW = if (uncW > MAX_THUMB_WIDTH_DP)  MAX_THUMB_WIDTH_DP.toFloat()  / uncW else 1f
+            val capScaleH = if (uncH > MAX_THUMB_HEIGHT_DP) MAX_THUMB_HEIGHT_DP.toFloat() / uncH else 1f
+            val capScale  = min(capScaleW, capScaleH)
+            return (uncW * capScale).coerceAtLeast(MIN_THUMB_SIZE_DP.toFloat()) to
+                   (uncH * capScale).coerceAtLeast(MIN_THUMB_SIZE_DP.toFloat())
+        }
     }
 }

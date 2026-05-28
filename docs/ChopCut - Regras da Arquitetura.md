@@ -2,9 +2,7 @@
 
 > Documento de referência rápida para manter o projeto funcionando sem quebrar.
 
-## 🏗️ Estrutura de Arquivos (20 no total)
-
-Não crie novos arquivos .kt sem necessidade. Tudo deve caber nos 20 arquivos existentes.
+## 🏗️ Estrutura de Arquivos (21 no total)
 
 ```
 com.chopcut/                          # package único para todos os arquivos
@@ -17,7 +15,8 @@ com.chopcut/                          # package único para todos os arquivos
 │   └── Errors.kt                     # ErrorHandler, ChopCutException, ErrorResult
 ├── data/
 │   ├── AudioEngine.kt                # WaveformExtractor, WaveformCache, WaveformAnalyzer, AudioRawData
-│   ├── ThumbnailEngine.kt            # FastFrameExtractor, ThumbnailCacheManager, ThumbnailStripManager
+│   ├── ThumbnailEngine.kt            # (aposentado) FastFrameExtractor, ThumbnailCacheManager, ThumbnailStripManager
+│   ├── ThumbnailExtraction.kt        # ThumbnailExtraction, ExtractionProgressState, ExtractionResult
 │   └── VideoEngine.kt                # TransformerPipeline, CopyPipeline, VideoRepository
 ├── graphics/
 │   ├── egl/SurfaceBridge.kt          # (standalone)
@@ -160,7 +159,8 @@ Assets de teste: `app/src/androidTest/assets/sample.mp4`
 | `EditorState`, `EditorTool`, `CompressionLevel` | `ui/editor/EditorFeature.kt` (config) ou `ui/editor/EditorToolsUI.kt` (state) |
 | `TrimPosition`, `TrimRange`, `SaveDialogState` | `ui/editor/TrimUI.kt` |
 | `ThumbnailConfig`, `AudioConfig` | `ui/editor/EditorFeature.kt` |
-| `ThumbnailCacheManager`, `FastFrameExtractor`, `ThumbnailStripManager` | `data/ThumbnailEngine.kt` |
+| `ThumbnailCacheManager`, `FastFrameExtractor`, `ThumbnailStripManager` | `data/ThumbnailEngine.kt` (aposentado) |
+| `ThumbnailExtraction`, `ExtractionProgressState`, `ExtractionResult` | `data/ThumbnailExtraction.kt` |
 | `TransformerPipeline`, `CopyPipeline`, `VideoRepository` | `data/VideoEngine.kt` |
 | `WaveformExtractor`, `WaveformCache`, `WaveformConfig` | `data/AudioEngine.kt` |
 | `ErrorHandler`, `ChopCutException` | `core/Errors.kt` |

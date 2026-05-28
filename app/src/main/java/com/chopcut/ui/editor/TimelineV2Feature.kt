@@ -98,6 +98,11 @@ class TimelineV2ViewModel(
     private val _videoAr = MutableStateFlow(16f / 9f)
     val aspectRatio: StateFlow<Float> = _videoAr.asStateFlow()
 
+    private val _videoWidth  = MutableStateFlow(1920)
+    private val _videoHeight = MutableStateFlow(1080)
+    val videoWidth:  StateFlow<Int> = _videoWidth.asStateFlow()
+    val videoHeight: StateFlow<Int> = _videoHeight.asStateFlow()
+
     data class VideoDetails(
         val title: String,
         val sizeString: String,
@@ -125,6 +130,8 @@ class TimelineV2ViewModel(
                 repository.getMetadata(videoUri)?.let { info ->
                     _durationMs.value = info.durationMs
                     _videoAr.value = info.aspectRatio
+                    _videoWidth.value  = info.width
+                    _videoHeight.value = info.height
                     _videoDetails.value = VideoDetails(
                         title = info.fileName,
                         sizeString = FormatUtils.formatFileSize(info.sizeBytes),
@@ -356,7 +363,9 @@ fun TimelineV2Screen(
 
     val videoDetails by viewModel.videoDetails.collectAsStateWithLifecycle()
 
-    val aspectRatio by viewModel.aspectRatio.collectAsStateWithLifecycle()
+    val aspectRatio  by viewModel.aspectRatio.collectAsStateWithLifecycle()
+    val videoWidth   by viewModel.videoWidth.collectAsStateWithLifecycle()
+    val videoHeight  by viewModel.videoHeight.collectAsStateWithLifecycle()
     val thumbBitmaps by viewModel.thumbBitmaps.collectAsStateWithLifecycle()
 
     // Target position para suavização manual de scrubbing
@@ -607,8 +616,9 @@ fun TimelineV2Screen(
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            // Area do TimelineV2 com suporte a onDeleteInterval
-            val containerHeight = if (aspectRatio < 1f) 140.dp else 114.dp
+            // Altura dinâmica baseada nas dimensões reais do vídeo
+            val (thumbWDp, thumbHDp) = ThumbnailConfig.TimelineV2Thumbs.computeDp(videoWidth, videoHeight)
+            val containerHeight = (24.dp + thumbHDp.dp + 10.dp).coerceAtLeast(80.dp)
             TimelineV2(
                 targetPositionMs = targetPositionMs,
                 onTargetPositionChanged = { targetPositionMs = it },
@@ -620,7 +630,8 @@ fun TimelineV2Screen(
                 activeMarkerStartMs = activeMarkerStartMs,
                 onDeleteInterval = { viewModel.deleteInterval(it) },
                 thumbBitmaps = thumbBitmaps,
-                videoAr = aspectRatio,
+                videoWidth = videoWidth,
+                videoHeight = videoHeight,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(containerHeight)
@@ -706,7 +717,8 @@ fun TimelineV2(
     activeMarkerStartMs: Long?,
     onDeleteInterval: (Int) -> Unit,
     thumbBitmaps: Map<Int, Bitmap> = emptyMap(),
-    videoAr: Float = 16f / 9f,
+    videoWidth: Int = 1920,
+    videoHeight: Int = 1080,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -733,21 +745,10 @@ fun TimelineV2(
         remember { mutableStateOf(Color(0xFF00E5FF)) }
     }
 
-    // Dynamic thumb size based on orientation
-    val isPortrait = videoAr < 1f
-    val isSquare = !isPortrait && videoAr <= 1.1f
-    val thumbWidthDp = when {
-        isSquare -> 60.dp
-        isPortrait -> 45.dp
-        else -> 80.dp
-    }
-    val thumbHeightDp = when {
-        isSquare -> 60.dp
-        isPortrait -> 80.dp
-        else -> 45.dp
-    }
-    val thumbWidthPx = with(density) { thumbWidthDp.toPx() }
-    val thumbHeightPx = with(density) { thumbHeightDp.toPx() }
+    // Dimensões com fator de resolução + caps preservando AR exato
+    val (thumbWDpF, thumbHDpF) = ThumbnailConfig.TimelineV2Thumbs.computeDp(videoWidth, videoHeight)
+    val thumbWidthPx  = with(density) { thumbWDpF.dp.toPx() }
+    val thumbHeightPx = with(density) { thumbHDpF.dp.toPx() }
     val timelineTopPx = with(density) { 24.dp.toPx() }
     val tickHeightPx = with(density) { 6.dp.toPx() }
     val tickGapPx = with(density) { 4.dp.toPx() }

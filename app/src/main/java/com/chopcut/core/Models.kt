@@ -137,7 +137,9 @@ data class ThumbnailSettings(
     val format: ThumbnailFormat = ThumbnailFormat.JPEG,
     val sizePreset: SizePreset = SizePreset.SMALL,
     val extractionQuality: ThumbnailQuality = ThumbnailQuality.HIGH,
-    val scaleMode: ThumbnailScaleMode = ThumbnailScaleMode.FIT
+    val scaleMode: ThumbnailScaleMode = ThumbnailScaleMode.FIT,
+    val explicitWidthPx: Int = 0,
+    val explicitHeightPx: Int = 0
 ) {
     /** Backward compat para ThumbnailEngine.kt */
     @Deprecated("Use sizePreset")
@@ -150,6 +152,7 @@ data class ThumbnailSettings(
     val scaleFactor: Float get() = 1f
 
     fun computeDimensions(videoAr: Float): Pair<Int, Int> {
+        if (explicitWidthPx > 0 && explicitHeightPx > 0) return explicitWidthPx to explicitHeightPx
         val baseH = sizePreset.baseHeight.coerceAtLeast(16)
         val w = (baseH * 16f / 9f).roundToInt().coerceAtLeast(16)
         return when {
@@ -372,10 +375,7 @@ data class VideoInfo(
     val aspectRatio: Float
         get() {
             if (width == 0 || height == 0) return 16f / 9f // Fallback
-            val isPortrait = rotation == 90 || rotation == 270
-            val displayWidth = if (isPortrait) height else width
-            val displayHeight = if (isPortrait) width else height
-            return displayWidth.toFloat() / displayHeight.toFloat()
+            return width.toFloat() / height.toFloat()
         }
 }
 

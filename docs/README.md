@@ -12,6 +12,7 @@ Sempre começe lendo estes arquivos na ordem:
 
 - Qualquer diferennça ou dúvida confirmar com o usuário.
 
+
 1. `CLAUDE.md` — Instruções gerais do projeto, padrões de performance, comandos
 2. `docs/ChopCut - Regras da Arquitetura.md` — Onde cada coisa está, regras críticas
 3. `docs/session#01.md` ou o último `session#NN.md` — O que foi feito na sessão anterior
@@ -41,7 +42,7 @@ Siga o padrão de commits da Session #01:
 - `chore: mensagem` — Para tarefas gerais
 - `docs: mensagem` — Para documentação
 
-Commite em grupos lógicos e pequenos, não um único commit gigante.
+- Commite com base nas alterações realizadas no codigo durante da sessao atual.
 
 ### 4. No final de cada sessão
 Crie um arquivo `docs/session-<session-id>.md` (onde o id pode ser qualquer identificador próprio como `session#03`):
@@ -51,6 +52,9 @@ Crie um arquivo `docs/session-<session-id>.md` (onde o id pode ser qualquer iden
 - Resultados (tabela antes/depois)
 - Comandos úteis
 - Pendências
+- Uso total dos token e tools utilizadas
+- O que mais consumiu tokens
+- Sugestoes futuras para economia de tokens
 
 > [!IMPORTANT]
 > **Manutenção das Regras de Arquitetura:**
