@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#   adb-menu — menu interativo de conexão de dispositivos Android (bash `select`)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Conveniência opcional, zero dependências. Atalhos de adb para descobrir, parear
+# e listar devices. As tarefas de build ficam no ./gradle-menu.
+
+set -u
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
+
+ADB="${ANDROID_HOME:-$HOME/Android/Sdk}/platform-tools/adb"
+[ -x "$ADB" ] || ADB="adb"   # cai no adb do PATH se o do SDK não existir
+
+# Tenta parear via mDNS qualquer device de depuração Wi-Fi anunciado na rede.
+mdns_connect() {
+    command -v avahi-browse >/dev/null 2>&1 || return 0
+    avahi-browse -trp _adb._tcp 2>/dev/null | awk -F';' '/^=/ && NF>=9 {print $8":"$9}' \
+    | while read -r endpoint; do
+        [ -n "$endpoint" ] && echo "📡 Conectando a $endpoint via mDNS..." && "$ADB" connect "$endpoint"
+    done
+}
+
+connect_device() {
+    echo "🔌 Procurando dispositivos..."
+    mdns_connect
+    "$ADB" devices
+}
+
+pair_wifi() {
+    read -rp "Endereço do device (IP:PORT): " addr
+    read -rp "Código de pareamento (6 dígitos): " code
+    [ -z "$addr" ] && { echo "⚠️  Endereço vazio, cancelando."; return; }
+    echo "📡 Pareando com $addr..."
+    "$ADB" pair "$addr" <<<"$code" && echo "🔌 Conectando..." && "$ADB" connect "$addr"
+}
+
+PS3=$'\n'"➤ Escolha uma opção (número): "
+options=(
+    "connect device"
+    "pair Wi-Fi"
+    "listar devices"
+    "desconectar todos"
+    "sair"
+)
+
+# `break` ao fim de cada case reinicia o `select` via `while`, reimprimindo a lista.
+while true; do
+    echo "📱 ChopCut — menu adb (conexão de devices)"
+    select opt in "${options[@]}"; do
+        case "$opt" in
+            "connect device")     connect_device ;;
+            "pair Wi-Fi")         pair_wifi ;;
+            "listar devices")     "$ADB" devices ;;
+            "desconectar todos")  "$ADB" disconnect ;;
+            "sair")               echo "👋 Até mais."; exit 0 ;;
+            *)                    echo "⚠️  Opção inválida: $REPLY" ;;
+        esac
+        break
+    done
+done

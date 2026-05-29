@@ -1,40 +1,40 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#             🚀 BOOTSTRAP DO PAINEL GRADLE EM GO (LIPGLOSS & BUBBLE TEA)
+#   gradle-menu — menu interativo fino sobre o Makefile (bash `select`, zero deps)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Conveniência opcional: lista as tarefas de build e delega ao `make`. NÃO é o
+# caminho canônico — `make build`/`install`/`run` direto fazem o mesmo. As flags
+# de performance vivem em gradle.properties (sempre ligadas), não aqui.
+# Tarefas de device (connect/pair) ficam no ./adb-menu.
 
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-SRC_DIR="$DIR/gradle/scripts/menu-go"
-BIN_PATH="$SRC_DIR/menu-bin"
+set -u
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 
-# Verifica se o Go está instalado
-if ! command -v go >/dev/null 2>&1; then
-    echo "❌ Erro: Go não está instalado no sistema."
-    echo "Por favor, instale o Go para executar o painel de alta performance."
-    exit 1
-fi
+PS3=$'\n'"➤ Escolha uma tarefa (número): "
+options=(
+    "build (APK debug)"
+    "install + abrir app"
+    "clean + build + install"
+    "clean cache + build"
+    "lint"
+    "sair"
+)
 
-# Recompila se o binário não existir ou se algum fonte .go / go.mod for mais recente.
-NEEDS_BUILD=false
-if [ ! -f "$BIN_PATH" ] || [ "$SRC_DIR/go.mod" -nt "$BIN_PATH" ]; then
-    NEEDS_BUILD=true
-else
-    for src in "$SRC_DIR"/*.go; do
-        [ "$src" -nt "$BIN_PATH" ] && NEEDS_BUILD=true && break
+# `break` ao fim de cada case encerra o `select`; o `while` o reinicia, o que faz
+# o bash reimprimir a lista completa de opções após cada tarefa.
+while true; do
+    echo
+    echo "🚀 ChopCut — menu Gradle (delega ao Makefile)"
+    select opt in "${options[@]}"; do
+        case "$opt" in
+            "build (APK debug)")        make build ;;
+            "install + abrir app")      make run ;;
+            "clean + build + install")  make clean && make run ;;
+            "clean cache + build")      rm -rf .gradle && make clean build ;;
+            "lint")                     make lint ;;
+            "sair")                     echo "👋 Até mais."; exit 0 ;;
+            *)                          echo "⚠️  Opção inválida: $REPLY" ;;
+        esac
+        break
     done
-fi
-
-if [ "$NEEDS_BUILD" = true ]; then
-    echo "🔄 Compilando painel em Go (Lipgloss TUI)..."
-    if ! (cd "$SRC_DIR" && go build -o menu-bin .); then
-        echo "❌ Falha ao compilar o painel Go."
-        exit 1
-    fi
-fi
-
-# O painel usa caminhos relativos à raiz do projeto (./gradlew, gradle/scripts/...,
-# .gradle, app/build/...). Garante a cwd correta mesmo se chamado de um subdiretório.
-cd "$DIR" || { echo "❌ Não foi possível acessar a raiz do projeto: $DIR"; exit 1; }
-
-# Executa o painel substituindo o processo bash atual
-exec "$BIN_PATH" "$@"
+done

@@ -1,95 +1,74 @@
-# 🚀 Scripts do Gradle e Painel Interativo (TUI Go)
+# 🚀 Scripts do Gradle e Menu Interativo
 
-Este documento descreve como utilizar os scripts localizados em `gradle/scripts/` e o painel de alta performance do Gradle criado para o projeto ChopCut.
-
----
-
-## 📋 Visão Geral
-
-Para simplificar a execução de tarefas do Gradle e garantir o uso correto do JDK do projeto, foi desenvolvido um painel TUI (Terminal User Interface) em Go usando as bibliotecas **Bubble Tea** e **Lipgloss** do Charmbracelet.
-
-O painel é controlado pelo atalho principal na raiz do projeto:
-* **`./gradle-menu`** (Script Bash wrapper que compila e executa o painel em Go)
+Este documento descreve o `Makefile` (caminho canônico) e o menu interativo opcional `./gradle-menu` do projeto ChopCut.
 
 ---
 
-## 🛠️ Configuração e Parâmetros (`gradle/scripts/gradle-params.sh`)
+## 📋 Visão geral
 
-O comportamento das tarefas executadas pelo painel é controlado de forma centralizada pelo arquivo `gradle/scripts/gradle-params.sh`. Editando os valores para `true` ou `false`, você altera instantaneamente as flags passadas ao Gradle sem precisar digitar comandos longos no terminal.
+O caminho canônico de build são os atalhos do **`Makefile`**, que já exporta o `JAVA_HOME=./jdk17` do projeto. Não há matriz de toggles em script: as flags de performance (parallel, caching, daemon) vivem em **`gradle.properties`**, sempre ligadas.
 
-### 🔍 Parâmetros Disponíveis:
+Como conveniência opcional há dois menus interativos. São scripts bash que usam o `select` nativo da shell (**zero dependências** — sem Go, sem binário, sem compilação); a lista de opções reaparece após cada ação, até você escolher `sair`:
 
-| Grupo | Parâmetro | Valor Padrão | Descrição |
-| :--- | :--- | :---: | :--- |
-| **Verbosidade** | `GRADLE_QUIET` | `false` | Exibe apenas erros críticos (`-q`). |
-| | `GRADLE_WARN` | `false` | Exibe avisos e erros (`-w`). |
-| | `GRADLE_INFO` | `true` | Modo informativo com detalhes de ciclo de vida (`-i`). |
-| | `GRADLE_DEBUG` | `false` | Depuração detalhada do Gradle daemon (`-d`). |
-| **Rastreamento** | `GRADLE_STACKTRACE` | `false` | Exibe stacktrace simples para erros (`-s`). |
-| | `GRADLE_FULL_STACKTRACE` | `true` | Exibe stacktrace completo do compilador (`-S`). |
-| **Performance** | `GRADLE_PARALLEL` | `true` | Compilação paralela de módulos (`--parallel`). |
-| | `GRADLE_BUILD_CACHE` | `true` | Reutiliza compilações estáveis (`--build-cache`). |
-| | `GRADLE_CONFIGURE_ON_DEMAND` | `true` | Configura apenas módulos necessários (`--configure-on-demand`). |
-| | `GRADLE_LIMIT_WORKERS` | `false` | Limita a 4 workers para poupar CPU (`--max-workers=4`). |
-| **Modos Especiais**| `GRADLE_DAEMON` | `true` | Mantém o daemon ativo para builds subsequentes mais rápidos. |
-| | `GRADLE_OFFLINE` | `false` | Usa apenas dependências já baixadas no cache local (`--offline`). |
-| | `GRADLE_RERUN_TASKS` | `false` | Força a reexecução completa ignorando o cache (`--rerun-tasks`). |
-| | `GRADLE_CONTINUE` | `false` | Continua executando tarefas mesmo em caso de falha de alguma (`--continue`). |
-| | `GRADLE_DRY_RUN` | `false` | Apenas simula as tarefas sem executá-las (`-m`). |
+- **`./gradle-menu`** — tarefas de build, delegando ao `make`.
+- **`./adb-menu`** — conexão de dispositivos Android via `adb` (connect, pair Wi-Fi, listar, desconectar).
 
 ---
 
-## 🚀 Como Executar o Painel Interativo
+## 🛠️ Atalhos do `Makefile`
 
-Basta rodar o atalho a partir da raiz do projeto:
+```bash
+make build      # APK de debug (assembleDebug)
+make install    # instala no device/emulador conectado
+make run        # instala e abre o app
+make compile    # checagem rápida do Kotlin (compileDebugKotlin)
+make lint       # lintDebug
+make test       # testes instrumentados (requer device)
+make clean      # limpa os outputs de build
+make help       # lista os alvos
+```
+
+Toggles pontuais de debug vão via `GRADLE_ARGS`, ex.: `make build GRADLE_ARGS="-i --rerun-tasks"`.
+
+---
+
+## 🕹️ Menu de build (`./gradle-menu`)
 
 ```bash
 ./gradle-menu
 ```
 
-### O que o script faz por trás dos panos?
-1. **Verificação de Dependência**: Verifica se o `go` está instalado no sistema.
-2. **Compilação Automática**: Compila o código fonte em `gradle/scripts/menu-go/main.go` gerando o executável binário `menu-bin` se for a primeira vez ou se houver alterações no código-fonte.
-3. **Ambiente Automático**: Injeta a variável `JAVA_HOME=./jdk17` garantindo compatibilidade com o JDK 17 do projeto, evitando falhas com a versão global da máquina host.
-4. **Resolução de mDNS**: Tenta encontrar e parear com dispositivos na rede via mDNS automaticamente.
+O script imprime a lista numerada de tarefas; você digita o **número** da opção e tecla Enter. A lista reaparece após cada tarefa até você escolher `sair`.
 
----
+1. **build (APK debug)** — `make build`.
+2. **install + abrir app** — `make run` (instala e inicia a MainActivity).
+3. **clean + build + install** — `make clean` seguido de `make run`.
+4. **clean cache + build** — apaga a pasta `.gradle` e roda `make clean build`.
+5. **lint** — `make lint`.
+6. **sair** — encerra o menu.
 
-## 📱 Opções do Menu TUI
-
-Ao abrir o painel, você terá acesso a uma interface dividida em duas colunas:
-1. **Esquerda**: Lista de tarefas e Dispositivos Android conectados/autorizados no momento.
-2. **Direita**: Saída em tempo real (logs) da tarefa em execução e status do último APK compilado.
-
-### 🕹️ Atalhos do Teclado:
-* **`Seta para Cima / k`**: Navegar para cima nas opções de tarefa.
-* **`Seta para Baixo / j`**: Navegar para baixo nas opções de tarefa.
-* **`Enter`**: Executar a tarefa selecionada.
-* **`Teclas de 1 a 6`**: Executa diretamente a tarefa pelo número correspondente.
-* **`Tecla 0 / q / Ctrl+C`**: Sair do painel.
-* **`Esc`** (durante execução de tarefa): **Cancela / Aborta** a execução imediatamente.
-
-### 📝 Lista de Tarefas Pré-configuradas:
-1. **`build`**: Compila o APK de desenvolvimento (`./gradlew assembleDebug`).
-2. **`build and install`**: Conecta ao dispositivo, realiza o build, instala o APK debug e inicia automaticamente o aplicativo na MainActivity.
-3. **`clean build and install`**: Apaga a pasta `.gradle` e compilações anteriores, reconecta ao dispositivo, executa nova compilação limpa, instala e inicia o app.
-4. **`clean build and cache`**: Limpa o cache físico do Gradle, limpa compilações antigas e reconstrói o cache de compilações gerando o APK debug limpo.
-5. **`connect device`**: Tenta forçar a detecção de dispositivos USB/rede via comandos ADB (`wait-for-device`) e mDNS.
-6. **`check syntax (lintDebug)`**: Executa a análise estática e sintática de erros do Kotlin compiler para garantir a integridade do código sem avisos críticos.
-
----
-
-## 🛠️ Comandos Manuais Equivalentes
-
-Se você precisar executar comandos diretamente de scripts em shell ou CI sem usar a TUI, sempre lembre de declarar o `JAVA_HOME` local na frente do comando:
+## 📱 Menu de devices (`./adb-menu`)
 
 ```bash
-# Compilar APK Debug manualmente
-JAVA_HOME=./jdk17 ./gradlew assembleDebug
+./adb-menu
+```
 
-# Compilar e Instalar manualmente
-JAVA_HOME=./jdk17 ./gradlew installDebug
+1. **connect device** — tenta parear devices de depuração Wi-Fi anunciados via mDNS (`avahi-browse`, se disponível) e lista os devices com `adb devices`.
+2. **pair Wi-Fi** — pede `IP:PORT` e o código de pareamento, e roda `adb pair` + `adb connect`.
+3. **listar devices** — `adb devices`.
+4. **desconectar todos** — `adb disconnect`.
+5. **sair** — encerra o menu.
 
-# Rodar todos os testes instrumentados manualmente
-JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest
+O caminho do `adb` é resolvido a partir de `$ANDROID_HOME/platform-tools/adb` (padrão `~/Android/Sdk`), com fallback para o `adb` do `PATH`.
+
+---
+
+## 🛠️ Comandos manuais equivalentes
+
+Se precisar rodar `gradlew` direto (CI, scripts) sem o `make`, declare o `JAVA_HOME` local na frente do comando:
+
+```bash
+JAVA_HOME=./jdk17 ./gradlew assembleDebug          # build do APK debug
+JAVA_HOME=./jdk17 ./gradlew installDebug           # instalar no device
+JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest   # testes instrumentados
 ```

@@ -12,6 +12,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -161,6 +162,51 @@ fun HomeScreen(
         permissionLauncher.launch(permission)
     }
 
+    val hasCuts = selectedUri?.let { AppliedCutsRegistry.hasCuts(it) } ?: false
+    val features = remember(selectedUri, hasCuts) {
+        listOf(
+            HomeFeatureItem(
+                title = "Recortar Vídeo",
+                description = "Corte trechos com precisão cirúrgica de frames",
+                icon = Icons.Default.ContentCut,
+                showDot = hasCuts,
+                onClick = {
+                    val uri = selectedUri
+                    if (uri != null) {
+                        val encodedUri = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
+                        onNavigateToEditor("editor?videoUri=$encodedUri")
+                    } else {
+                        requestGallery()
+                    }
+                }
+            ),
+            HomeFeatureItem(
+                title = "Mesclar Clipes",
+                description = "Combine múltiplos vídeos em um único arquivo",
+                icon = Icons.AutoMirrored.Filled.CallMerge,
+                onClick = {
+                    android.widget.Toast.makeText(context, "Mesclagem de clipes disponível em breve!", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            ),
+            HomeFeatureItem(
+                title = "Compactar",
+                description = "Reduza o tamanho do vídeo preservando qualidade",
+                icon = Icons.Default.Compress,
+                onClick = {
+                    android.widget.Toast.makeText(context, "Compactação de vídeo disponível em breve!", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            ),
+            HomeFeatureItem(
+                title = "Extrair Áudio",
+                description = "Salve a faixa de áudio em formato de alta fidelidade",
+                icon = Icons.Default.MusicNote,
+                onClick = {
+                    android.widget.Toast.makeText(context, "Extração de áudio disponível em breve!", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            )
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -241,6 +287,35 @@ fun HomeScreen(
                         )
                     }
                 }
+
+                item {
+                    Text(
+                        text = "Ferramentas",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = OnSurface,
+                        modifier = Modifier.padding(top = ChopCutSpacing.xs)
+                    )
+                }
+
+                // Render feature items in rows of 2 (2 columns grid)
+                items(features.chunked(2).size) { rowIndex ->
+                    val rowItems = features.chunked(2)[rowIndex]
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
+                    ) {
+                        rowItems.forEach { feature ->
+                            FeatureCard(
+                                feature = feature,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (rowItems.size < 2) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
         
                 item { Spacer(Modifier.height(ChopCutSpacing.md)) }
             }
@@ -273,294 +348,7 @@ fun HomeScreen(
     )
 }
 
-@Composable
-private fun VideoPickerEmpty(onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(280.dp)
-            .clip(RectangleShape)
-            .background(SurfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(ChopCutSpacing.md),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .background(
-                    Primary.copy(alpha = 0.12f),
-                    RectangleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.VideoLibrary,
-                contentDescription = null,
-                modifier = Modifier.size(36.dp),
-                tint = Primary
-            )
-        }
-        Spacer(Modifier.height(ChopCutSpacing.sm))
-        Text(
-            text = "Selecionar Vídeo",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = OnSurface
-        )
-        Spacer(Modifier.height(ChopCutSpacing.xxs))
-        Text(
-            text = "Toque para escolher da galeria",
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary
-        )
-        Spacer(Modifier.height(ChopCutSpacing.sm))
-        Box(
-            modifier = Modifier
-                .padding(horizontal = ChopCutSpacing.lg)
-                .fillMaxWidth()
-                .height(40.dp)
-                .background(Primary, RectangleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xs),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.VideoLibrary,
-                    contentDescription = null,
-                    tint = OnPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Escolher Vídeo",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = OnPrimary
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun VideoPickerLoading() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(280.dp)
-            .clip(RectangleShape)
-            .background(SurfaceVariant),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
-        ) {
-            CircularProgressIndicator(
-                color = Primary,
-                modifier = Modifier.size(40.dp),
-                strokeWidth = 3.dp
-            )
-            Text(
-                text = "Carregando vídeo...",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
-            )
-        }
-    }
-}
-
-@Composable
-private fun VideoPickerLoaded(
-    videoInfo: VideoInfo,
-    videoUri: Uri,
-    isPreloading: Boolean = false,
-    onChangeVideo: () -> Unit,
-    onOpenEditor: () -> Unit,
-    onRemoveVideo: () -> Unit
-) {
-    val context = LocalContext.current
-    val imageLoader = remember {
-        ImageLoader.Builder(context)
-            .components { add(VideoFrameDecoder.Factory()) }
-            .build()
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(280.dp)
-            .clip(RectangleShape)
-            .background(SurfaceVariant)
-    ) {
-        Image(
-            painter = rememberAsyncImagePainter(
-                model = ImageRequest.Builder(context)
-                    .data(videoUri)
-                    .crossfade(true)
-                    .build(),
-                imageLoader = imageLoader
-            ),
-            contentDescription = "Thumbnail do vídeo",
-            contentScale = ContentScale.Crop,
-            alignment = Alignment.Center,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Transparent,
-                            OverlayDark.copy(alpha = 0.7f)
-                        )
-                    )
-                )
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(ChopCutSpacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
-        ) {
-            BadgeText(text = "${videoInfo.width}×${videoInfo.height}")
-            BadgeText(text = FormatUtils.getAspectRatio(videoInfo.width, videoInfo.height))
-            Spacer(modifier = Modifier.weight(1f))
-            BadgeText(text = formatDuration(videoInfo.durationMs))
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(ChopCutSpacing.sm)
-        ) {
-            Text(
-                text = videoInfo.fileName,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(ChopCutSpacing.xxs))
-            Text(
-                text = buildString {
-                    append(videoInfo.videoCodec ?: "N/A")
-                    append(" · ")
-                    append("${videoInfo.frameRate}fps")
-                    if (videoInfo.hasAudio) append(" · 🔊")
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.85f)
-            )
-            Spacer(Modifier.height(ChopCutSpacing.sm))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xs)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(40.dp)
-                        .background(Primary, RectangleShape)
-                        .clickable(onClick = onOpenEditor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xxs),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (isPreloading) {
-                            CircularProgressIndicator(
-                                color = OnPrimary,
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = OnPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        Text(
-                            text = if (isPreloading) "Preparando..." else "Editar",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Medium,
-                            color = OnPrimary
-                        )
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .height(40.dp)
-                        .width(80.dp)
-                        .background(
-                            Color.White.copy(alpha = 0.2f),
-                            RectangleShape
-                        )
-                        .clickable(onClick = onChangeVideo),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.VideoLibrary,
-                        contentDescription = "Trocar vídeo",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .height(40.dp)
-                        .width(50.dp)
-                        .background(
-                            Color.Red.copy(alpha = 0.8f),
-                            RectangleShape
-                        )
-                        .clickable(onClick = onRemoveVideo),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Remover vídeo",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-// CacheFeatureCard e formatBytes removidos pois o motor antigo de cache foi descontinuado.
-
-@Composable
-private fun BadgeText(
-    text: String,
-    modifier: Modifier = Modifier
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Medium,
-        color = Color.White,
-        modifier = modifier
-            .background(
-                color = Color.Black.copy(alpha = 0.4f),
-                shape = RectangleShape
-            )
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-    )
-}
 // --- Merged from HomeViewModel.kt ---
 
 
@@ -1229,6 +1017,78 @@ fun ExtractionProgressBottomSheet(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+        }
+    }
+}
+
+data class HomeFeatureItem(
+    val title: String,
+    val description: String,
+    val icon: ImageVector,
+    val showDot: Boolean = false,
+    val onClick: () -> Unit
+)
+
+@Composable
+private fun FeatureCard(
+    feature: HomeFeatureItem,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Surface)
+                .border(1.dp, Divider, RectangleShape)
+                .clickable(onClick = feature.onClick)
+                .padding(ChopCutSpacing.md)
+                .height(130.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Primary.copy(alpha = 0.1f), RectangleShape)
+                    .border(1.dp, Primary.copy(alpha = 0.3f), RectangleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = feature.icon,
+                    contentDescription = null,
+                    tint = Primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = feature.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = OnSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = feature.description,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 13.sp
+                )
+            }
+        }
+
+        if (feature.showDot) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 10.dp, end = 10.dp)
+                    .size(8.dp)
+                    .background(Color(0xFF00E5FF), CircleShape)
+                    .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+            )
         }
     }
 }

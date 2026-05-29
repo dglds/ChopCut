@@ -96,26 +96,10 @@ class CopyPipeline(
                 }
 
 
-                // Create a clean output format with essential fields
-                val outputVideoFormat = MediaFormat()
-
-                // Copy essential format fields
-                outputVideoFormat.setString(MediaFormat.KEY_MIME, videoFormat.getString(MediaFormat.KEY_MIME))
-                outputVideoFormat.setInteger(MediaFormat.KEY_WIDTH, videoFormat.getInteger(MediaFormat.KEY_WIDTH))
-                outputVideoFormat.setInteger(MediaFormat.KEY_HEIGHT, videoFormat.getInteger(MediaFormat.KEY_HEIGHT))
-                outputVideoFormat.setLong(MediaFormat.KEY_DURATION, videoFormat.getLong(MediaFormat.KEY_DURATION))
-                if (videoFormat.containsKey(MediaFormat.KEY_BIT_RATE)) {
-                    outputVideoFormat.setInteger(MediaFormat.KEY_BIT_RATE, videoFormat.getInteger(MediaFormat.KEY_BIT_RATE))
-                }
-                if (videoFormat.containsKey(MediaFormat.KEY_FRAME_RATE)) {
-                    outputVideoFormat.setInteger(MediaFormat.KEY_FRAME_RATE, videoFormat.getInteger(MediaFormat.KEY_FRAME_RATE))
-                }
-                if (videoFormat.containsKey(MediaFormat.KEY_COLOR_FORMAT)) {
-                    outputVideoFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, videoFormat.getInteger(MediaFormat.KEY_COLOR_FORMAT))
-                }
-
-                // CRITICAL: Set rotation BEFORE adding to muxer
-                outputVideoFormat.setInteger(MediaFormat.KEY_ROTATION, rotationFromFormat)
+                // Reusar o MediaFormat original do extractor: ele já carrega o
+                // codec-specific data (csd-0/csd-1 = SPS/PPS). Reconstruir o format
+                // na mão omite o csd, o moov sai sem config de codec e o MP4 não abre
+                // em nenhum player nem gera thumbnail. A rotação vai via setOrientationHint.
 
                 var audioFormat: MediaFormat? = null
                 var audioTrackOutputIndex = -1
@@ -125,7 +109,8 @@ class CopyPipeline(
                 }
 
                 muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-                val videoTrackOutputIndex = muxer.addTrack(outputVideoFormat)
+                muxer.setOrientationHint(rotationFromFormat)
+                val videoTrackOutputIndex = muxer.addTrack(videoFormat)
                 if (audioFormat != null) {
                     audioTrackOutputIndex = muxer.addTrack(audioFormat)
                 }
@@ -165,11 +150,9 @@ class CopyPipeline(
                     processedDurationUs += (range.endMs - range.startMs) * 1000
                 }
 
-                // Stop muxer - ignore if already stopped
-                try {
-                    muxer.stop()
-                } catch (e: Exception) {
-                }
+                // Finalizar o muxer (escreve o moov). Se falhar, deixe propagar:
+                // o arquivo estaria corrompido e não deve ser reportado como sucesso.
+                muxer.stop()
                 emit(Result.success(outputFile))
 
             } finally {

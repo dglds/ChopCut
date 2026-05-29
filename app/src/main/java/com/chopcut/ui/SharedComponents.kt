@@ -12,6 +12,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
@@ -66,6 +67,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.net.Uri
+import androidx.compose.foundation.Image
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.ui.platform.LocalContext
+import coil.ImageLoader
+import coil.compose.rememberAsyncImagePainter
+import coil.decode.VideoFrameDecoder
+import coil.request.ImageRequest
 
 
 // --- Merged from DurationLabel.kt ---
@@ -590,6 +602,284 @@ fun ErrorState(
                 text = actionLabel,
                 onClick = onAction
             )
+        }
+    }
+}
+
+@Composable
+fun VideoPickerEmpty(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+            .background(Surface)
+            .border(1.dp, Primary.copy(alpha = 0.3f), RectangleShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = ChopCutSpacing.md, vertical = ChopCutSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.md)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .background(Primary.copy(alpha = 0.1f), RectangleShape)
+                .border(1.dp, Primary.copy(alpha = 0.5f), RectangleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.VideoLibrary,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = Primary
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Selecionar Vídeo",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = OnSurface
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "Toque para importar da galeria",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(Primary, RectangleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = OnPrimary,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun VideoPickerLoading() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+            .background(Surface)
+            .border(1.dp, Divider, RectangleShape)
+            .padding(horizontal = ChopCutSpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.md)
+    ) {
+        CircularProgressIndicator(
+            color = Primary,
+            modifier = Modifier.size(24.dp),
+            strokeWidth = 2.dp
+        )
+        Text(
+            text = "Carregando metadados do vídeo...",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextSecondary
+        )
+    }
+}
+
+@Composable
+fun VideoPickerLoaded(
+    videoInfo: VideoInfo,
+    videoUri: Uri,
+    isPreloading: Boolean = false,
+    onChangeVideo: () -> Unit,
+    onOpenEditor: () -> Unit,
+    onRemoveVideo: () -> Unit
+) {
+    val context = LocalContext.current
+    val imageLoader = remember {
+        ImageLoader.Builder(context)
+            .components { add(VideoFrameDecoder.Factory()) }
+            .build()
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(130.dp)
+            .background(Surface)
+            .border(1.dp, Divider, RectangleShape)
+            .padding(ChopCutSpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.sm)
+    ) {
+        // Thumbnail & Badges Preview (Left side)
+        Box(
+            modifier = Modifier
+                .width(140.dp)
+                .fillMaxHeight()
+                .background(Color.Black)
+                .border(1.dp, Border, RectangleShape)
+        ) {
+            Image(
+                painter = rememberAsyncImagePainter(
+                    model = ImageRequest.Builder(context)
+                        .data(videoUri)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = imageLoader
+                ),
+                contentDescription = "Thumbnail do vídeo",
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Duration Badge (Overlay bottom-right of thumbnail)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(ChopCutSpacing.xxs)
+                    .background(Color.Black.copy(alpha = 0.7f), RectangleShape)
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = formatDuration(videoInfo.durationMs),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // Aspect Ratio Badge (Overlay top-left of thumbnail)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(ChopCutSpacing.xxs)
+                    .background(Primary.copy(alpha = 0.85f), RectangleShape)
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = FormatUtils.getAspectRatio(videoInfo.width, videoInfo.height),
+                    color = OnPrimary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // Details & Actions (Right side)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = videoInfo.fileName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = OnSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                Text(
+                    text = buildString {
+                        append("${videoInfo.width}×${videoInfo.height}")
+                        append(" · ")
+                        append(videoInfo.videoCodec ?: "N/A")
+                        append(" · ")
+                        append("${videoInfo.frameRate}fps")
+                        if (videoInfo.hasAudio) append(" · 🔊")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Compact Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xxs),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Primary action: Recortar
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .background(Primary, RectangleShape)
+                        .clickable(onClick = onOpenEditor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(ChopCutSpacing.xxs),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isPreloading) {
+                            CircularProgressIndicator(
+                                color = OnPrimary,
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 1.5.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.ContentCut,
+                                contentDescription = null,
+                                tint = OnPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Text(
+                            text = if (isPreloading) "..." else "Recortar",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = OnPrimary
+                        )
+                    }
+                }
+
+                // Change Video Button
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(SurfaceVariant, RectangleShape)
+                        .border(1.dp, Border, RectangleShape)
+                        .clickable(onClick = onChangeVideo),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VideoLibrary,
+                        contentDescription = "Trocar vídeo",
+                        tint = OnSurface,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Remove Video Button
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Error.copy(alpha = 0.15f), RectangleShape)
+                        .border(1.dp, Error.copy(alpha = 0.5f), RectangleShape)
+                        .clickable(onClick = onRemoveVideo),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remover vídeo",
+                        tint = Error,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         }
     }
 }

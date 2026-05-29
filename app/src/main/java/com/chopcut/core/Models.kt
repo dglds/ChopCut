@@ -450,4 +450,19 @@ data class VideoRange(
     }
 }
 
+object AppliedCutsRegistry {
+    private val videosWithCuts = mutableSetOf<android.net.Uri>()
+
+    fun setHasCuts(uri: android.net.Uri, hasCuts: Boolean) {
+        if (hasCuts) {
+            videosWithCuts.add(uri)
+        } else {
+            videosWithCuts.remove(uri)
+        }
+    }
+
+    fun hasCuts(uri: android.net.Uri): Boolean = videosWithCuts.contains(uri)
+}
+
+
 

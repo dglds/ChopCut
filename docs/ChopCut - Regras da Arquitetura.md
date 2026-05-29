@@ -74,15 +74,19 @@ Conflitos conhecidos e resolvidos:
 | `ExtractionStage` | `core/Models.kt` | Estágios de thumbnails: `DECODE, PROCESS, SAVE` (telemetria do teste) |
 | `VideoInfo` | `core/Models.kt` | Metadata de vídeo |
 
-### 5. Build e Execução usando o `./gradle-menu` ou JDK 17 manual
+### 5. Build e Execução via `make` (ou `./gradle-menu`)
 
-Para compilar e gerenciar as tarefas do Gradle com segurança, utilize o painel interativo de alto desempenho (TUI em Go):
+O caminho canônico são os atalhos do `Makefile`, que já exporta o `JAVA_HOME=./jdk17` do projeto:
 
 ```bash
-./gradle-menu               # ✅ RECOMENDADO (TUI Interativa)
+make build      # APK debug (assembleDebug)
+make install    # instala no device
+make run        # instala e abre o app
+make lint       # lintDebug
+make test       # testes instrumentados
 ```
 
-O painel configura automaticamente `JAVA_HOME=./jdk17` e aplica as configurações do arquivo `gradle/scripts/gradle-params.sh`. Para rodar tarefas manualmente no terminal, configure a variável de ambiente `JAVA_HOME` explicitamente:
+Como conveniência opcional há o `./gradle-menu` — um script bash com `select` (zero dependências) que lista as tarefas e delega ao `make`, com atalhos extras de `connect device` e `pair Wi-Fi` via adb. Para rodar `gradlew` na mão, defina o `JAVA_HOME` explicitamente:
 
 ```bash
 JAVA_HOME=./jdk17 ./gradlew assembleDebug
@@ -103,7 +107,7 @@ SHA-1 dos padrões (ver CLAUDE.md para detalhes completos):
 ## 🧪 Testes
 
 ```bash
-# Iniciar painel de tarefas Gradle (TUI Go)
+# Menu interativo de tarefas (bash select, opcional)
 ./gradle-menu
 
 # Ou build manual do APK debug

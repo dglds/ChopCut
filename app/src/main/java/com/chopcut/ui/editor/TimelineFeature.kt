@@ -1,6 +1,7 @@
 package com.chopcut
 
 import android.app.Application
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -46,6 +47,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -72,6 +75,13 @@ data class MarkerInterval(
     val endMs: Long
 )
 
+sealed class ExportUiState {
+    data object Idle : ExportUiState()
+    data object Exporting : ExportUiState()
+    data class Success(val shareUri: Uri) : ExportUiState()
+    data class Error(val message: String) : ExportUiState()
+}
+
 class TimelineViewModel(
     application: Application,
     private val videoUri: Uri?
@@ -94,6 +104,14 @@ class TimelineViewModel(
 
     private val _thumbBitmaps = MutableStateFlow<Map<Int, Bitmap>>(emptyMap())
     val thumbBitmaps: StateFlow<Map<Int, Bitmap>> = _thumbBitmaps.asStateFlow()
+
+    private val _isPreviewMode = MutableStateFlow(false)
+    val isPreviewMode: StateFlow<Boolean> = _isPreviewMode.asStateFlow()
+
+    private val _exportState = MutableStateFlow<ExportUiState>(ExportUiState.Idle)
+    val exportState: StateFlow<ExportUiState> = _exportState.asStateFlow()
+
+    private val videoRepository = VideoRepository(application)
 
     private val _videoAr = MutableStateFlow(16f / 9f)
     val aspectRatio: StateFlow<Float> = _videoAr.asStateFlow()
@@ -126,7 +144,7 @@ class TimelineViewModel(
             }
 
             viewModelScope.launch {
-                val repository = VideoRepository(application)
+                val repository = videoRepository
                 repository.getMetadata(videoUri)?.let { info ->
                     _durationMs.value = info.durationMs
                     _videoAr.value = info.aspectRatio
@@ -167,7 +185,18 @@ class TimelineViewModel(
                 while (true) {
                     val player = exoPlayer
                     if (player != null && player.isPlaying) {
-                        _currentPositionMs.value = player.currentPosition
+                        val currentPos = player.currentPosition
+                        if (_isPreviewMode.value) {
+                            val nextPos = checkAndSkipIntervals(currentPos)
+                            if (nextPos != currentPos) {
+                                player.seekTo(nextPos)
+                                _currentPositionMs.value = nextPos
+                            } else {
+                                _currentPositionMs.value = currentPos
+                            }
+                        } else {
+                            _currentPositionMs.value = currentPos
+                        }
                     }
                     delay(16)
                 }
@@ -263,9 +292,85 @@ class TimelineViewModel(
     }
 
     fun updatePosition(ms: Long) {
-        val targetPos = ms.coerceIn(0L, _durationMs.value)
+        var targetPos = ms.coerceIn(0L, _durationMs.value)
+        if (_isPreviewMode.value) {
+            targetPos = checkAndSkipIntervals(targetPos)
+        }
         _currentPositionMs.value = targetPos
         exoPlayer?.seekTo(targetPos)
+    }
+
+    fun setPreviewMode(enabled: Boolean) {
+        _isPreviewMode.value = enabled
+        if (enabled) {
+            val nextPos = checkAndSkipIntervals(_currentPositionMs.value)
+            if (nextPos != _currentPositionMs.value) {
+                updatePosition(nextPos)
+            }
+        }
+    }
+
+    fun exportCuts() {
+        val uri = videoUri ?: return
+        val intervals = _markerIntervals.value
+        if (intervals.isEmpty()) return
+
+        val trimPairs = intervals.map { it.startMs to it.endMs }
+        val keepRanges = RangeUtils.calculateKeepRanges(trimPairs, _durationMs.value)
+        if (keepRanges.isEmpty()) {
+            _exportState.value = ExportUiState.Error("Os cortes cobrem o vídeo inteiro — não sobrou nada para exportar.")
+            return
+        }
+
+        _exportState.value = ExportUiState.Exporting
+        viewModelScope.launch {
+            val pipeline = CopyPipeline(getApplication<Application>(), videoRepository)
+            pipeline.trim(uri, keepRanges).collect { result ->
+                result.fold(
+                    onSuccess = { file ->
+                        try {
+                            val baseName = FileNameUtils.extractBaseNameFromUri(uri)
+                            val stamp = java.text.SimpleDateFormat("mmss", java.util.Locale.US)
+                                .format(java.util.Date())
+                            videoRepository.saveToGallery(file, "${baseName}_chopcut_$stamp.mp4")
+                            val shareUri = FileProvider.getUriForFile(
+                                getApplication<Application>(),
+                                "com.chopcut.fileprovider",
+                                file
+                            )
+                            _exportState.value = ExportUiState.Success(shareUri)
+                        } catch (e: Exception) {
+                            _exportState.value = ExportUiState.Error(e.message ?: "Falha ao salvar o vídeo")
+                        }
+                    },
+                    onFailure = { e ->
+                        _exportState.value = ExportUiState.Error(
+                            (e as? ChopCutException)?.userMessage ?: e.message ?: "Falha ao recortar o vídeo"
+                        )
+                    }
+                )
+            }
+        }
+    }
+
+    fun resetExportState() {
+        _exportState.value = ExportUiState.Idle
+    }
+
+    fun checkAndSkipIntervals(positionMs: Long): Long {
+        var current = positionMs
+        var skipped = true
+        while (skipped) {
+            skipped = false
+            for (interval in _markerIntervals.value) {
+                if (current >= interval.startMs && current < interval.endMs) {
+                    current = interval.endMs
+                    skipped = true
+                    break
+                }
+            }
+        }
+        return current
     }
 
     fun toggleMarker(currentPositionMs: Long) {
@@ -293,6 +398,9 @@ class TimelineViewModel(
     fun deleteInterval(intervalId: Int) {
         _markerIntervals.value = _markerIntervals.value.filter { it.id != intervalId }
         _markerIntervals.value = reindexIntervals(_markerIntervals.value)
+        if (_markerIntervals.value.isEmpty()) {
+            setPreviewMode(false)
+        }
     }
 
     private fun reindexIntervals(list: List<MarkerInterval>): List<MarkerInterval> {
@@ -396,6 +504,11 @@ fun TimelineScreen(
     val videoHeight  by viewModel.videoHeight.collectAsStateWithLifecycle()
     val thumbBitmaps by viewModel.thumbBitmaps.collectAsStateWithLifecycle()
 
+    val isPreviewMode by viewModel.isPreviewMode.collectAsStateWithLifecycle()
+    val exportState by viewModel.exportState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var showConfirmationDialog by remember { mutableStateOf(false) }
+
     // Target position para suavização manual de scrubbing
     var targetPositionMs by remember { mutableStateOf(currentPositionMs.toFloat()) }
 
@@ -414,7 +527,7 @@ fun TimelineScreen(
     }
 
     // Loop de animação precisa de 60 FPS usando withFrameNanos (apenas quando não usamos ExoPlayer real)
-    LaunchedEffect(isPlaying) {
+    LaunchedEffect(isPlaying, isPreviewMode) {
         if (isPlaying && viewModel.exoPlayer == null) {
             var lastNanos = System.nanoTime()
             var accumulatedMs = currentPositionMs.toFloat()
@@ -425,6 +538,12 @@ fun TimelineScreen(
                     lastNanos = nanos
 
                     accumulatedMs = (accumulatedMs + deltaMs).coerceAtMost(durationMs.toFloat())
+                    if (isPreviewMode) {
+                        val nextMs = viewModel.checkAndSkipIntervals(accumulatedMs.toLong())
+                        if (nextMs != accumulatedMs.toLong()) {
+                            accumulatedMs = nextMs.toFloat()
+                        }
+                    }
                     viewModel.updatePosition(accumulatedMs.toLong())
 
                     if (accumulatedMs >= durationMs) {
@@ -480,6 +599,20 @@ fun TimelineScreen(
                             contentDescription = "Voltar",
                             tint = Color.White
                         )
+                    }
+                },
+                actions = {
+                    if (markerIntervals.isNotEmpty()) {
+                        TextButton(
+                            onClick = { showConfirmationDialog = true }
+                        ) {
+                            Text(
+                                text = "CONFIRMAR",
+                                color = Color(0xFF00E5FF),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -660,12 +793,61 @@ fun TimelineScreen(
                 thumbBitmaps = thumbBitmaps,
                 videoWidth = videoWidth,
                 videoHeight = videoHeight,
+                isPreviewMode = isPreviewMode,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(containerHeight)
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Modo Preview Toggle Switch Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = if (isPreviewMode) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "MODO PREVIEW (PULAR CORTES)",
+                        style = TextStyle(
+                            fontFamily = FontFamily.SansSerif,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isPreviewMode) Color.White else Color.White.copy(alpha = 0.5f)
+                        )
+                    )
+                }
+
+                Switch(
+                    checked = isPreviewMode,
+                    onCheckedChange = { viewModel.setPreviewMode(it) },
+                    enabled = markerIntervals.isNotEmpty(),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.Black,
+                        checkedTrackColor = Color(0xFF00E5FF),
+                        uncheckedThumbColor = Color.White.copy(alpha = 0.6f),
+                        uncheckedTrackColor = Color.White.copy(alpha = 0.15f),
+                        disabledCheckedTrackColor = Color(0xFF00E5FF).copy(alpha = 0.3f),
+                        disabledUncheckedTrackColor = Color.White.copy(alpha = 0.05f)
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Controles de Marcação na parte inferior (centralizado e limpo)
             Row(
@@ -730,6 +912,175 @@ fun TimelineScreen(
             }
         }
     }
+
+    if (showConfirmationDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmationDialog = false },
+            title = {
+                Text(
+                    text = "Confirmar Cortes",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontFamily = FontFamily.SansSerif
+                )
+            },
+            text = {
+                Text(
+                    text = "O vídeo final conterá apenas os trechos que estão fora dos intervalos amarelos.\n\nDeseja exportar agora ou continuar editando?",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontFamily = FontFamily.SansSerif
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showConfirmationDialog = false
+                        viewModel.setPreviewMode(false)
+                        viewModel.exportCuts()
+                    }
+                ) {
+                    Text(
+                        text = "Exportar",
+                        color = Color(0xFF00E5FF),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showConfirmationDialog = false }
+                ) {
+                    Text(
+                        text = "Continuar Editando",
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+            },
+            containerColor = Color(0xFF1E1E1E),
+            textContentColor = Color.White,
+            titleContentColor = Color.White
+        )
+    }
+
+    when (val st = exportState) {
+        ExportUiState.Exporting -> {
+            Dialog(onDismissRequest = { }) {
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFF1E1E1E), RoundedCornerShape(16.dp))
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = Color(0xFF00E5FF))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Recortando…",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        is ExportUiState.Success -> {
+            AlertDialog(
+                onDismissRequest = { },
+                title = {
+                    Text(
+                        text = "Vídeo recortado!",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Salvo na pasta ChopCut.",
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val share = Intent(Intent.ACTION_SEND).apply {
+                                type = "video/*"
+                                putExtra(Intent.EXTRA_STREAM, st.shareUri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(share, "Compartilhar vídeo"))
+                        }
+                    ) {
+                        Text(
+                            text = "Compartilhar",
+                            color = Color(0xFF00E5FF),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.resetExportState()
+                            if (videoUri != null) {
+                                AppliedCutsRegistry.setHasCuts(videoUri, true)
+                            }
+                            onNavigateBack()
+                        }
+                    ) {
+                        Text(
+                            text = "Concluir",
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                },
+                containerColor = Color(0xFF1E1E1E),
+                textContentColor = Color.White,
+                titleContentColor = Color.White
+            )
+        }
+
+        is ExportUiState.Error -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.resetExportState() },
+                title = {
+                    Text(
+                        text = "Falha ao recortar",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                },
+                text = {
+                    Text(
+                        text = st.message,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.exportCuts() }) {
+                        Text(
+                            text = "Tentar novamente",
+                            color = Color(0xFF00E5FF),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.resetExportState() }) {
+                        Text(
+                            text = "Fechar",
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                },
+                containerColor = Color(0xFF1E1E1E),
+                textContentColor = Color.White,
+                titleContentColor = Color.White
+            )
+        }
+
+        ExportUiState.Idle -> { }
+    }
 }
 
 
@@ -747,6 +1098,7 @@ fun Timeline(
     thumbBitmaps: Map<Int, Bitmap> = emptyMap(),
     videoWidth: Int = 1920,
     videoHeight: Int = 1080,
+    isPreviewMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -1041,37 +1393,39 @@ fun Timeline(
         val buttonSizePx = with(density) { buttonSizeDp.toPx() }
         val centerYPx = verticalOffsetPx + timelineTopPx + thumbHeightPx / 2f
 
-        markerIntervals.forEach { interval ->
-            val startX = centerX + (interval.startMs.toFloat() / durationMs.toFloat()) * totalTimelineWidthPx - scrollOffsetPx
-            val endX = centerX + (interval.endMs.toFloat() / durationMs.toFloat()) * totalTimelineWidthPx - scrollOffsetPx
-            val drawWidth = endX - startX
-            val centerXPx = startX + drawWidth / 2f
+        if (!isPreviewMode) {
+            markerIntervals.forEach { interval ->
+                val startX = centerX + (interval.startMs.toFloat() / durationMs.toFloat()) * totalTimelineWidthPx - scrollOffsetPx
+                val endX = centerX + (interval.endMs.toFloat() / durationMs.toFloat()) * totalTimelineWidthPx - scrollOffsetPx
+                val drawWidth = endX - startX
+                val centerXPx = startX + drawWidth / 2f
 
-            // Only display delete button if:
-            // 1. Center of the segment is on screen
-            // 2. Segment width is at least the button size plus a tiny margin
-            val isButtonVisible = centerXPx >= buttonSizePx / 2f && centerXPx <= widthPx - buttonSizePx / 2f
-            val isSegmentWideEnough = drawWidth >= buttonSizePx
+                // Only display delete button if:
+                // 1. Center of the segment is on screen
+                // 2. Segment width is at least the button size plus a tiny margin
+                val isButtonVisible = centerXPx >= buttonSizePx / 2f && centerXPx <= widthPx - buttonSizePx / 2f
+                val isSegmentWideEnough = drawWidth >= buttonSizePx
 
-            if (isButtonVisible && isSegmentWideEnough) {
-                val xOffsetDp = with(density) { (centerXPx - buttonSizePx / 2f).toDp() }
-                val yOffsetDp = with(density) { (centerYPx - buttonSizePx / 2f).toDp() }
+                if (isButtonVisible && isSegmentWideEnough) {
+                    val xOffsetDp = with(density) { (centerXPx - buttonSizePx / 2f).toDp() }
+                    val yOffsetDp = with(density) { (centerYPx - buttonSizePx / 2f).toDp() }
 
-                Box(
-                    modifier = Modifier
-                        .offset(x = xOffsetDp, y = yOffsetDp)
-                        .size(buttonSizeDp)
-                        .clip(CircleShape)
-                        .background(Color.Red)
-                        .clickable { onDeleteInterval(interval.id) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Excluir marcação",
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .offset(x = xOffsetDp, y = yOffsetDp)
+                            .size(buttonSizeDp)
+                            .clip(CircleShape)
+                            .background(Color.Red)
+                            .clickable { onDeleteInterval(interval.id) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Excluir marcação",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
         }

@@ -34,7 +34,7 @@ JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pandroid.testInstrumentationRu
 
 ### Flags de performance e o painel TUI opcional
 
-As flags de performance (parallel, caching, daemon) vivem em **`gradle.properties`** — sempre-ligadas, sem matriz de toggles em script. Existe ainda um painel TUI em Go (`./gradle-menu`, fontes em `gradle/scripts/menu-go/`) como conveniência opcional para quem prefere um dashboard com lista de devices e log ao vivo; **não é o caminho canônico** e não é necessário para nenhuma tarefa.
+As flags de performance (parallel, caching, daemon) vivem em **`gradle.properties`** — sempre-ligadas, sem matriz de toggles em script. Existe ainda um menu interativo opcional (`./gradle-menu`) — um script bash com `select` (zero dependências) que lista as tarefas e delega ao `make`, mais atalhos de `connect device`/`pair Wi-Fi` via adb; **não é o caminho canônico** e não é necessário para nenhuma tarefa.
 
 ## Architecture
 
