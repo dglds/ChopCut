@@ -43,7 +43,7 @@ O projeto utiliza um SDK do Android local e exige o **JDK 17** fornecido na past
 Antes de realizar qualquer alteração, você **DEVE** seguir o protocolo oficial de gerenciamento de sessões:
 
 1. **Protocolo de Sessão:** consulte o arquivo [SESSION_PROTOCOL.md](file:///home/diego/Android/ChopCut/SESSION_PROTOCOL.md) para saber como iniciar, executar e finalizar sua sessão de trabalho (incluindo o preenchimento obrigatório da nota de progresso `sessions/session#NN.md`).
-2. **Regras da Arquitetura:** consulte o arquivo [ChopCut - Regras da Arquitetura.md](file:///home/diego/Android/ChopCut/docs/ChopCut%20-%20Regras%20da%20Arquitetura.md) para respeitar a estrutura de 16 arquivos e a inegociável regra de **package único** (`com.chopcut`), que proíbe imports internos.
+2. **Regras da Arquitetura:** consulte o arquivo [ChopCut - Regras da Arquitetura.md](file:///home/diego/Android/ChopCut/docs/ChopCut%20-%20Regras%20da%20Arquitetura.md) para respeitar a estrutura de arquivos (inventário vivo em `docs/STRUCTURE.generated.md`, auto-gerado) e a inegociável regra de **package único** (`com.chopcut`), que proíbe imports internos.
 3. **Padrão de Commits:** crie commits modulares separados por escopo (ex: `refactor(editor): ...`, `fix(home): ...`, `docs: ...`).
 
 > **Skill `/desafiar-plano`:** antes de implementar uma mudança não trivial, estressa o plano contra estas regras (16 arquivos, package único, nomes sem duplicata, padrões de Canvas) e contra o backlog da última `sessions/session#NN.md`, afinando a terminologia para os nomes canônicos do projeto.

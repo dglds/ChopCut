@@ -2,7 +2,11 @@
 
 > Documento de referência rápida para manter o projeto funcionando sem quebrar.
 
-## 🏗️ Estrutura de Arquivos (16 no total)
+## 🏗️ Estrutura de Arquivos
+
+> **Inventário ao vivo (contagem de arquivos/tipos/funções):** [STRUCTURE.generated.md](./STRUCTURE.generated.md) — gerado automaticamente por `gradle/scripts/scan-structure.sh` no commit. **Não conte arquivos na mão; confira o gerado.**
+>
+> O mapa abaixo é a referência *curada* (o que cada arquivo é PARA) e o "onde adicionar cada coisa". Mudou um arquivo? O inventário gerado se atualiza sozinho; só ajuste este mapa se o *propósito* de um arquivo mudar. Para análise de símbolos/dependências use o **CodeGraph**.
 
 ```
 com.chopcut/                          # package único para todos os arquivos
@@ -18,9 +22,6 @@ com.chopcut/                          # package único para todos os arquivos
 ├── data/
 │   ├── ThumbnailExtraction.kt        # ThumbnailExtraction, ExtractionProgressState, ExtractionResult
 │   └── VideoEngine.kt                # TransformerPipeline, CopyPipeline, VideoRepository
-├── graphics/
-│   ├── egl/SurfaceBridge.kt          # (standalone)
-│   └── gl/GLRenderer.kt              # (standalone)
 ├── ui/
 │   ├── SharedComponents.kt           # Botões, FABs, Cards, Loading, ErrorState, Overlays
 │   ├── home/
@@ -46,9 +47,9 @@ val info = VideoInfo(...)    // definido em core/Models.kt
 ErrorState(...)              // definido em ui/SharedComponents.kt
 ```
 
-### 2. Só adicione código novo dentro dos 16 arquivos
+### 2. Só adicione código novo dentro dos arquivos existentes
 
-Qualquer nova funcionalidade deve ser adicionada a um dos arquivos existentes. Não crie novos arquivos .kt.
+Qualquer nova funcionalidade deve ser adicionada a um dos arquivos existentes. Não crie novos arquivos .kt (a contagem atual está em [STRUCTURE.generated.md](./STRUCTURE.generated.md)).
 
 | Se for... | Adicione em... |
 |-----------|---------------|
