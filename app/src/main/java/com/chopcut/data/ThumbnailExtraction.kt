@@ -158,25 +158,29 @@ class ThumbnailExtraction(private val context: Context) {
                         extractBaseW to extractBaseH
                     }
 
-                    val hasRotation = videoInfo.rotation == 90 || videoInfo.rotation == 270
-                    val (reqW, reqH) = if (hasRotation) extractH to extractW else extractW to extractH
                     val rawFrame = retriever.getScaledFrameAtTime(
                         positionMs * 1000L,
                         MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        reqW,
-                        reqH
+                        extractW,
+                        extractH
                     )
 
-                    val retrieverAlreadyRotated = hasRotation && rawFrame != null &&
-                        rawFrame.width == extractW && rawFrame.height == extractH
-                    val orientedFrame = if (rawFrame != null && hasRotation && !retrieverAlreadyRotated) {
-                        val matrix = android.graphics.Matrix()
-                        matrix.postRotate(videoInfo.rotation.toFloat())
-                        val rotated = Bitmap.createBitmap(rawFrame, 0, 0, rawFrame.width, rawFrame.height, matrix, true)
-                        if (rotated != rawFrame) rawFrame.recycle()
-                        rotated
+                    val orientedFrame = if (rawFrame != null) {
+                        val rotation = videoInfo.rotation
+                        val needsRotation = rotation == 90 || rotation == 270
+                        val isStillLandscape = rawFrame.width > rawFrame.height && extractW < extractH
+                        
+                        if (needsRotation && isStillLandscape) {
+                            val matrix = android.graphics.Matrix()
+                            matrix.postRotate(rotation.toFloat())
+                            val rotated = Bitmap.createBitmap(rawFrame, 0, 0, rawFrame.width, rawFrame.height, matrix, true)
+                            if (rotated != rawFrame) rawFrame.recycle()
+                            rotated
+                        } else {
+                            rawFrame
+                        }
                     } else {
-                        rawFrame
+                        null
                     }
 
                     val bitmap = when {
