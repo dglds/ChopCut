@@ -756,13 +756,20 @@ fun Timeline(
             isAntiAlias = true
         }
     }
+    // Pré-alocações reutilizadas no draw scope (evita alocação por frame a 60Hz)
+    val dstRect = remember { android.graphics.Rect() }
+    val labelStyle = remember { TextStyle(color = Color.White.copy(alpha = 0.6f), fontSize = 10.sp, fontFamily = FontFamily.Monospace) }
+    val gridLine = remember { Color.White.copy(alpha = 0.15f) }
+    val tickStrong = remember { Color.White.copy(alpha = 0.4f) }
+    val tickWeak = remember { Color.White.copy(alpha = 0.2f) }
+    val markerFill = remember { Color.Yellow.copy(alpha = 0.22f) }
+    val activeFill = remember { Color.Yellow.copy(alpha = 0.15f) }
+    val activeBorder = remember { Color.Yellow.copy(alpha = 0.7f) }
 
     val targetPositionState = rememberUpdatedState(targetPositionMs)
     val onTargetPositionChangedState = rememberUpdatedState(onTargetPositionChanged)
     val sensitivityState = rememberUpdatedState(sensitivity)
 
-    // @violation:canvas-isolated — playheadColor lido dentro do Canvas principal que renderiza thumbnails e régua;
-    // invalida TODO o Canvas a cada 250ms. Solução: extrair playhead para Canvas separado sobreposto via BoxWithConstraints.
     val isRecording = activeMarkerStartMs != null
     val infiniteTransition = rememberInfiniteTransition(label = "playheadTransition")
     val playheadColor by if (isRecording) {
@@ -788,6 +795,10 @@ fun Timeline(
     val tickGapPx = with(density) { 4.dp.toPx() }
 
     val totalSeconds = (durationMs / 1000f).toInt().coerceAtLeast(1)
+    // Labels "${i}s" são estáveis — medir 1x por totalSeconds, não por frame
+    val tickLabels = remember(totalSeconds, labelStyle) {
+        (0..totalSeconds).map { textMeasurer.measure(text = "${it}s", style = labelStyle) }
+    }
 
     BoxWithConstraints(modifier = modifier) {
         val widthPx = constraints.maxWidth.toFloat()
@@ -834,7 +845,7 @@ fun Timeline(
             
             // 1. Draw top line for ticks reference (with gap offset)
             drawLine(
-                color = Color.White.copy(alpha = 0.15f),
+                color = gridLine,
                 start = Offset(0f, canvasVerticalOffsetPx + timelineTopPx - tickGapPx),
                 end = Offset(width, canvasVerticalOffsetPx + timelineTopPx - tickGapPx),
                 strokeWidth = 1f
@@ -850,13 +861,13 @@ fun Timeline(
                     val bitmap = thumbBitmaps[i]
                     if (bitmap != null && !bitmap.isRecycled) {
                         // Draw real bitmap thumbnail
-                        val dstRect = android.graphics.Rect(
+                        dstRect.set(
                             thumbLeft.toInt(),
                             (canvasVerticalOffsetPx + timelineTopPx).toInt(),
                             thumbRight.toInt(),
                             (canvasVerticalOffsetPx + timelineTopPx + thumbHeightPx).toInt()
                         )
-                        // Paint prealocado fora do escopo do Canvas para evitar jank por Garbage Collection
+                        // Paint e Rect prealocados fora do escopo do Canvas para evitar jank por GC
                         drawIntoCanvas { canvas ->
                             canvas.nativeCanvas.drawBitmap(bitmap, null, dstRect, thumbnailPaint)
                         }
@@ -886,7 +897,7 @@ fun Timeline(
                     
                     // Draw thin thumbnail border
                     drawRect(
-                        color = Color.White.copy(alpha = 0.15f),
+                        color = gridLine,
                         topLeft = Offset(thumbLeft, canvasVerticalOffsetPx + timelineTopPx),
                         size = Size(thumbWidthPx, thumbHeightPx),
                         style = Stroke(width = with(density) { 0.5.dp.toPx() })
@@ -898,7 +909,7 @@ fun Timeline(
                 if (tickX >= -10f && tickX <= width + 10f) {
                     // Standard second tick
                     drawLine(
-                        color = Color.White.copy(alpha = 0.4f),
+                        color = tickStrong,
                         start = Offset(tickX, canvasVerticalOffsetPx + timelineTopPx - tickGapPx - tickHeightPx),
                         end = Offset(tickX, canvasVerticalOffsetPx + timelineTopPx - tickGapPx),
                         strokeWidth = with(density) { 1.dp.toPx() }
@@ -908,25 +919,18 @@ fun Timeline(
                     val halfTickX = tickX + (thumbWidthPx / 2f)
                     if (halfTickX >= -10f && halfTickX <= width + 10f && i < totalSeconds) {
                         drawLine(
-                            color = Color.White.copy(alpha = 0.2f),
+                            color = tickWeak,
                             start = Offset(halfTickX, canvasVerticalOffsetPx + timelineTopPx - tickGapPx - (tickHeightPx / 2f)),
                             end = Offset(halfTickX, canvasVerticalOffsetPx + timelineTopPx - tickGapPx),
                             strokeWidth = with(density) { 0.5.dp.toPx() }
                         )
                     }
                     
-                    // Ticks Label (Roboto Mono or standard Monospace)
-                    val textLayoutResult = textMeasurer.measure(
-                        text = "${i}s",
-                        style = TextStyle(
-                            color = Color.White.copy(alpha = 0.6f),
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    )
+                    // Label pré-medido (tickLabels) — sem measure()/TextStyle/Color.copy por frame
+                    val tickLabel = tickLabels[i]
                     drawText(
-                        textLayoutResult = textLayoutResult,
-                        topLeft = Offset(tickX - textLayoutResult.size.width / 2f, canvasVerticalOffsetPx + 2.dp.toPx())
+                        textLayoutResult = tickLabel,
+                        topLeft = Offset(tickX - tickLabel.size.width / 2f, canvasVerticalOffsetPx + 2.dp.toPx())
                     )
                 }
             }
@@ -940,7 +944,7 @@ fun Timeline(
                 if (endX >= 0f && startX <= width) {
                     // Fill semi-transparent yellow
                     drawRect(
-                        color = Color.Yellow.copy(alpha = 0.22f),
+                        color = markerFill,
                         topLeft = Offset(startX, canvasVerticalOffsetPx + timelineTopPx),
                         size = Size(drawWidth, thumbHeightPx)
                     )
@@ -973,20 +977,20 @@ fun Timeline(
                 if (endX >= 0f && startX <= width) {
                     // Fill semi-transparent active yellow
                     drawRect(
-                        color = Color.Yellow.copy(alpha = 0.15f),
+                        color = activeFill,
                         topLeft = Offset(startX, canvasVerticalOffsetPx + timelineTopPx),
                         size = Size(drawWidth, thumbHeightPx)
                     )
                     
                     // Active solid borders
                     drawLine(
-                        color = Color.Yellow.copy(alpha = 0.7f),
+                        color = activeBorder,
                         start = Offset(startX, canvasVerticalOffsetPx + timelineTopPx),
                         end = Offset(startX, canvasVerticalOffsetPx + timelineTopPx + thumbHeightPx),
                         strokeWidth = with(density) { 1.5.dp.toPx() }
                     )
                     drawLine(
-                        color = Color.Yellow.copy(alpha = 0.7f),
+                        color = activeBorder,
                         start = Offset(endX, canvasVerticalOffsetPx + timelineTopPx),
                         end = Offset(endX, canvasVerticalOffsetPx + timelineTopPx + thumbHeightPx),
                         strokeWidth = with(density) { 1.5.dp.toPx() }
