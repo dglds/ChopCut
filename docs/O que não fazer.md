@@ -162,3 +162,26 @@
 
 ### ❌ NÃO extraia frames sem limpar o diretório antes
 * **O Motivo:** Se a extração anterior tinha 120 frames e a nova tem 60, os arquivos `frame_00061.jpg` a `frame_00120.jpg` permanecem órfãos. Isso faz o TimelineV2ViewModel carregar bitmaps antigos junto com os novos. Sempre faça `outputDir.deleteRecursively()` ou `outputDir.listFiles()?.forEach { it.delete() }` antes de extrair.
+
+---
+
+## 🎬 7. Trim sem re-encode (MediaMuxer / CopyPipeline)
+
+### ❌ NÃO reconstrua o MediaFormat da track de vídeo ao copiar sem re-encode
+* **O Motivo:** Copiar só `width/height/mime/bitrate/...` para um `MediaFormat()` novo **omite o codec-specific data** (`csd-0`/`csd-1` = SPS/PPS do H.264/HEVC). O `moov` sai sem config de codec e o MP4 **não abre em player nenhum nem gera thumbnail** (ffprobe mostra `codec_name=unknown`, `0x0`). Foi exatamente o bug do `CopyPipeline.trim`.
+* **O que não fazer:**
+  ```kotlin
+  // 🚫 NUNCA FAÇA ISSO (perde o csd → arquivo inválido)
+  val out = MediaFormat()
+  out.setString(KEY_MIME, videoFormat.getString(KEY_MIME)); /* width/height/... */
+  out.setInteger(KEY_ROTATION, rotation)
+  muxer.addTrack(out)
+
+  // ✅ FAÇA ISSO: use o format original do extractor (já traz o csd) e
+  // aplique rotação via setOrientationHint
+  muxer.setOrientationHint(rotation)
+  muxer.addTrack(videoFormat)
+  ```
+
+### ❌ NÃO engula a exceção de `muxer.stop()`
+* **O Motivo:** `stop()` finaliza/escreve o `moov`. Se falhar e a exceção for engolida (`try { muxer.stop() } catch {}`), você reporta **sucesso sobre um arquivo corrompido**. Deixe propagar para o tratamento de erro.
