@@ -18,7 +18,8 @@
 
 ## 🧭 Decisões recentes
 
-- **Jank da timeline corrigido (`dba4784`) e VALIDADO em device real (Galaxy A15, Android 16):** Rect de bitmap reutilizado via `.set()`, labels de tick pré-medidos, cores fixas em `remember`. Medição `gfxinfo` com thumbnails reais — reprodução (60Hz): **0,13% janky, 0 missed vsync**; scroll: **0,00% janky, 0 slow UI thread**. Caminho `drawBitmap`/`dstRect` confirmado fluido.
+- **Jank da timeline corrigido (`dba4784`) e VALIDADO em device real (Galaxy A15, Android 16):** Rect de bitmap reutilizado via `.set()`, labels de tick pré-medidos, cores fixas em `remember`. Medição `gfxinfo` com thumbnails reais (reprodução, 60Hz): **~0,15% janky, 0 missed vsync**. Caminho `drawBitmap`/`dstRect` confirmado fluido.
+- **Teste de jank automatizado:** `gradle/scripts/run-jank-test.sh` faz o fluxo inteiro (adb Wi-Fi → install → navega a UI por texto/uiautomator → "Extrair Frames" → mede gfxinfo na reprodução → PASS/FAIL). A skill `/rodar-app` aponta para ele. Regressão de fluidez agora é checável por comando, não só por inspeção visual.
 
 - **Tooling de IA adicionado:** skills de projeto `/desafiar-plano`, `/revisar-canvas`, `/rodar-app` (em `.claude/skills/`, versionadas); allowlist read-only (CodeGraph + adb + build) em `.claude/settings.json`.
 - **Estrutura agora é auto-inventariada:** `gradle/scripts/scan-structure.sh` gera `docs/STRUCTURE.generated.md` e roda no pré-commit (`.githooks/`). Docs deixaram de manter a contagem de arquivos na mão (a antiga "16" estava defasada — real são 14, `graphics/` foi arquivado).
