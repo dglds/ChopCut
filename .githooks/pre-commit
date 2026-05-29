@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#
+# pre-commit — mantém docs/STRUCTURE.generated.md em sincronia com o código.
+#
+# Regenera o inventário de estrutura e, se ele mudou, o adiciona ao commit.
+# Assim o doc nunca diverge do código commitado, sem manutenção manual.
+#
+# Ativação (uma vez por clone):  git config core.hooksPath .githooks
+#
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+SCAN="$REPO_ROOT/gradle/scripts/scan-structure.sh"
+
+# Se o scanner não existir/falhar, não bloqueia o commit.
+[ -x "$SCAN" ] || exit 0
+
+"$SCAN" >/dev/null 2>&1 || exit 0
+git add "$REPO_ROOT/docs/STRUCTURE.generated.md" 2>/dev/null || true
+
+exit 0
