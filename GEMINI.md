@@ -36,7 +36,7 @@ Este projeto requer o uso do **JDK 17** local (localizado na pasta `./jdk17`) e 
 
 Antes de planejar ou realizar alterações estruturais, siga rigorosamente os seguintes protocolos:
 
-1. **Protocolo de Sessão:** leia o arquivo [SESSION_PROTOCOL.md](file:///home/diego/Android/ChopCut/SESSION_PROTOCOL.md) para alinhar-se ao protocolo de inicialização de sessão, execução e geração do arquivo de fechamento de sessão `docs/session#NN.md`.
+1. **Protocolo de Sessão:** leia o arquivo [SESSION_PROTOCOL.md](file:///home/diego/Android/ChopCut/SESSION_PROTOCOL.md) para alinhar-se ao protocolo de inicialização de sessão (utilizando `/start-session`), execução e geração do arquivo de fechamento de sessão `sessions/session#NN-objetivo-da-session.md` (utilizando `/finish-session`).
 2. **Regras da Arquitetura:** leia o arquivo [ChopCut - Regras da Arquitetura.md](file:///home/diego/Android/ChopCut/docs/ChopCut%20-%20Regras%20da%20Arquitetura.md) para garantir total conformidade com a estrutura enxuta de **16 arquivos** e a regra inegociável de **package único** (`com.chopcut`), que proíbe qualquer import interno.
 3. **Estilo de Mensagem e Commits:** faça commits atômicos baseados em escopo (ex: `refactor(editor): ...`, `fix(home): ...`, `docs: ...`).
 

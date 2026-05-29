@@ -15,7 +15,7 @@ Sempre começe lendo estes arquivos na ordem:
 
 1. `CLAUDE.md` — Instruções gerais do projeto, padrões de performance, comandos
 2. `docs/ChopCut - Regras da Arquitetura.md` — Onde cada coisa está, regras críticas
-3. `docs/session#01.md` ou o último `session#NN.md` — O que foi feito na sessão anterior
+3. `sessions/session#01.md` ou o último `sessions/session#NN-objetivo-da-session.md` — O que foi feito na sessão anterior
 4. `errors.json` — Registro automatizado de contagem e logs detalhados de falhas de build
 
 ### 2. Registro de Erros Automatizado (`errors.json`)
@@ -45,16 +45,7 @@ Siga o padrão de commits da Session #01:
 - Commite com base nas alterações realizadas no codigo durante da sessao atual.
 
 ### 4. No final de cada sessão
-Crie um arquivo `docs/session-<session-id>.md` (onde o id pode ser qualquer identificador próprio como `session#03`):
-- Identificação (nome do modelo, ou qualquer identificador de modelo de IA)
-- Data e objetivo
-- O que foi feito 
-- Resultados (tabela antes/depois)
-- Comandos úteis
-- Pendências
-- Uso total dos token e tools utilizadas
-- O que mais consumiu tokens
-- Sugestoes futuras para economia de tokens
+Crie um arquivo `sessions/session#NN-objetivo-da-session.md` seguindo rigorosamente o protocolo descrito em [SESSION_PROTOCOL.md](file:///home/diego/Android/ChopCut/SESSION_PROTOCOL.md) ou executando a skill `/finish-session`.
 
 > [!IMPORTANT]
 > **Manutenção das Regras de Arquitetura:**
@@ -97,12 +88,13 @@ Como tudo está no mesmo package, não pode haver duas classes, objetos ou enums
 | `PreloadStage` | `ui/home/HomeFeature.kt` | `Starting, Validating, ExtractingAudio, ExtractingThumbnails, Ready` |
 | `WaveformData` | `core/Models.kt` | 2 params: `(amplitudes, durationMs)` |
 
-### Build e Tarefas com `./gradle-menu` (TUI Go)
-Para compilar, instalar e depurar com segurança e facilidade, utilize o painel interativo em Go:
+### Build e Tarefas com `make` (ou `./gradle-menu`)
+O caminho canônico são os atalhos do `Makefile`, que já exporta o `JAVA_HOME=./jdk17`:
 ```bash
-./gradle-menu
+make build      # APK debug      make install    # instala no device
+make run        # instala e abre  make lint / make test
 ```
-Esse painel configura `JAVA_HOME=./jdk17` automaticamente e consome os parâmetros em `gradle/scripts/gradle-params.sh`. Para tarefas manuais no terminal, defina `JAVA_HOME=./jdk17` na frente do comando (ex: `JAVA_HOME=./jdk17 ./gradlew assembleDebug`), caso contrário o build falhará com a versão global do Java do sistema.
+Como conveniência opcional há o `./gradle-menu` — um script bash com `select` (zero dependências) que lista as tarefas e delega ao `make`. Para tarefas manuais no terminal sem o `make`, defina `JAVA_HOME=./jdk17` na frente do comando (ex: `JAVA_HOME=./jdk17 ./gradlew assembleDebug`), caso contrário o build falhará com a versão global do Java do sistema.
 
 ---## Arquitetura atual (20 arquivos)
 
@@ -155,7 +147,7 @@ app/src/main/java/com/chopcut/
 ## Comandos
 
 ```bash
-./gradle-menu                                # Painel interativo de tarefas (TUI Go)
+./gradle-menu                                # Menu interativo de tarefas (bash select, opcional)
 JAVA_HOME=./jdk17 ./gradlew assembleDebug    # Build manual do APK debug
 JAVA_HOME=./jdk17 ./gradlew installDebug     # Instalar no dispositivo (manual)
 JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest # Rodar todos os testes (manual)

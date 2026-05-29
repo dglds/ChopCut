@@ -16,6 +16,8 @@ Guia de início e finalização de sessões para IA e devs. **Princípio: fonte 
 
 ## 🚀 1. Início de Sessão
 
+Para iniciar uma nova sessão, você pode executar o hook/skill **/start-session**. Este ritual garante o alinhamento correto:
+
 1. **Leia o [STATE.md](file:///home/diego/Android/ChopCut/STATE.md)** — é o único arquivo que dá o estado atual (backlog + known-issues + últimas decisões). Não reconstrua isso lendo notas de sessão antigas.
 2. **Confira o estado da estrutura, não reconte:** se precisar saber quantos/quais arquivos existem, abra `docs/STRUCTURE.generated.md`. Para qualquer pergunta sobre *onde mora* um símbolo, pergunte ao **CodeGraph**.
 3. **Compile só se for mexer em código** (não é ritual): `make compile` (ou `JAVA_HOME=./jdk17 ./gradlew compileDebugKotlin`).
@@ -33,18 +35,18 @@ As regras (package único, sem novos arquivos, sem nomes duplicados, commits mod
 
 ## 🏁 3. Finalização de Sessão
 
-A ordem é **Memory-first**: a lição que evita o próximo erro é capturada *antes* do changelog, porque é o que de fato "indexa conhecimento". A nota de sessão é registro para humano, não insumo de contexto da IA.
+Ao encerrar, você deve executar o hook/skill **/finish-session** para automatizar a geração do handoff. A ordem conceitual é **Memory-first**: a lição que evita o próximo erro é capturada *antes* do changelog.
 
 1. **Valide o build:** `make build` (ou `JAVA_HOME=./jdk17 ./gradlew assembleDebug`).
-2. **Capture a lição (Memory-first).** Toda regra do tipo *"não faça X porque Y"* ou decisão não-óbvia vai para a **Memory** (`memory/`, com o **porquê**) ou, se for regra dura de projeto, para [`docs/O que não fazer.md`](file:///home/diego/Android/ChopCut/docs/O%20que%20n%C3%A3o%20fazer.md). **Nunca** deixe a lição só na nota de sessão — ninguém relê 10 narrativas; a Memory carrega sozinha no próximo boot.
-3. **Atualize o [STATE.md](file:///home/diego/Android/ChopCut/STATE.md)** — único dono do estado vivo: backlog (feito/novo), known-issues, decisões. É o handoff para a próxima IA.
+2. **Capture a lição (Memory-first).** Toda regra do tipo *"não faça X porque Y"* ou decisão não-óbvia vai para a **Memory** (`memory/`, com o **porquê**) ou, se for regra dura de projeto, para [`docs/O que não fazer.md`](file:///home/diego/Android/ChopCut/docs/O%20que%20n%C3%A3o%20fazer.md). **Nunca** deixe a lição só na nota de sessão — a Memory carrega sozinha no próximo boot.
+3. **Atualize o [STATE.md](file:///home/diego/Android/ChopCut/STATE.md)** — único dono do estado vivo: backlog (feito/novo), known-issues, decisões.
 4. **Mudou o *propósito* de um arquivo, navegação ou um pipeline central?** Atualize as **Regras da Arquitetura**. (Contagem/inventário NÃO precisa de update manual — o hook regenera `STRUCTURE.generated.md`.)
-5. **Crie a nota** `sessions/session#NN.md` (próximo sequencial) — changelog enxuto append-only, usando o template abaixo.
+5. **Crie a nota** no padrão `sessions/session#NN-objetivo-da-session.md` (onde `#NN` é o próximo sequencial de dois dígitos e `objetivo-da-session` é o objetivo em letras minúsculas com hífens, ex: `sessions/session#13-reestruturar-timeline.md`), usando o template abaixo.
 6. **Commit modular por escopo.** O hook de pré-commit regenera e adiciona `STRUCTURE.generated.md` sozinho.
 
 ---
 
-## 📄 Template — `sessions/session#NN.md`
+## 📄 Template — `sessions/session#NN-objetivo-da-session.md`
 
 Changelog enxuto. O estado *vivo* mora no STATE.md, a lição durável na Memory — a nota só costura a narrativa do "o que e por quê" desta sessão.
 
@@ -69,3 +71,4 @@ Changelog enxuto. O estado *vivo* mora no STATE.md, a lição durável na Memory
 > - **Comandos usados** → estão no `.claude/CLAUDE.md`.
 > - **Tabelas antes/depois, "resultados e impactos", telemetria** → ruído; ninguém relê.
 > - **O backlog inteiro** → mora só no STATE.md; aqui vai só o *delta*.
+

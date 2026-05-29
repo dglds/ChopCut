@@ -59,7 +59,9 @@
   # 🚫 NUNCA FAÇA ISSO (Pode quebrar por incompatibilidade de versão de Java)
   ./gradlew assembleDebug
   
-  # ✅ FAÇA ISSO: use o painel Go centralizador de tarefas ou defina a variável:
+  # ✅ FAÇA ISSO: use o make (já exporta o JAVA_HOME), o menu opcional, ou defina a variável:
+  make build
+  # OU:
   ./gradle-menu
   # OU:
   JAVA_HOME=./jdk17 ./gradlew assembleDebug
@@ -95,7 +97,7 @@
 ## 📝 5. Documentação e Boas Práticas de Trabalho
 
 ### ❌ NÃO finalize uma sessão sem atualizar o histórico de sessões
-* **O Motivo:** A transparência e o histórico estruturado de sessões (arquivos `session#NN.md`) garantem que qualquer IA ou desenvolvedor parceiro saiba exatamente o estado em que o software foi deixado.
+* **O Motivo:** A transparência e o histórico estruturado de sessões (arquivos `session#NN-objetivo-da-session.md`) garantem que qualquer IA ou desenvolvedor parceiro saiba exatamente o estado em que o software foi deixado.
 
 ### ❌ NÃO esqueça de atualizar as Regras da Arquitetura ao fazer mudanças estruturais
 * **O Motivo:** Conforme especificado nas regras do `README.md`, o arquivo `ChopCut - Regras da Arquitetura.md` deve ser mantido sempre 100% atualizado para servir de bússola para o desenvolvimento do projeto.

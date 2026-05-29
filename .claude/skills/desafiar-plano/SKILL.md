@@ -1,6 +1,6 @@
 ---
 name: desafiar-plano
-description: Sessão de interrogatório que estressa um plano de implementação contra as regras reais do ChopCut — estrutura de 16 arquivos, package único, nomes sem duplicata, padrões de performance de Canvas e o backlog da última sessão — antes de escrever código. Afina a terminologia para os nomes canônicos do projeto e atualiza a documentação (sessions/session#NN.md, Regras da Arquitetura) conforme as decisões se firmam. Use ao testar um plano antes de implementar.
+description: Sessão de interrogatório que estressa um plano de implementação contra as regras reais do ChopCut — estrutura de 16 arquivos, package único, nomes sem duplicata, padrões de performance de Canvas e o backlog da última sessão — antes de escrever código. Afina a terminologia para os nomes canônicos do projeto e atualiza a documentação (sessions/session#NN-objetivo-da-session.md, Regras da Arquitetura) conforme as decisões se firmam. Use ao testar um plano antes de implementar.
 ---
 
 <what-to-do>
@@ -21,7 +21,7 @@ Antes e durante o interrogatório, ancore o plano nestes documentos reais (o Cho
 
 - **[docs/ChopCut - Regras da Arquitetura.md](file:///home/diego/Android/ChopCut/docs/ChopCut%20-%20Regras%20da%20Arquitetura.md)** — a estrutura de 16 arquivos, package único, mapa de "onde adicionar cada coisa", conflitos de nome conhecidos.
 - **`CLAUDE.md` → "Padrões críticos de performance"** — os 3 padrões de Canvas.
-- **Última `sessions/session#NN.md`** — o que foi feito por último e o backlog de pendências. Leia a de maior número antes de desafiar o plano; o plano pode colidir com algo já decidido ou já listado.
+- **Última `sessions/session#NN-objetivo-da-session.md`** — o que foi feito por último e o backlog de pendências. Leia a de maior número antes de desafiar o plano; o plano pode colidir com algo já decidido ou já listado.
 - **[SESSION_PROTOCOL.md](file:///home/diego/Android/ChopCut/SESSION_PROTOCOL.md)** — protocolo de início/execução/finalização.
 
 ## Os eixos do interrogatório
@@ -66,7 +66,7 @@ Se o plano renomeia/remove um símbolo ou pipeline, rode `codegraph_impact`/`cod
 
 Conforme as decisões se firmam, registre — não acumule:
 
-- **Decisão de implementação, pendência ou escopo fechado** → anote na `sessions/session#NN.md` da sessão corrente (backlog/decisões), seguindo o SESSION_PROTOCOL.
+- **Decisão de implementação, pendência ou escopo fechado** → anote na `sessions/session#NN-objetivo-da-session.md` da sessão corrente (backlog/decisões), seguindo o SESSION_PROTOCOL.
 - **Mudança de estrutura de arquivos, navegação, ViewModels ou um novo conflito de nome** → atualize imediatamente a **Regras da Arquitetura.md** (a própria regra exige isso na finalização de sessão).
 
 ## Sinalize mudanças de arquitetura com moderação
