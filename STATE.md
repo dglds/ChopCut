@@ -2,18 +2,21 @@
 
 > **Único ponto de leitura de estado.** A IA lê este arquivo no início da sessão e o atualiza no fim. Histórico narrativo fica em `sessions/`; regras na [Regras da Arquitetura](docs/ChopCut%20-%20Regras%20da%20Arquitetura.md); inventário em `docs/STRUCTURE.generated.md`.
 
-**Última atualização:** 2026-05-29
+**Última atualização:** 2026-05-29 (session #15)
 
 ---
 
 ## 📋 Backlog (aberto)
 
 - [ ] Corrigir os 3 warnings restantes de depreciação no build (detecção de cores e componentes UI)
-- [ ] Validar o fluxo de export (Recortar) com aspect ratio **horizontal** (vertical 9:16 já validado em device com `_10segundos`)
+- [ ] Decidir o destino do `FastFrameExtractorTest.kt` órfão (apagar ou portar p/ `ThumbnailExtraction`) — hoje quebra `make test` / `connectedAndroidTest`
 - [ ] Implementar export das demais ferramentas reusando o padrão de `exportCuts`: Compactar (`TransformerPipeline` + `CompressionLevel`, tela própria), Mesclar (`concat`), Extrair Áudio — ver follow-up do plano
 - [ ] (opcional) Progresso real na exportação — `CopyPipeline.trim` não emite incremental (overlay hoje é indeterminado)
+- [x] ~~Validar o fluxo de export (Recortar) com aspect ratio horizontal~~ → validado em device nos **3** aspect ratios (16:9, 9:16, 1:1), resolução/rotação preservadas (session #15)
 
 ## ⚠️ Known issues / cuidados
+
+- **`make test` / `connectedAndroidTest` não compila:** `app/src/androidTest/.../FastFrameExtractorTest.kt` referencia `FastFrameExtractor`, classe deletada no commit `fc4e50d`. O source set `androidTest` inteiro falha a compilação. `CLAUDE.md` e `.claude/CLAUDE.md` ainda citam esse teste como exemplo (exemplo morto).
 
 - `TimelineFeature.kt` concentra a timeline inteira (Canvas de thumbnails + Canvas de playhead isolado). Mudanças aqui exigem validação visual (`/rodar-app`) — jank não tem teste automatizado.
 - `CopyPipeline` corta por keyframe (`SEEK_TO_PREVIOUS_SYNC`): o início de cada trecho pode incluir alguns frames antes do ponto marcado. Trade-off lossless aceito; precisão fina seria via Transformer (re-encode).
@@ -22,6 +25,7 @@
 
 ## 🧭 Decisões recentes
 
+- **Export validado nos 3 aspect ratios (session #15):** teste manual em device (Galaxy A15) exportando vídeos reais de `Movies/ChopCut/teste/` (`16_9`, `9_16`, `1-1`) pelo Recortar, com 2 keep ranges (remove o meio → concat). `ffprobe` confirmou resolução/rotação idênticas à origem nos 3 (16:9 = 1920×1080; 9:16 = 1920×1080 rot90; 1:1 = 1440×1440 rot90), HEVC com csd válido, áudio AAC preservado, leitura íntegra de todos os pacotes. **Lossless preserva resolução** — só a duração muda. Gotchas de validação local (ffmpeg-free/VLC sem HEVC; player Android fiel = Just Player) em Memory [[baixar-resultado-export-ao-testar]].
 - **Recortar end-to-end (exportação real):** `TimelineViewModel.exportCuts()` converte os marcadores (trechos a remover) via `RangeUtils.calculateKeepRanges` → `CopyPipeline.trim` (lossless) → `saveToGallery` (`${base}_chopcut_mmss.mp4`). UI: CONFIRMAR → "Exportar" → overlay "Recortando…" → dialog de sucesso (Compartilhar via FileProvider/`ACTION_SEND` + Concluir). Estado via `ExportUiState` (Idle/Exporting/Success/Error). Decisão de arquitetura: **edição não-destrutiva** (estado em memória; arquivo só na exportação) e **fluxos separados por ferramenta**. Validado em device (Galaxy A15) com ffprobe.
 - **Correção crítica do `CopyPipeline` (csd):** o pipeline reconstruía o `MediaFormat` da track de vídeo sem o `csd-0`/`csd-1` → MP4 inválido (não abria em player, sem thumbnail). Agora usa `addTrack(videoFormat)` original + `setOrientationHint`, e `muxer.stop()` não engole mais exceção. → registrado em `O que não fazer.md` §7.
 - **Extração de Componentes de Vídeo:** Os seletores horizontais enxutos `VideoPickerEmpty`, `VideoPickerLoading` e `VideoPickerLoaded` foram movidos com sucesso de `HomeFeature.kt` para `SharedComponents.kt`, organizando melhor os componentes compartilhados da aplicação e enxugando `HomeFeature.kt`.
