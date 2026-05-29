@@ -21,6 +21,8 @@ O projeto utiliza um SDK do Android local e exige o **JDK 17** fornecido na past
   JAVA_HOME=./jdk17 ./gradlew installDebug
   ```
 
+> **Skill `/rodar-app`:** sobe o ChopCut de ponta a ponta (checa device → `installDebug` → abre `com.chopcut/.MainActivity` ou deep-link de vídeo no editor → screenshot + logcat). Use para validar visualmente mudanças de UI, já que jank não é coberto por testes. A skill built-in `/run` delega para ela.
+
 ---
 
 ## 🧪 Comandos de Testes
@@ -51,3 +53,5 @@ Antes de realizar qualquer alteração, você **DEVE** seguir o protocolo oficia
 Para manter a renderização do editor suave e sem engasgos (jank):
 - **Não aloque objetos** (como `Paint`, `RectF`, `Path` ou `BorderStroke`) dentro do escopo de desenho de Canvas. Aloque-os no composable e use `remember` para reutilização.
 - **Isolamento de Canvas:** Mantenha animações contínuas (como o playhead do cursor de reprodução) em um Canvas sobreposto independente do Canvas estático de miniaturas, evitando redesenhar os bitmaps do vídeo a cada frame.
+
+> **Skill `/revisar-canvas`:** audita estes padrões (alocação no draw scope, race de gesto vs. estado observado, isolamento de animação) em todo código de UI com `Canvas`/`drawBehind`. Rode antes de commitar mudanças na timeline.
