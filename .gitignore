@@ -18,7 +18,10 @@ prompt.txt
 .claude/skills/ui-ux-pro-max/scripts/__pycache__/
 .vscode/
 /logs/
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/ui-ux-pro-max/scripts/__pycache__/
+!.claude/settings.json
 .gemini/
 .carl
 /perfetto
