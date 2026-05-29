@@ -27,14 +27,13 @@ var options = []string{
 }
 
 type lineMsg string
+type processStartedMsg struct {
+	cmd *exec.Cmd
+}
 type taskFinishedMsg struct {
 	err error
 }
 type tickMsg time.Time
-type deviceTickMsg time.Time
-type refreshDevicesMsg struct {
-	devices []string
-}
 
 type model struct {
 	width            int
@@ -47,7 +46,6 @@ type model struct {
 	taskStartTime    time.Time
 	lastApkStatus    string
 	activeCmd        *exec.Cmd
-	mutex            sync.Mutex
 	gradleParams     map[string]bool
 	quitting         bool
 	connectedDevices []string
@@ -164,11 +162,6 @@ func getGradleArgs(params map[string]bool) []string {
 	return args
 }
 
-func getAdbPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "Android/Sdk/platform-tools/adb")
-}
-
 func getApkStatus() string {
 	apkPath := "app/build/outputs/apk/debug/app-debug.apk"
 	statusPath := ".last_build_status"
@@ -194,104 +187,10 @@ func getApkStatus() string {
 	return fmt.Sprintf("   APK: %s (%s)", apkTime, statusStyle.Render(status))
 }
 
-func getDevices() ([]string, error) {
-	adbPath := getAdbPath()
-	cmd := exec.Command(adbPath, "devices")
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	var devices []string
-	lines := strings.Split(string(out), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "List of devices") {
-			continue
-		}
-		parts := strings.Fields(line)
-		if len(parts) >= 2 && parts[1] == "device" {
-			devices = append(devices, parts[0])
-		}
-	}
-	return devices, nil
-}
-
-func tryMdnsConnect() {
-	adbPath := getAdbPath()
-	cmd := exec.Command("avahi-browse", "-trp", "_adb._tcp")
-	out, err := cmd.Output()
-	if err != nil {
-		return
-	}
-	lines := strings.Split(string(out), "\n")
-	for _, line := range lines {
-		if !strings.HasPrefix(line, "=") {
-			continue
-		}
-		parts := strings.Split(line, ";")
-		if len(parts) >= 9 {
-			addr := parts[7]
-			port := parts[8]
-			if addr != "" && port != "" {
-				checkCmd := exec.Command(adbPath, "devices")
-				devsOut, _ := checkCmd.Output()
-				if !strings.Contains(string(devsOut), addr+":"+port) {
-					program.Send(lineMsg(fmt.Sprintf("📡 Conectando a %s:%s via mDNS...", addr, port)))
-					exec.Command(adbPath, "connect", addr+":"+port).Run()
-				}
-			}
-		}
-	}
-}
-
 func tick() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
-}
-
-func deviceTick() tea.Cmd {
-	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
-		return deviceTickMsg(t)
-	})
-}
-
-func (m model) refreshDevicesCmd() tea.Cmd {
-	return func() tea.Msg {
-		var list []string
-		adbPath := getAdbPath()
-		cmd := exec.Command(adbPath, "devices")
-		out, err := cmd.Output()
-		if err == nil {
-			lines := strings.Split(string(out), "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if line == "" || strings.HasPrefix(line, "List of devices") {
-					continue
-				}
-				parts := strings.Fields(line)
-				if len(parts) >= 2 {
-					status := parts[1]
-					devName := parts[0]
-
-					styledStatus := status
-					if status == "device" {
-						styledStatus = lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Render("ativo")
-					} else if status == "unauthorized" {
-						styledStatus = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("não autorizado")
-					} else {
-						styledStatus = lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Render(status)
-					}
-
-					list = append(list, fmt.Sprintf("  • %s (%s)", devName, styledStatus))
-				}
-			}
-		}
-		if len(list) == 0 {
-			list = []string{"  Nenhum dispositivo encontrado."}
-		}
-		return refreshDevicesMsg{devices: list}
-	}
 }
 
 func (m *model) startTask(taskOpt int) tea.Cmd {
@@ -314,25 +213,27 @@ func (m *model) startTask(taskOpt int) tea.Cmd {
 		}
 
 		runCmd := func(name string, args []string) error {
-			m.mutex.Lock()
-			m.activeCmd = exec.Command(name, args...)
-			m.activeCmd.Dir = "."
-			m.activeCmd.Env = append(os.Environ(), "JAVA_HOME="+filepath.Join(".", "jdk17"))
-			cmdCopy := m.activeCmd
-			m.mutex.Unlock()
+			cmd := exec.Command(name, args...)
+			cmd.Dir = "."
+			cmd.Env = append(os.Environ(), "JAVA_HOME="+filepath.Join(".", "jdk17"))
 
-			stdout, err := cmdCopy.StdoutPipe()
+			stdout, err := cmd.StdoutPipe()
 			if err != nil {
 				return err
 			}
-			stderr, err := cmdCopy.StderrPipe()
+			stderr, err := cmd.StderrPipe()
 			if err != nil {
 				return err
 			}
 
-			if err := cmdCopy.Start(); err != nil {
+			if err := cmd.Start(); err != nil {
 				return err
 			}
+
+			// Publica o processo ativo no model via loop do Bubble Tea (única via segura
+			// de escrita no estado — escrever direto desta goroutine atualizaria uma cópia
+			// descartada do model, deixando o [Esc] sem nada para matar).
+			program.Send(processStartedMsg{cmd: cmd})
 
 			var wg sync.WaitGroup
 			wg.Add(2)
@@ -349,7 +250,7 @@ func (m *model) startTask(taskOpt int) tea.Cmd {
 			go reader(stderr)
 
 			wg.Wait()
-			return cmdCopy.Wait()
+			return cmd.Wait()
 		}
 
 		checkDevice := func() ([]string, error) {
@@ -458,14 +359,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.runningTask {
 			// Se estiver executando tarefa, esc ou ctrl+c aborta
 			if msg.Type == tea.KeyEsc || (msg.Type == tea.KeyCtrlC && msg.String() == "ctrl+c") {
-				m.mutex.Lock()
 				if m.activeCmd != nil && m.activeCmd.Process != nil {
 					m.activeCmd.Process.Kill()
 					m.logLines = append(m.logLines, "\n❌ TAREFA CANCELADA PELO USUÁRIO.")
 					m.logViewport.SetContent(strings.Join(m.logLines, "\n"))
 					m.logViewport.GotoBottom()
 				}
-				m.mutex.Unlock()
 				return m, nil
 			}
 			return m, nil
@@ -520,6 +419,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		
 		m.logViewport.Width = rightWidth - 2
 		m.logViewport.Height = viewportHeight
+
+	case processStartedMsg:
+		m.activeCmd = msg.cmd
 
 	case lineMsg:
 		m.logLines = append(m.logLines, string(msg))

@@ -14,14 +14,27 @@ if ! command -v go >/dev/null 2>&1; then
     exit 1
 fi
 
-# Se o binário não existir ou o main.go for mais recente, compila
-if [ ! -f "$BIN_PATH" ] || [ "$SRC_DIR/main.go" -nt "$BIN_PATH" ] || [ "$SRC_DIR/go.mod" -nt "$BIN_PATH" ]; then
+# Recompila se o binário não existir ou se algum fonte .go / go.mod for mais recente.
+NEEDS_BUILD=false
+if [ ! -f "$BIN_PATH" ] || [ "$SRC_DIR/go.mod" -nt "$BIN_PATH" ]; then
+    NEEDS_BUILD=true
+else
+    for src in "$SRC_DIR"/*.go; do
+        [ "$src" -nt "$BIN_PATH" ] && NEEDS_BUILD=true && break
+    done
+fi
+
+if [ "$NEEDS_BUILD" = true ]; then
     echo "🔄 Compilando painel em Go (Lipgloss TUI)..."
-    if ! (cd "$SRC_DIR" && go build -o menu-bin main.go); then
+    if ! (cd "$SRC_DIR" && go build -o menu-bin .); then
         echo "❌ Falha ao compilar o painel Go."
         exit 1
     fi
 fi
+
+# O painel usa caminhos relativos à raiz do projeto (./gradlew, gradle/scripts/...,
+# .gradle, app/build/...). Garante a cwd correta mesmo se chamado de um subdiretório.
+cd "$DIR" || { echo "❌ Não foi possível acessar a raiz do projeto: $DIR"; exit 1; }
 
 # Executa o painel substituindo o processo bash atual
 exec "$BIN_PATH" "$@"

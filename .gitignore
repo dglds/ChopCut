@@ -69,3 +69,7 @@ backlog_otimizacao_android.md
 
 *.jpg
 ideias.txt
+
+# ── gradle-menu (TUI Go) — artefatos de runtime ──
+gradle/scripts/menu-go/menu-bin
+.last_build_status

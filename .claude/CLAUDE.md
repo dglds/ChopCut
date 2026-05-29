@@ -4,30 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run Commands
 
-Todas as tarefas principais de build, instalação e testes podem ser controladas usando o painel interativo de alta performance (TUI em Go):
+O caminho canônico são os atalhos do `Makefile` (ou `./gradlew` direto). O JDK 17 do projeto (`./jdk17`) é exportado pelo Makefile; rodando `gradlew` na mão, defina `JAVA_HOME=./jdk17`.
 
 ```bash
-# Iniciar o painel interativo (TUI Go)
-./gradle-menu
+make build      # APK de debug (assembleDebug)
+make install    # instala no device/emulador conectado
+make run        # instala e abre o app
+make compile    # checagem rápida do Kotlin (compileDebugKotlin)
+make lint       # lintDebug
+make test       # testes instrumentados (requer device)
+make help       # lista os alvos
 ```
 
-O painel configurará o JDK 17 do projeto automaticamente e lerá as flags configuradas no arquivo `gradle/scripts/gradle-params.sh`.
+Toggles pontuais de debug vão via `GRADLE_ARGS`, ex.: `make build GRADLE_ARGS="-i --rerun-tasks"`.
 
-### Comandos Manuais (se necessário)
-
-Caso queira executar os comandos manualmente sem usar o painel TUI, configure `JAVA_HOME` com o JDK 17 local (`./jdk17`):
+Equivalentes manuais com `gradlew`:
 
 ```bash
-# Build debug APK
 JAVA_HOME=./jdk17 ./gradlew assembleDebug
-
-# Instalar no dispositivo ou emulador conectado
 JAVA_HOME=./jdk17 ./gradlew installDebug
-
-# Rodar testes instrumentados (requer dispositivo/emulador)
 JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest
-
-# Rodar um teste de classe específico
+# Teste de classe específico:
 JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.timeline.FastFrameExtractorTest
 
 # Enviar vídeo para o emulador para testes
@@ -35,9 +32,9 @@ JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pandroid.testInstrumentationRu
 ~/Android/Sdk/platform-tools/adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Movies/video.mp4
 ```
 
-### Configurações de Scripts em `gradle/scripts/`
+### Flags de performance e o painel TUI opcional
 
-As configurações de parâmetros do Gradle são declaradas em `gradle/scripts/gradle-params.sh`. Você pode ativar/desativar flags (ex: `GRADLE_PARALLEL`, `GRADLE_BUILD_CACHE`, nível de logs de stacktrace) editando esse arquivo como `true` ou `false`. O painel `./gradle-menu` lerá esse arquivo dinamicamente antes de cada tarefa.
+As flags de performance (parallel, caching, daemon) vivem em **`gradle.properties`** — sempre-ligadas, sem matriz de toggles em script. Existe ainda um painel TUI em Go (`./gradle-menu`, fontes em `gradle/scripts/menu-go/`) como conveniência opcional para quem prefere um dashboard com lista de devices e log ao vivo; **não é o caminho canônico** e não é necessário para nenhuma tarefa.
 
 ## Architecture
 

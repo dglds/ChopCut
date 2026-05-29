@@ -10,6 +10,7 @@ Guia de início e finalização de sessões para IA e devs. **Princípio: fonte 
 | Estrutura do código (símbolos, chamadas, impacto) | **CodeGraph** (`codegraph_*`) |
 | Decisões/gotchas duráveis entre sessões | Memory (`memory/MEMORY.md`, carrega sozinha) |
 | Padrões de performance de Canvas | `CLAUDE.md` + skill `/revisar-canvas` |
+| Comandos de build / install / testes | Atalhos do `Makefile` (`make build`/`install`/`test`) ou `JAVA_HOME=./jdk17 ./gradlew …` — ver [.claude/CLAUDE.md](file:///home/diego/Android/ChopCut/.claude/CLAUDE.md). Flags de perf em `gradle.properties`. |
 
 ---
 
@@ -17,7 +18,7 @@ Guia de início e finalização de sessões para IA e devs. **Princípio: fonte 
 
 1. **Leia o [STATE.md](file:///home/diego/Android/ChopCut/STATE.md)** — é o único arquivo que dá o estado atual (backlog + known-issues + últimas decisões). Não reconstrua isso lendo notas de sessão antigas.
 2. **Confira o estado da estrutura, não reconte:** se precisar saber quantos/quais arquivos existem, abra `docs/STRUCTURE.generated.md`. Para qualquer pergunta sobre *onde mora* um símbolo, pergunte ao **CodeGraph**.
-3. **Compile só se for mexer em código** (não é ritual): `JAVA_HOME=./jdk17 ./gradlew compileDebugKotlin`.
+3. **Compile só se for mexer em código** (não é ritual): `make compile` (ou `JAVA_HOME=./jdk17 ./gradlew compileDebugKotlin`).
 
 > Setup único por clone (ativa o hook que mantém a estrutura sincronizada): `git config core.hooksPath .githooks`
 
@@ -32,32 +33,39 @@ As regras (package único, sem novos arquivos, sem nomes duplicados, commits mod
 
 ## 🏁 3. Finalização de Sessão
 
-1. **Valide o build:** `JAVA_HOME=./jdk17 ./gradlew assembleDebug`
-2. **Atualize o [STATE.md](file:///home/diego/Android/ChopCut/STATE.md):** backlog (feito/novo), known-issues, e decisões da sessão. Este é o handoff para a próxima IA.
-3. **Decisão não-óbvia? Salve na Memory** (`memory/`) com o porquê — não a enterre só na nota de sessão.
-4. **Mudou o *propósito* de um arquivo, navegação ou um pipeline central?** Atualize as **Regras da Arquitetura**. (A contagem/inventário NÃO precisa de update manual — o hook regenera `STRUCTURE.generated.md`.)
-5. **Crie a nota da sessão** `sessions/session#NN.md` (próximo sequencial) — histórico append-only enxuto, usando o template abaixo.
+A ordem é **Memory-first**: a lição que evita o próximo erro é capturada *antes* do changelog, porque é o que de fato "indexa conhecimento". A nota de sessão é registro para humano, não insumo de contexto da IA.
+
+1. **Valide o build:** `make build` (ou `JAVA_HOME=./jdk17 ./gradlew assembleDebug`).
+2. **Capture a lição (Memory-first).** Toda regra do tipo *"não faça X porque Y"* ou decisão não-óbvia vai para a **Memory** (`memory/`, com o **porquê**) ou, se for regra dura de projeto, para [`docs/O que não fazer.md`](file:///home/diego/Android/ChopCut/docs/O%20que%20n%C3%A3o%20fazer.md). **Nunca** deixe a lição só na nota de sessão — ninguém relê 10 narrativas; a Memory carrega sozinha no próximo boot.
+3. **Atualize o [STATE.md](file:///home/diego/Android/ChopCut/STATE.md)** — único dono do estado vivo: backlog (feito/novo), known-issues, decisões. É o handoff para a próxima IA.
+4. **Mudou o *propósito* de um arquivo, navegação ou um pipeline central?** Atualize as **Regras da Arquitetura**. (Contagem/inventário NÃO precisa de update manual — o hook regenera `STRUCTURE.generated.md`.)
+5. **Crie a nota** `sessions/session#NN.md` (próximo sequencial) — changelog enxuto append-only, usando o template abaixo.
 6. **Commit modular por escopo.** O hook de pré-commit regenera e adiciona `STRUCTURE.generated.md` sozinho.
 
 ---
 
 ## 📄 Template — `sessions/session#NN.md`
 
-Histórico narrativo enxuto. O estado *vivo* mora no STATE.md, não aqui — não duplique o backlog inteiro.
+Changelog enxuto. O estado *vivo* mora no STATE.md, a lição durável na Memory — a nota só costura a narrativa do "o que e por quê" desta sessão.
 
 ```markdown
 # Session #NN — [Título breve]
 
 **Modelo:** [IA usada]  **Data:** [AAAA-MM-DD]
-**Objetivo:** [o que foi atacado]
+**Objetivo:** [o que foi atacado — 1 linha]
 
-## O que foi feito
-- [mudança] → [arquivo(s)]
+## O que mudou
+- [mudança em 1 linha] — *por quê, se não for óbvio*
 
-## Decisões (e por quê)
-- [decisão não-óbvia + razão] — salva na Memory como [[slug]] se for durável
+## Decisões / lições
+- [decisão] → salva na Memory como [[slug]] (ou em "O que não fazer")
 
-## Delta do backlog
-- Fechado: [...]
-- Novo: [...] (refletido no STATE.md)
+## Backlog (delta)
+- Fechado: [...]  ·  Novo: [...]  → refletido no STATE.md (não copie o backlog inteiro)
 ```
+
+> **NÃO inclua na nota** (vive em fonte melhor — aponte, não copie):
+> - **Arquivos modificados** → `git log` / `git diff` são a fonte exata.
+> - **Comandos usados** → estão no `.claude/CLAUDE.md`.
+> - **Tabelas antes/depois, "resultados e impactos", telemetria** → ruído; ninguém relê.
+> - **O backlog inteiro** → mora só no STATE.md; aqui vai só o *delta*.
