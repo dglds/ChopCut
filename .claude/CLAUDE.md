@@ -24,8 +24,8 @@ Equivalentes manuais com `gradlew`:
 JAVA_HOME=./jdk17 ./gradlew assembleDebug
 JAVA_HOME=./jdk17 ./gradlew installDebug
 JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest
-# Teste de classe específico:
-JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.timeline.FastFrameExtractorTest
+# Teste de classe específico (troque pelo nome real da classe de teste):
+JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.<NomeDoTest>
 
 # Enviar vídeo para o emulador para testes
 ~/Android/Sdk/platform-tools/adb push ~/Videos/video.mp4 /sdcard/Movies/video.mp4

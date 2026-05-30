@@ -31,9 +31,9 @@ O projeto utiliza um SDK do Android local e exige o **JDK 17** fornecido na past
   ```bash
   JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest
   ```
-- **Executar Teste Específico:**
+- **Executar Teste Específico** (troque pelo nome real da classe):
   ```bash
-  JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.timeline.TimelineTest
+  JAVA_HOME=./jdk17 ./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chopcut.<NomeDoTest>
   ```
 
 ---
