@@ -396,6 +396,38 @@ object FormatUtils {
 
         return formatFileInfo(fileName, fileSizeBytes, durationMs, width, height)
     }
+
+    fun estimateExportSize(
+        level: CompressionLevel,
+        keepRanges: List<TimeRange>,
+        originalDurationUs: Long,
+        originalSizeBytes: Long,
+        originalWidth: Int,
+        originalHeight: Int,
+        originalBitrateBps: Long
+    ): Long {
+        val totalKeepDurationMs = keepRanges.sumOf { it.endMs - it.startMs }
+        val originalDurationMs = originalDurationUs / 1000L
+        if (originalDurationMs <= 0L) return 0L
+
+        val originalProportionalSize = (originalSizeBytes * totalKeepDurationMs) / originalDurationMs
+
+        if (level == CompressionLevel.ORIGINAL) {
+            return originalProportionalSize
+        }
+
+        val targetBitrate = if (originalBitrateBps > 0L) {
+            Math.min(level.targetBitrateBps, originalBitrateBps)
+        } else {
+            level.targetBitrateBps
+        }
+
+        val totalBitrateBps = targetBitrate + 128_000L
+        val durationSeconds = totalKeepDurationMs / 1000.0
+        val estimatedBytes = (totalBitrateBps * durationSeconds / 8.0).toLong()
+
+        return Math.min(estimatedBytes, originalProportionalSize).coerceAtLeast(1024L)
+    }
 }
 
 object FileNameUtils {

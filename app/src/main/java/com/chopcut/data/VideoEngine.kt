@@ -447,13 +447,16 @@ class TransformerPipeline(
     fun trim(uri: Uri, ranges: List<TimeRange>, aspectRatio: Float? = null, compressionLevel: CompressionLevel = CompressionLevel.ORIGINAL): Flow<TrimProgress> = callbackFlow {
         val outputFile = videoRepository.createTempFile(".mp4")
 
-        Timber.d("TransformerPipeline: trim started - ${ranges.size} ranges")
+        Timber.d("TransformerPipeline: trim started - ${ranges.size} ranges, level: ${compressionLevel.label}")
 
         var isFinished = false
         var transformerRef: Transformer? = null
         val progressHolder = ProgressHolder()
 
         try {
+            val metadata = videoRepository.getMetadata(uri)
+                ?: throw IllegalArgumentException("Unable to read video metadata")
+
             val sequenceBuilder = EditedMediaItemSequence.Builder()
 
             ranges.forEach { range ->
@@ -468,7 +471,33 @@ class TransformerPipeline(
                     .build()
 
                 val videoEffects = mutableListOf<Effect>()
-                if (aspectRatio != null) {
+
+                if (compressionLevel != CompressionLevel.ORIGINAL) {
+                    val originalW = metadata.width
+                    val originalH = metadata.height
+
+                    val targetH = Math.min(compressionLevel.targetHeight, originalH)
+                    val targetW = (originalW * targetH) / originalH
+
+                    val evenHeight = (targetH / 2) * 2
+                    val evenWidth = (targetW / 2) * 2
+
+                    if (aspectRatio != null) {
+                        val croppedWidth = (evenHeight * aspectRatio).toInt()
+                        val evenCroppedWidth = (croppedWidth / 2) * 2
+                        videoEffects.add(Presentation.createForWidthAndHeight(
+                            evenCroppedWidth,
+                            evenHeight,
+                            Presentation.LAYOUT_SCALE_TO_FIT
+                        ))
+                    } else {
+                        videoEffects.add(Presentation.createForWidthAndHeight(
+                            evenWidth,
+                            evenHeight,
+                            Presentation.LAYOUT_SCALE_TO_FIT
+                        ))
+                    }
+                } else if (aspectRatio != null) {
                     videoEffects.add(Presentation.createForAspectRatio(aspectRatio, Presentation.LAYOUT_SCALE_TO_FIT))
                 }
 
@@ -529,15 +558,15 @@ class TransformerPipeline(
                 try {
                     val transformerBuilder = Transformer.Builder(context)
                         .addListener(transformerListener)
+                        .setVideoMimeType("video/avc")
 
-                    // Aplicar compressão se selecionado
                     if (compressionLevel != CompressionLevel.ORIGINAL) {
-                        val targetBitrate = when (compressionLevel) {
-                            CompressionLevel.MEDIUM -> 3_000_000 // 3 Mbps
-                            CompressionLevel.LOW -> 1_000_000    // 1 Mbps
-                            else -> Format.NO_VALUE
+                        val targetBitrate = if (metadata.bitrate > 0) {
+                            Math.min(compressionLevel.targetBitrateBps, metadata.bitrate).toInt()
+                        } else {
+                            compressionLevel.targetBitrateBps.toInt()
                         }
-                        
+
                         val encoderFactory = DefaultEncoderFactory.Builder(context)
                             .setRequestedVideoEncoderSettings(
                                 VideoEncoderSettings.Builder()
@@ -545,7 +574,7 @@ class TransformerPipeline(
                                     .build()
                             )
                             .build()
-                            
+
                         transformerBuilder.setEncoderFactory(encoderFactory)
                     }
 

@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.view.ViewGroup
+import java.io.File
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -77,7 +78,7 @@ data class MarkerInterval(
 
 sealed class ExportUiState {
     data object Idle : ExportUiState()
-    data object Exporting : ExportUiState()
+    data class Exporting(val progress: Int = -1) : ExportUiState()
     data class Success(val shareUri: Uri) : ExportUiState()
     data class Error(val message: String) : ExportUiState()
 }
@@ -121,6 +122,12 @@ class TimelineViewModel(
     val videoWidth:  StateFlow<Int> = _videoWidth.asStateFlow()
     val videoHeight: StateFlow<Int> = _videoHeight.asStateFlow()
 
+    private val _videoBitrate = MutableStateFlow(0L)
+    val videoBitrate: StateFlow<Long> = _videoBitrate.asStateFlow()
+
+    private val _videoSizeBytes = MutableStateFlow(0L)
+    val videoSizeBytes: StateFlow<Long> = _videoSizeBytes.asStateFlow()
+
     data class VideoDetails(
         val title: String,
         val sizeString: String,
@@ -150,6 +157,8 @@ class TimelineViewModel(
                     _videoAr.value = info.aspectRatio
                     _videoWidth.value  = info.width
                     _videoHeight.value = info.height
+                    _videoBitrate.value = info.bitrate
+                    _videoSizeBytes.value = info.sizeBytes
                     _videoDetails.value = VideoDetails(
                         title = info.fileName,
                         sizeString = FormatUtils.formatFileSize(info.sizeBytes),
@@ -310,7 +319,7 @@ class TimelineViewModel(
         }
     }
 
-    fun exportCuts() {
+    fun exportCuts(level: CompressionLevel = CompressionLevel.ORIGINAL) {
         val uri = videoUri ?: return
         val intervals = _markerIntervals.value
         if (intervals.isEmpty()) return
@@ -322,33 +331,58 @@ class TimelineViewModel(
             return
         }
 
-        _exportState.value = ExportUiState.Exporting
+        _exportState.value = ExportUiState.Exporting(-1)
         viewModelScope.launch {
-            val pipeline = CopyPipeline(getApplication<Application>(), videoRepository)
-            pipeline.trim(uri, keepRanges).collect { result ->
-                result.fold(
-                    onSuccess = { file ->
-                        try {
-                            val baseName = FileNameUtils.extractBaseNameFromUri(uri)
-                            val stamp = java.text.SimpleDateFormat("mmss", java.util.Locale.US)
-                                .format(java.util.Date())
-                            videoRepository.saveToGallery(file, "${baseName}_chopcut_$stamp.mp4")
-                            val shareUri = FileProvider.getUriForFile(
-                                getApplication<Application>(),
-                                "com.chopcut.fileprovider",
-                                file
+            if (level == CompressionLevel.ORIGINAL) {
+                val pipeline = CopyPipeline(getApplication<Application>(), videoRepository)
+                pipeline.trim(uri, keepRanges).collect { result ->
+                    result.fold(
+                        onSuccess = { file ->
+                            saveAndFinishExport(file, uri)
+                        },
+                        onFailure = { e ->
+                            _exportState.value = ExportUiState.Error(
+                                (e as? ChopCutException)?.userMessage ?: e.message ?: "Falha ao recortar o vídeo"
                             )
-                            _exportState.value = ExportUiState.Success(shareUri)
-                        } catch (e: Exception) {
-                            _exportState.value = ExportUiState.Error(e.message ?: "Falha ao salvar o vídeo")
                         }
-                    },
-                    onFailure = { e ->
-                        _exportState.value = ExportUiState.Error(
-                            (e as? ChopCutException)?.userMessage ?: e.message ?: "Falha ao recortar o vídeo"
-                        )
+                    )
+                }
+            } else {
+                val pipeline = TransformerPipeline(getApplication<Application>(), videoRepository)
+                pipeline.trim(uri, keepRanges, _videoAr.value, level).collect { progress ->
+                    when (progress) {
+                        is TrimProgress.InProgress -> {
+                            _exportState.value = ExportUiState.Exporting(progress.percent)
+                        }
+                        is TrimProgress.Completed -> {
+                            saveAndFinishExport(progress.file, uri)
+                        }
+                        is TrimProgress.Failed -> {
+                            _exportState.value = ExportUiState.Error(
+                                (progress.error as? ChopCutException)?.userMessage ?: progress.error.message ?: "Falha ao compactar o vídeo"
+                            )
+                        }
                     }
+                }
+            }
+        }
+    }
+
+    private fun saveAndFinishExport(file: File, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val baseName = FileNameUtils.extractBaseNameFromUri(uri)
+                val stamp = java.text.SimpleDateFormat("mmss", java.util.Locale.US)
+                    .format(java.util.Date())
+                videoRepository.saveToGallery(file, "${baseName}_chopcut_$stamp.mp4")
+                val shareUri = FileProvider.getUriForFile(
+                    getApplication<Application>(),
+                    "com.chopcut.fileprovider",
+                    file
                 )
+                _exportState.value = ExportUiState.Success(shareUri)
+            } catch (e: Exception) {
+                _exportState.value = ExportUiState.Error(e.message ?: "Falha ao salvar o vídeo")
             }
         }
     }
@@ -506,8 +540,11 @@ fun TimelineScreen(
 
     val isPreviewMode by viewModel.isPreviewMode.collectAsStateWithLifecycle()
     val exportState by viewModel.exportState.collectAsStateWithLifecycle()
+    val videoBitrate by viewModel.videoBitrate.collectAsStateWithLifecycle()
+    val videoSizeBytes by viewModel.videoSizeBytes.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var showConfirmationDialog by remember { mutableStateOf(false) }
+    var showExportBottomSheet by remember { mutableStateOf(false) }
+    var selectedCompressionLevel by remember { mutableStateOf(CompressionLevel.ORIGINAL) }
 
     // Target position para suavização manual de scrubbing
     var targetPositionMs by remember { mutableStateOf(currentPositionMs.toFloat()) }
@@ -604,7 +641,7 @@ fun TimelineScreen(
                 actions = {
                     if (markerIntervals.isNotEmpty()) {
                         TextButton(
-                            onClick = { showConfirmationDialog = true }
+                            onClick = { showExportBottomSheet = true }
                         ) {
                             Text(
                                 text = "CONFIRMAR",
@@ -913,70 +950,136 @@ fun TimelineScreen(
         }
     }
 
-    if (showConfirmationDialog) {
-        AlertDialog(
-            onDismissRequest = { showConfirmationDialog = false },
-            title = {
+    if (showExportBottomSheet) {
+        val trimPairs = markerIntervals.map { it.startMs to it.endMs }
+        val keepRanges = RangeUtils.calculateKeepRanges(trimPairs, durationMs)
+
+        ModalBottomSheet(
+            onDismissRequest = { showExportBottomSheet = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            scrimColor = Color.Black.copy(alpha = 0.6f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .navigationBarsPadding(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    text = "Confirmar Cortes",
+                    text = "Opções de Exportação",
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 20.sp,
                     fontFamily = FontFamily.SansSerif
                 )
-            },
-            text = {
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "O vídeo final conterá apenas os trechos que estão fora dos intervalos amarelos.\n\nDeseja exportar agora ou continuar editando?",
-                    color = Color.White.copy(alpha = 0.8f),
+                    text = "Selecione o nível de compressão do vídeo recortado",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    fontSize = 13.sp,
                     fontFamily = FontFamily.SansSerif
                 )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showConfirmationDialog = false
-                        viewModel.setPreviewMode(false)
-                        viewModel.exportCuts()
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    CompressionLevel.values().forEach { level ->
+                        val isViable = level.isViable(videoWidth, videoHeight, videoBitrate)
+                        val estimatedSize = FormatUtils.estimateExportSize(
+                            level = level,
+                            keepRanges = keepRanges,
+                            originalDurationUs = durationMs * 1000L,
+                            originalSizeBytes = videoSizeBytes,
+                            originalWidth = videoWidth,
+                            originalHeight = videoHeight,
+                            originalBitrateBps = videoBitrate
+                        )
+
+                        val sizeString = FormatUtils.formatFileSize(estimatedSize)
+                        val targetResString = if (level != CompressionLevel.ORIGINAL) {
+                            val targetH = Math.min(level.targetHeight, videoHeight)
+                            val targetW = (videoWidth * targetH) / videoHeight
+                            val evenW = (targetW / 2) * 2
+                            val evenH = (targetH / 2) * 2
+                            "Resolução: ${evenW}x${evenH} (~${level.targetBitrateBps / 1_000_000} Mbps)"
+                        } else ""
+
+                        CompressionOptionCard(
+                            level = level,
+                            isSelected = selectedCompressionLevel == level,
+                            isViable = isViable,
+                            estimatedSize = sizeString,
+                            targetResString = targetResString,
+                            onClick = { selectedCompressionLevel = level }
+                        )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable {
+                            showExportBottomSheet = false
+                            viewModel.setPreviewMode(false)
+                            viewModel.exportCuts(selectedCompressionLevel)
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Exportar",
-                        color = Color(0xFF00E5FF),
-                        fontWeight = FontWeight.Bold
+                        text = "EXPORTAR VÍDEO",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        letterSpacing = 1.sp
                     )
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showConfirmationDialog = false }
-                ) {
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextButton(onClick = { showExportBottomSheet = false }) {
                     Text(
-                        text = "Continuar Editando",
-                        color = Color.White.copy(alpha = 0.6f)
+                        "Cancelar",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
                 }
-            },
-            containerColor = Color(0xFF1E1E1E),
-            textContentColor = Color.White,
-            titleContentColor = Color.White
-        )
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
     }
 
     when (val st = exportState) {
-        ExportUiState.Exporting -> {
+        is ExportUiState.Exporting -> {
             Dialog(onDismissRequest = { }) {
                 Box(
                     modifier = Modifier
-                        .background(Color(0xFF1E1E1E), RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = Color(0xFF00E5FF))
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = if (st.progress >= 0) Modifier.size(48.dp) else Modifier.size(64.dp)
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
+                        val labelText = if (st.progress >= 0) {
+                            "Processando (${st.progress}%)…"
+                        } else {
+                            "Recortando…"
+                        }
                         Text(
-                            text = "Recortando…",
-                            color = Color.White,
+                            text = labelText,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1424,6 +1527,110 @@ fun Timeline(
                             contentDescription = "Excluir marcação",
                             tint = Color.White,
                             modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompressionOptionCard(
+    level: CompressionLevel,
+    isSelected: Boolean,
+    isViable: Boolean,
+    estimatedSize: String,
+    targetResString: String,
+    onClick: () -> Unit
+) {
+    val borderColor = when {
+        isSelected -> MaterialTheme.colorScheme.primary
+        isViable -> MaterialTheme.colorScheme.outline
+        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+    }
+
+    val backgroundColor = if (isSelected) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = if (isSelected) 2.dp else 1.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .background(backgroundColor, RoundedCornerShape(12.dp))
+            .clickable(enabled = isViable) { onClick() }
+            .padding(16.dp),
+        contentAlignment = Alignment.TopStart
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = level.label,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = level.description,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
+                if (!isViable) {
+                    Text(
+                        text = "Indisponível",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                                RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                } else if (isSelected) {
+                    Text(
+                        text = "✓",
+                        fontSize = 20.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            if (isViable) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Tamanho: $estimatedSize",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    if (targetResString.isNotEmpty()) {
+                        Text(
+                            text = targetResString,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
                 }
