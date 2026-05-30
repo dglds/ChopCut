@@ -2,7 +2,7 @@
 
 > **Único ponto de leitura de estado.** A IA lê este arquivo no início da sessão e o atualiza no fim. Histórico narrativo fica em `sessions/`; regras na [Regras da Arquitetura](docs/ChopCut%20-%20Regras%20da%20Arquitetura.md); inventário em `docs/STRUCTURE.generated.md`.
 
-**Última atualização:** 2026-05-29 (session #15)
+**Última atualização:** 2026-05-29 (session #16)
 
 ---
 
@@ -10,8 +10,9 @@
 
 - [ ] Corrigir os 3 warnings restantes de depreciação no build (detecção de cores e componentes UI)
 - [ ] Decidir o destino do `FastFrameExtractorTest.kt` órfão (apagar ou portar p/ `ThumbnailExtraction`) — hoje quebra `make test` / `connectedAndroidTest`
-- [ ] Implementar export das demais ferramentas reusando o padrão de `exportCuts`: Compactar (`TransformerPipeline` + `CompressionLevel`, tela própria), Mesclar (`concat`), Extrair Áudio — ver follow-up do plano
-- [ ] (opcional) Progresso real na exportação — `CopyPipeline.trim` não emite incremental (overlay hoje é indeterminado)
+- [x] ~~Compactar~~ → implementado **dentro do fluxo de export do Recortar** (ModalBottomSheet, níveis Original/Média/Baixa), não como tela própria — `TransformerPipeline` + `CompressionLevel` (session #16)
+- [ ] Implementar export das demais ferramentas reusando o padrão de `exportCuts`: Mesclar (`concat`), Extrair Áudio — ver follow-up do plano
+- [ ] (opcional) Progresso real na exportação **lossless** — `CopyPipeline.trim` não emite incremental (overlay indeterminado). O re-encode (Compactar via `TransformerPipeline`) **já emite % real** (overlay "Processando (N%)…")
 - [x] ~~Validar o fluxo de export (Recortar) com aspect ratio horizontal~~ → validado em device nos **3** aspect ratios (16:9, 9:16, 1:1), resolução/rotação preservadas (session #15)
 
 ## ⚠️ Known issues / cuidados
@@ -24,6 +25,8 @@
 - Sem emulador no SDK padrão (`~/Android/Sdk/emulator` ausente). Para rodar: Galaxy A15 (`SM-A156M`) já pareado via adb Wi-Fi — descobrir com `adb mdns services` e conectar no IP:porta do serviço `_adb-tls-connect._tcp` (ex.: `adb connect 192.168.1.10:PORTA`). Frames só são extraídos pelo fluxo Home → "Escolher Vídeo" → "Extrair Frames" (deep-link `ACTION_VIEW` pula essa etapa e mostra placeholders).
 
 ## 🧭 Decisões recentes
+
+- **Feature de Compactação implementada (session #16):** ao confirmar os cortes, o export abre um `ModalBottomSheet` (Material3, `colorScheme`) com 3 níveis — **Original** (lossless via `CopyPipeline`), **Média** (HD 1080p / 5 Mbps) e **Baixa** (SD 720p / 2,5 Mbps), os dois últimos re-encodando via `TransformerPipeline`. `CompressionLevel` ganhou `targetHeight`/`targetBitrateBps`/`isViable()`; `FormatUtils.estimateExportSize()` mostra tamanho estimado em tempo real e o badge "Indisponível" desabilita nível sem ganho real. Re-encode força **H.264** (`video/avc`) e **dimensões pares**, com bitrate clampado ao original. Roteamento por nível em `TimelineViewModel.exportCuts(level)`. Validado em device (Galaxy A15): Baixa de 16:9 → 3,25 MB, % real no overlay. Gotchas do re-encode em Memory [[compactacao-reencode-h264-pares]].
 
 - **Export validado nos 3 aspect ratios (session #15):** teste manual em device (Galaxy A15) exportando vídeos reais de `Movies/ChopCut/teste/` (`16_9`, `9_16`, `1-1`) pelo Recortar, com 2 keep ranges (remove o meio → concat). `ffprobe` confirmou resolução/rotação idênticas à origem nos 3 (16:9 = 1920×1080; 9:16 = 1920×1080 rot90; 1:1 = 1440×1440 rot90), HEVC com csd válido, áudio AAC preservado, leitura íntegra de todos os pacotes. **Lossless preserva resolução** — só a duração muda. Gotchas de validação local (ffmpeg-free/VLC sem HEVC; player Android fiel = Just Player) em Memory [[baixar-resultado-export-ao-testar]].
 - **Recortar end-to-end (exportação real):** `TimelineViewModel.exportCuts()` converte os marcadores (trechos a remover) via `RangeUtils.calculateKeepRanges` → `CopyPipeline.trim` (lossless) → `saveToGallery` (`${base}_chopcut_mmss.mp4`). UI: CONFIRMAR → "Exportar" → overlay "Recortando…" → dialog de sucesso (Compartilhar via FileProvider/`ACTION_SEND` + Concluir). Estado via `ExportUiState` (Idle/Exporting/Success/Error). Decisão de arquitetura: **edição não-destrutiva** (estado em memória; arquivo só na exportação) e **fluxos separados por ferramenta**. Validado em device (Galaxy A15) com ffprobe.
