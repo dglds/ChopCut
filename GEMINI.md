@@ -6,9 +6,8 @@ Este arquivo instrui os agentes de IA **Gemini** e **Antigravity** sobre como co
 
 ## 🛠️ Comandos de Compilação e Build
 
+- Utilize o Makefile para os builds
 
-
- - Utilize o Makefile para os builds
 ---
 
 ## 🧪 Comandos de Testes
@@ -19,4 +18,12 @@ Este arquivo instrui os agentes de IA **Gemini** e **Antigravity** sobre como co
   ```
 
 ---
+
+## 📋 Protocolos e Planos de Implementação
+
+- **Planos de Implementação Enxutos:** Os planos de implementação (`implementation_plan.md`) gerados pela IA devem ser extremamente concisos, diretos e objetivos. Evite descrições longas ou redundantes. Foque no estritamente necessário:
+  - Objetivo sucinto da mudança.
+  - Arquivos a serem modificados ou criados.
+  - Plano de verificação direto e simplificado.
+
 
