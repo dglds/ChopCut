@@ -336,16 +336,15 @@ class TimelineViewModel(
             if (level == CompressionLevel.ORIGINAL) {
                 val pipeline = CopyPipeline(getApplication<Application>(), videoRepository)
                 pipeline.trim(uri, keepRanges).collect { result ->
-                    result.fold(
-                        onSuccess = { file ->
-                            saveAndFinishExport(file, uri)
-                        },
-                        onFailure = { e ->
-                            _exportState.value = ExportUiState.Error(
-                                (e as? ChopCutException)?.userMessage ?: e.message ?: "Falha ao recortar o vídeo"
-                            )
-                        }
-                    )
+                    val file = result.getOrNull()
+                    if (file != null) {
+                        saveAndFinishExport(file, uri)
+                    } else {
+                        val e = result.exceptionOrNull()
+                        _exportState.value = ExportUiState.Error(
+                            (e as? ChopCutException)?.userMessage ?: e?.message ?: "Falha ao recortar o vídeo"
+                        )
+                    }
                 }
             } else {
                 val pipeline = TransformerPipeline(getApplication<Application>(), videoRepository)
@@ -368,22 +367,23 @@ class TimelineViewModel(
         }
     }
 
-    private fun saveAndFinishExport(file: File, uri: Uri) {
-        viewModelScope.launch {
-            try {
-                val baseName = FileNameUtils.extractBaseNameFromUri(uri)
-                val stamp = java.text.SimpleDateFormat("mmss", java.util.Locale.US)
-                    .format(java.util.Date())
-                videoRepository.saveToGallery(file, "${baseName}_chopcut_$stamp.mp4")
-                val shareUri = FileProvider.getUriForFile(
-                    getApplication<Application>(),
-                    "com.chopcut.fileprovider",
-                    file
-                )
-                _exportState.value = ExportUiState.Success(shareUri)
-            } catch (e: Exception) {
-                _exportState.value = ExportUiState.Error(e.message ?: "Falha ao salvar o vídeo")
-            }
+    // Suspende dentro do collect do trim (não dispara coroutine própria): o save precisa
+    // concluir ANTES de o flow encerrar, pois o teardown do pipeline apaga o arquivo de
+    // cache. O launch fire-and-forget anterior corria contra essa deleção e perdia.
+    private suspend fun saveAndFinishExport(file: File, uri: Uri) {
+        try {
+            val baseName = FileNameUtils.extractBaseNameFromUri(uri)
+            val stamp = java.text.SimpleDateFormat("mmss", java.util.Locale.US)
+                .format(java.util.Date())
+            videoRepository.saveToGallery(file, "${baseName}_chopcut_$stamp.mp4")
+            val shareUri = FileProvider.getUriForFile(
+                getApplication<Application>(),
+                "com.chopcut.fileprovider",
+                file
+            )
+            _exportState.value = ExportUiState.Success(shareUri)
+        } catch (e: Exception) {
+            _exportState.value = ExportUiState.Error(e.message ?: "Falha ao salvar o vídeo")
         }
     }
 

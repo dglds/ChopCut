@@ -592,10 +592,15 @@ class TransformerPipeline(
             }
 
             awaitClose {
-                isFinished = true
                 mainHandler.removeCallbacks(progressRunnable)
-                // Transformer deve ser cancelado na main thread
-                mainHandler.post { transformerRef?.cancel() }
+                // A decisão de cancelar roda na main thread (mesma que escreve isFinished
+                // em onCompleted/onError), evitando corrida de visibilidade. Só cancelamos
+                // em cancelamento real (coletor parou antes do término); após sucesso/erro
+                // o export já finalizou e cancel() apagaria o arquivo recém-escrito.
+                mainHandler.post {
+                    if (!isFinished) transformerRef?.cancel()
+                    isFinished = true
+                }
             }
 
         } catch (e: Exception) {
