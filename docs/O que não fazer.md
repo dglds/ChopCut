@@ -78,14 +78,14 @@
 
 ## 📱 4. Gerenciamento de Estado e ViewModels (Jetpack Compose)
 
-### ❌ NÃO recrie ViewModels Activity-scoped dentro de sub-composables
-* **O Motivo:** Os ViewModels principais (`EditorViewModel`, `AudioViewModel`, `ThumbnailViewModel`) devem ser instanciados uma única vez na `MainActivity` ou no NavGraph de entrada para manter o estado unificado do player e da edição.
+### ❌ NÃO recrie ViewModels com escopo de rota dentro de sub-composables
+* **O Motivo:** O `TimelineViewModel` (e o `HomeViewModel`) deve ser instanciado uma única vez na rota/navegação para manter o estado unificado do player e da edição — não recriado dentro de cada sub-composable.
 * **O que não fazer:**
   ```kotlin
   @Composable
-  fun TimelineV2SubComponent() {
+  fun TimelineSubComponent() {
       // 🚫 NUNCA FAÇA ISSO (Cria uma nova instância órfã de ViewModel)
-      val viewModel: EditorViewModel = viewModel() 
+      val viewModel: TimelineViewModel = viewModel() 
   }
   ```
 
@@ -151,7 +151,7 @@
 * **O Motivo:** `computeDimensions` agora **requer** `videoAr: Float` — não tem overload sem args. Chamadas sem argumento quebram o build.
 
 ### ❌ NÃO extraia frames sem limpar o diretório antes
-* **O Motivo:** Se a extração anterior tinha 120 frames e a nova tem 60, os arquivos `frame_00061.jpg` a `frame_00120.jpg` permanecem órfãos. Isso faz o TimelineV2ViewModel carregar bitmaps antigos junto com os novos. Sempre faça `outputDir.deleteRecursively()` ou `outputDir.listFiles()?.forEach { it.delete() }` antes de extrair.
+* **O Motivo:** Se a extração anterior tinha 120 frames e a nova tem 60, os arquivos `frame_00061.jpg` a `frame_00120.jpg` permanecem órfãos. Isso faz a timeline carregar bitmaps antigos junto com os novos. Sempre faça `outputDir.deleteRecursively()` ou `outputDir.listFiles()?.forEach { it.delete() }` antes de extrair.
 
 ---
 
