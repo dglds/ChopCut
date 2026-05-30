@@ -47,7 +47,6 @@ Antes de realizar qualquer alteração, você **DEVE** seguir o protocolo oficia
 3. **Padrão de Commits:** crie commits modulares separados por escopo (ex: `refactor(editor): ...`, `fix(home): ...`, `docs: ...`).
 
 > **Skill `/start-session` e `/finish-session`:** Utilize para iniciar e encerrar a sessão de forma estruturada.
-> **Skill `/desafiar-plano`:** antes de implementar uma mudança não trivial, estressa o plano contra estas regras (16 arquivos, package único, nomes sem duplicata, padrões de Canvas) e contra o backlog da última `sessions/session#NN-objetivo-da-session.md`, afinando a terminologia para os nomes canônicos do projeto.
 
 ---
 

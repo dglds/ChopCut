@@ -26,7 +26,7 @@
   ```
 
 ### ❌ NÃO crie novos arquivos `.kt` sem extrema necessidade
-* **O Motivo:** A base de código está travada em **20 arquivos de código-fonte estruturados**. Qualquer componente novo de UI, utilitário ou modelo deve ser acoplado em um dos arquivos existentes correspondentes (ex: novos modelos de dados em `core/Models.kt`, novos utilitários em `core/Utils.kt`).
+* **O Motivo:** A base de código está travada na estrutura de arquivos atual (a contagem viva fica em `docs/STRUCTURE.generated.md`, auto-gerado). Qualquer componente novo de UI, utilitário ou modelo deve ser acoplado em um dos arquivos existentes correspondentes (ex: novos modelos de dados em `core/Models.kt`, novos utilitários em `core/Utils.kt`).
 
 ---
 
@@ -91,16 +91,6 @@
 
 ### ❌ NÃO crie classes, enums ou objetos com nomes duplicados
 * **O Motivo:** Devido ao escopo global do pacote único (`com.chopcut`), a existência de duas classes com o mesmo nome em arquivos diferentes resultará em erros graves de redefinição pelo compilador (`Redeclaration error`).
-
----
-
-## 📝 5. Documentação e Boas Práticas de Trabalho
-
-### ❌ NÃO finalize uma sessão sem atualizar o histórico de sessões
-* **O Motivo:** A transparência e o histórico estruturado de sessões (arquivos `session#NN-objetivo-da-session.md`) garantem que qualquer IA ou desenvolvedor parceiro saiba exatamente o estado em que o software foi deixado.
-
-### ❌ NÃO esqueça de atualizar as Regras da Arquitetura ao fazer mudanças estruturais
-* **O Motivo:** Conforme especificado nas regras do `README.md`, o arquivo `ChopCut - Regras da Arquitetura.md` deve ser mantido sempre 100% atualizado para servir de bússola para o desenvolvimento do projeto.
 
 ---
 
