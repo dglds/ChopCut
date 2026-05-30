@@ -136,16 +136,6 @@ BoxWithConstraints {
 
 Instrumented tests live in `app/src/androidTest/`. Test assets (`sample.mp4`, `sample15min.mp4`) are in `app/src/androidTest/assets/`. `TimelineTestHelper.copyTestVideo()` copies assets to `cacheDir` for use in tests. Custom test runner: `ChopCutTestRunner`.
 
-## Protocolo de Finalização de Sessão (`finalizar sessao`)
+## Protocolo de Finalização de Sessão (`finalizar sessão`)
 
-Sempre que a instrução "finalizar sessão" ou "finalize a sessão" for dada, o agente deve seguir rigorosamente estes passos em ordem:
-1. **Compilação e Validação Completa:**
-   - Garantir que o projeto compila sem erros executando o comando de build debug com o JDK 17 do projeto:
-     ```bash
-     JAVA_HOME=./jdk17 ./gradlew :app:assembleDebug
-     ```
-2. **Atualização do Walkthrough de Artefatos:**
-   - Registrar e detalhar todas as alterações de arquitetura, novos componentes, modelos de dados e mudanças visuais no arquivo de walkthrough na pasta de artefatos: `<appDataDir>/brain/<conversation-id>/walkthrough.md`.
-3. **Commit Automático das Alterações:**
-   - Adicionar todas as modificações, criações e exclusões ao controle de versão com `git add -A`.
-   - Realizar o commit utilizando mensagens claras e concisas seguindo a especificação de Commits Semânticos (ex: `feat: ...`, `fix: ...`, `docs: ...`, `refactor: ...`).
+Quando o usuário disser "finalizar sessão" / "finalize a sessão", execute a skill **`/finish-session`** — fonte única do ritual de encerramento (validar build, capturar a lição **Memory-first**, atualizar `STATE.md`, criar a nota `sessions/session#NN-objetivo-da-session.md` e fazer commit modular por escopo). O passo a passo e o template vivem em [SESSION_PROTOCOL.md](../SESSION_PROTOCOL.md) §3 — não duplique aqui.

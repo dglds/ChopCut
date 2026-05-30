@@ -11,7 +11,8 @@ Execute rigorosamente as etapas de encerramento de sessão para garantir a integ
    - Execute o build completo para garantir que nada foi quebrado: `JAVA_HOME=./jdk17 ./gradlew assembleDebug` (ou `make build`).
 2. **Abordagem Memory-First (Lições Aprendidas):**
    - Capture qualquer regra de performance, gotcha de API ou antipadrão encontrado durante a sessão.
-   - Escreva na **Memory** (`memory/MEMORY.md`) ou, se for regra estrita do projeto, no [`docs/O que não fazer.md`](file:///home/diego/Android/ChopCut/docs/O%20que%20n%C3%A3o%20fazer.md). **Nunca** deixe lições úteis restritas apenas à nota de sessão.
+   - **Inclua o que deu errado:** se algo falhou ou precisou refazer nesta sessão, registre a regra que evitaria o próximo erro. Esse loop é o que faz o protocolo *evitar* o erro, não só narrá-lo.
+   - Escreva na **Memory** (`memory/MEMORY.md` — `type: feedback` para erros, `type: project` para decisões) ou, se for regra estrita do projeto, no [`docs/O que não fazer.md`](file:///home/diego/Android/ChopCut/docs/O%20que%20n%C3%A3o%20fazer.md). **Nunca** deixe lições úteis restritas apenas à nota de sessão.
 3. **Atualize o [STATE.md](file:///home/diego/Android/ChopCut/STATE.md):**
    - Atualize a seção de backlog (marque o que foi feito, insira novos itens gerados).
    - Atualize os bugs/problemas conhecidos (known issues) e decisões recentes.
@@ -29,24 +30,8 @@ Execute rigorosamente as etapas de encerramento de sessão para garantir a integ
 
 <supporting-info>
 
-## Template de Nota de Sessão
+## Template e formato da nota
 
-Ao criar o arquivo `sessions/session#NN-objetivo-da-session.md`, use o seguinte template compacto e focado (sem tabelas redundantes, logs brutos ou listagem manual de arquivos que o git já rastreia):
-
-```markdown
-# Session #NN — [Título Breve da Sessão]
-
-**Modelo:** [Nome do Modelo de IA / Antigravity]  **Data:** [AAAA-MM-DD]
-**Objetivo:** [O que foi atacado nesta sessão - 1 linha]
-
-## O que mudou
-- [mudança em 1 linha] — *por quê, se não for óbvio*
-
-## Decisões / lições
-- [decisão ou lição importante] → salva na Memory como [[slug]] ou em "O que não fazer.md"
-
-## Backlog (delta)
-- Fechado: [...]  ·  Novo: [...]  → refletido no STATE.md (não copie o backlog inteiro)
-```
+O template da nota `sessions/session#NN-objetivo-da-session.md` é **fonte única** em [SESSION_PROTOCOL.md](file:///home/diego/Android/ChopCut/SESSION_PROTOCOL.md) §"Template" — siga de lá, não duplique aqui.
 
 </supporting-info>

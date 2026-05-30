@@ -8,7 +8,7 @@ description: Inicia oficialmente uma nova sessão de desenvolvimento no ChopCut.
 Execute o ritual de início de sessão de forma rigorosa para alinhar seu contexto e informar o usuário sobre o ponto de partida atual:
 
 1. **Leia o `STATE.md`** — identifique o backlog atual (tarefas ativas/novas), conhecidos (known issues) e últimas decisões.
-2. **Localize o último arquivo de sessão em `sessions/`** — o diretório contém arquivos no formato `session#NN-objetivo-da-session.md`. Identifique o maior número `#NN` (a última sessão concluída), leia seu conteúdo e extraia as lições aprendidas e o backlog delta que restou.
+2. **As lições duráveis já estão carregadas** — a Memory entra no contexto sozinha no boot; não precisa garimpá-las nas notas antigas. Para o contexto narrativo da última sessão, localize o maior `#NN` em `sessions/` e leia só o *delta* (o que ficou aberto). O estado vivo manda no `STATE.md`.
 3. **Resuma e apresente** ao usuário o status de partida em uma mensagem curta e estruturada:
    - **Última Sessão:** Breve lembrete do que foi concluído na sessão `#NN`.
    - **Foco da Sessão Atual:** Qual o objetivo principal que estamos prestes a atacar.
